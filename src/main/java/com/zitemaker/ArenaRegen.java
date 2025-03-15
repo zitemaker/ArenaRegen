@@ -1,8 +1,6 @@
-package DiamondPlugin.untitled2;
+package com.zitemaker;
 
 import org.bukkit.Bukkit;
-import org.bukkit.Location;
-import org.bukkit.World;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -12,7 +10,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
-public class Untitled2 extends JavaPlugin {
+public class ArenaRegen extends JavaPlugin {
 
     private Map<String, RegionData> registeredRegions = new HashMap<>();
     private boolean trackEntities;

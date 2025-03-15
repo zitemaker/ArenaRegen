@@ -1,6 +1,6 @@
-name: Untitled2
+name: ArenaRegen
 version: 1.0
-main: DiamondPlugin.untitled2.Untitled2
+main: com.zitemaker.ArenaRegen
 api-version: 1.21
 description: A plugin that registers and regenerates regions using coordinates.
 author: YourName
