@@ -1,4 +1,0 @@
-name: ArenaRegen
-version: '${project.version}'
-main: com.zitemaker.arenaregen.ArenaRegen
-api-version: '1.21'
