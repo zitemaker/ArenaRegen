@@ -1,0 +1,14 @@
+region:
+  min:
+    x: -54
+    y: 63
+    z: 46
+  max:
+    x: -47
+    y: 68
+    z: 53
+messages:
+  kill: "You entered a dangerous area and were killed!"
+  enabled: "Killing in the region is now enabled."
+  disabled: "Killing in the region is now disabled."
+  no-permission: "You do not have permission to use this command."

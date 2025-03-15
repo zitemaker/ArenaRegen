@@ -1,0 +1,29 @@
+name: Untitled2
+version: 1.0
+main: DiamondPlugin.untitled2.Untitled2
+api-version: 1.21
+description: A plugin that registers and regenerates regions using coordinates.
+author: YourName
+commands:
+  register:
+    description: Registers a region with the given name and coordinates.
+    usage: /register <name> <x1> <y1> <z1> <x2> <y2> <z2>
+    permission: untitled2.register
+  regen:
+    description: Regenerates a region to its registered state.
+    usage: /regen <name>
+    permission: untitled2.regen
+  rg:
+    description: Manages regions (list, spawn, tp, update).
+    usage: /rg <list|spawn|tp|update> [name]
+    permission: untitled2.rg
+permissions:
+  untitled2.register:
+    description: Allows the player to register regions.
+    default: op
+  untitled2.regen:
+    description: Allows the player to regenerate regions.
+    default: op
+  untitled2.rg:
+    description: Allows the player to manage regions.
+    default: op
