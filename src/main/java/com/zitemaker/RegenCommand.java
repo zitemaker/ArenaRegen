@@ -70,7 +70,7 @@ public class RegenCommand implements CommandExecutor {
         }
 
         // Restore all entities in the region
-        if (plugin.isTrackEntities()) {
+        if (plugin.getConfig().getBoolean("messages.track-entities")) {
             for (Map.Entry<Location, EntityType> entry : regionData.getEntityMap().entrySet()) {
                 try {
                     Location location = entry.getKey();
@@ -90,7 +90,7 @@ public class RegenCommand implements CommandExecutor {
         }
 
         // Send the "Arena Regen" message
-        String message = ChatColor.translateAlternateColorCodes('&', plugin.getArenaRegenMessage());
+        String message = ChatColor.translateAlternateColorCodes('&', plugin.getConfig().getString("messages.arena-regen", "&aArena Regen"));
         sender.sendMessage(message);
 
         return true;

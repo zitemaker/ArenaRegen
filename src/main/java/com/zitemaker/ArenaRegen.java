@@ -13,13 +13,10 @@ import java.util.Map;
 public class ArenaRegen extends JavaPlugin {
 
     private Map<String, RegionData> registeredRegions = new HashMap<>();
-    private boolean trackEntities;
-    private String arenaRegenMessage;
 
     @Override
     public void onEnable() {
-        // Load config
-        loadConfig();
+        saveDefaultConfig();
 
         // Load saved regions from config
         loadRegions();
@@ -42,40 +39,6 @@ public class ArenaRegen extends JavaPlugin {
 
     public Map<String, RegionData> getRegisteredRegions() {
         return registeredRegions;
-    }
-
-    public boolean isTrackEntities() {
-        return trackEntities;
-    }
-
-    public String getArenaRegenMessage() {
-        return arenaRegenMessage;
-    }
-
-    // Load config
-    private void loadConfig() {
-        File configFile = new File(getDataFolder(), "config.yml");
-        if (!configFile.exists()) {
-            saveDefaultConfig(); // Create default config if it doesn't exist
-        }
-
-        YamlConfiguration config = YamlConfiguration.loadConfiguration(configFile);
-
-        // Set defaults
-        config.addDefault("track-entities", true);
-        config.addDefault("messages.arena-regen", "&aArena Regen");
-        config.options().copyDefaults(true);
-
-        // Save updated config
-        try {
-            config.save(configFile);
-        } catch (IOException e) {
-            getLogger().severe("Failed to save config: " + e.getMessage());
-        }
-
-        // Load settings
-        trackEntities = config.getBoolean("track-entities", true);
-        arenaRegenMessage = config.getString("messages.arena-regen", "&aArena Regen");
     }
 
     // Save all regions to config

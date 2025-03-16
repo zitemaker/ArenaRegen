@@ -12,3 +12,5 @@ messages:
   enabled: "Killing in the region is now enabled."
   disabled: "Killing in the region is now disabled."
   no-permission: "You do not have permission to use this command."
+  track-entities: true
+  arena-regen: '&aArena Regen'
