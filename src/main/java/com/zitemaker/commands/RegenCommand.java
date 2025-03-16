@@ -1,5 +1,7 @@
-package com.zitemaker;
+package com.zitemaker.commands;
 
+import com.zitemaker.ArenaRegen;
+import com.zitemaker.RegionData;
 import org.bukkit.Location;
 import org.bukkit.block.Block;
 import org.bukkit.block.data.BlockData;

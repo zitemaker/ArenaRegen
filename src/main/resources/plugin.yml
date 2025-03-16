@@ -1,5 +1,5 @@
 name: ArenaRegen
-version: 1.0
+version: 1.0.0
 main: com.zitemaker.ArenaRegen
 api-version: 1.21
 description: A plugin that registers and regenerates regions using coordinates.
@@ -17,13 +17,36 @@ commands:
     description: Manages regions (list, spawn, tp, update).
     usage: /rg <list|spawn|tp|update> [name]
     permission: untitled2.rg
+  arenaregen:
+    description: Lets your configure everthing
+    usage: /arenaregen
+    aliases: [ar]
+
 permissions:
-  untitled2.register:
+  arenaregen.create:
     description: Allows the player to register regions.
     default: op
-  untitled2.regen:
+  arenaregen.delete:
     description: Allows the player to regenerate regions.
     default: op
-  untitled2.rg:
-    description: Allows the player to manage regions.
+  arenaregen.resize:
+    description: Allows the player to resize regions.
     default: op
+  arenaregen.list:
+    description: Allows the player to list all regions.
+    default: op
+  arenaregen.setspawn:
+    description: Allows the player to set a spawn for regions.
+    default: op
+  arenaregen.delspawn:
+    description: Allows the player to delete a spawn for regions.
+    default: op
+  arenaregen.teleport:
+    description: Allows the player to teleport to region spawns.
+    default: op
+  arenaregen.reload:
+    description: Allows the player to reload the plugin.
+    default: op
+  arenaregen.help:
+    description: Allows the player to view available commands.
+    default: true

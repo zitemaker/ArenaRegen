@@ -1,5 +1,9 @@
 package com.zitemaker;
 
+import com.zitemaker.commands.ArenaRegenCommand;
+import com.zitemaker.commands.RegenCommand;
+import com.zitemaker.commands.RegionCommand;
+import com.zitemaker.commands.RegisterCommand;
 import org.bukkit.Bukkit;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -7,26 +11,35 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
 import java.io.IOException;
+import java.lang.foreign.Arena;
 import java.util.HashMap;
 import java.util.Map;
 
 public class ArenaRegen extends JavaPlugin {
 
+    // ANSI color code for green
+    private static final String ANSI_GREEN = "\u001B[92m";
+    private static final String ANSI_RESET = "\u001B[0m";
+    private static final String ANSI_RED = "\u001B[31m";
+
     private Map<String, RegionData> registeredRegions = new HashMap<>();
 
     @Override
     public void onEnable() {
+        // Plugin startup success message
+        getLogger().info(ANSI_GREEN + "ArenaRegen.jar v" + getDescription().getVersion() + " has been enabled successfully" + ANSI_RESET);
+
+        // Save default config
+        getConfig().options().copyDefaults();
         saveDefaultConfig();
 
-        // Load saved regions from config
-        loadRegions();
+        // Register the event listeners
 
         // Register commands
-        getCommand("register").setExecutor(new RegisterCommand(this));
-        getCommand("regen").setExecutor(new RegenCommand(this));
-        getCommand("rg").setExecutor(new RegionCommand(this));
+        getCommand("arenaregen").setExecutor(new ArenaRegenCommand(this));
 
-        getLogger().info("Plugin enabled!");
+        // Register tab completer
+        getCommand("arenaregen").setTabCompleter(new ArenaRegenCommand(this));
     }
 
     @Override
@@ -34,7 +47,8 @@ public class ArenaRegen extends JavaPlugin {
         // Save regions to config
         saveRegions();
 
-        getLogger().info("Plugin disabled!");
+        // Plugin disable success message
+        getLogger().info(ANSI_RED + "ArenaRegen.jar v" + getDescription().getVersion() + " has been disabled successfully" + ANSI_RESET);
     }
 
     public Map<String, RegionData> getRegisteredRegions() {
