@@ -75,8 +75,6 @@ public class RegisterCommand implements CommandExecutor {
             plugin.getRegisteredRegions().put(name, regionData);
             sender.sendMessage(ChatColor.GREEN + "Region '" + name + "' has been registered.");
 
-            // Save regions to config
-            plugin.saveRegions();
         } catch (NumberFormatException e) {
             sender.sendMessage(ChatColor.RED + "Invalid coordinates. Please use integers.");
         } catch (Exception e) {

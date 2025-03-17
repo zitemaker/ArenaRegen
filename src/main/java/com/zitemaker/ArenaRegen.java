@@ -1,18 +1,16 @@
 package com.zitemaker;
 
 import com.zitemaker.commands.ArenaRegenCommand;
-import com.zitemaker.commands.RegenCommand;
-import com.zitemaker.commands.RegionCommand;
-import com.zitemaker.commands.RegisterCommand;
 import org.bukkit.Bukkit;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
 import java.io.IOException;
-import java.lang.foreign.Arena;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class ArenaRegen extends JavaPlugin {
@@ -23,6 +21,7 @@ public class ArenaRegen extends JavaPlugin {
     private static final String ANSI_RED = "\u001B[31m";
 
     private Map<String, RegionData> registeredRegions = new HashMap<>();
+    private Map<String, String> pendingDeletions = new HashMap<>();
 
     @Override
     public void onEnable() {
@@ -34,6 +33,7 @@ public class ArenaRegen extends JavaPlugin {
         saveDefaultConfig();
 
         // Register the event listeners
+        Bukkit.getPluginManager().registerEvents(new SelectionTool(), this);
 
         // Register commands
         getCommand("arenaregen").setExecutor(new ArenaRegenCommand(this));
@@ -44,8 +44,6 @@ public class ArenaRegen extends JavaPlugin {
 
     @Override
     public void onDisable() {
-        // Save regions to config
-        saveRegions();
 
         // Plugin disable success message
         getLogger().info(ANSI_RED + "ArenaRegen.jar v" + getDescription().getVersion() + " has been disabled successfully" + ANSI_RESET);
@@ -54,41 +52,29 @@ public class ArenaRegen extends JavaPlugin {
     public Map<String, RegionData> getRegisteredRegions() {
         return registeredRegions;
     }
-
-    // Save all regions to config
-    public void saveRegions() {
-        File configFile = new File(getDataFolder(), "regions.yml");
-        YamlConfiguration config = new YamlConfiguration();
-
-        // Save each region
-        for (Map.Entry<String, RegionData> entry : registeredRegions.entrySet()) {
-            ConfigurationSection regionSection = config.createSection(entry.getKey());
-            entry.getValue().serialize(regionSection);
-        }
-
-        // Save to file
-        try {
-            config.save(configFile);
-        } catch (IOException e) {
-            getLogger().severe("Failed to save regions to config: " + e.getMessage());
-        }
+    public Map<String, String> getPendingDeletions() {
+        return pendingDeletions;
     }
 
-    // Load all regions from config
-    private void loadRegions() {
-        File configFile = new File(getDataFolder(), "regions.yml");
-        if (!configFile.exists()) {
-            return; // No config file, nothing to load
-        }
+    private static final List<String> ARENAREGEN_PERMISSIONS = List.of(
+            "arenaregen.create",
+            "arenaregen.delete",
+            "arenaregen.resize",
+            "arenaregen.list",
+            "arenaregen.setspawn",
+            "arenaregen.delspawn",
+            "arenaregen.teleport",
+            "arenaregen.reload",
+            "arenaregen.help",
+            "arenaregen.select"
+    );
 
-        YamlConfiguration config = YamlConfiguration.loadConfiguration(configFile);
-
-        // Load each region
-        for (String key : config.getKeys(false)) {
-            ConfigurationSection regionSection = config.getConfigurationSection(key);
-            if (regionSection != null) {
-                registeredRegions.put(key, RegionData.deserialize(regionSection, Bukkit.getWorlds().get(0))); // Use the first world as default
+    public static boolean hasAnyPermissions(Player player) {
+        for (String permission : ARENAREGEN_PERMISSIONS) {
+            if (player.hasPermission(permission)) {
+                return true; // return true if player has atleast ONE permission like broo
             }
         }
+        return false;
     }
 }
