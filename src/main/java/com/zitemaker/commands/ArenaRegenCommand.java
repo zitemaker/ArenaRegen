@@ -34,7 +34,7 @@ public class ArenaRegenCommand implements TabExecutor {
         this.selectionListener = selectionListener;
     }
 
-    int arenaSizeLimit = 40000;
+    int arenaSizeLimit = 40000; // 40,000 blocks size limit for arena creating
 
     @Override
     public boolean onCommand(@NotNull CommandSender commandSender, @NotNull Command command, @NotNull String s, @NotNull String @NotNull [] strings) {
@@ -85,7 +85,7 @@ public class ArenaRegenCommand implements TabExecutor {
                 }
 
                 Vector[] selection = selectionListener.getSelection(player);
-                if (selection == null || selection[0] == null || selection[1] == null) {
+                if (selection == null) {
                     commandSender.sendMessage(ChatColor.RED + "You must select both corners using the selection tool first!");
                     return true;
                 }

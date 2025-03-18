@@ -14,7 +14,7 @@ import java.util.Objects;
 
 public class ArenaRegen extends JavaPlugin {
 
-    SelectionToolListener selectionToolListener = new SelectionToolListener();
+    SelectionToolListener selectionToolListener = new SelectionToolListener(this);
 
     // ANSI color code for green
     private static final String ANSI_GREEN = "\u001B[92m";
@@ -34,7 +34,7 @@ public class ArenaRegen extends JavaPlugin {
         saveDefaultConfig();
 
         // Register the event listeners
-        Bukkit.getPluginManager().registerEvents(new SelectionToolListener(), this);
+        Bukkit.getPluginManager().registerEvents(new SelectionToolListener(this), this);
 
         // Register commands
         Objects.requireNonNull(getCommand("arenaregen")).setExecutor(new ArenaRegenCommand(this, selectionToolListener));
