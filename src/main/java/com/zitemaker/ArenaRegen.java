@@ -1,27 +1,28 @@
 package com.zitemaker;
 
 import com.zitemaker.commands.ArenaRegenCommand;
+import com.zitemaker.util.RegionData;
+import com.zitemaker.util.SelectionToolListener;
 import org.bukkit.Bukkit;
-import org.bukkit.configuration.ConfigurationSection;
-import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
-import java.io.File;
-import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 public class ArenaRegen extends JavaPlugin {
+
+    SelectionToolListener selectionToolListener = new SelectionToolListener();
 
     // ANSI color code for green
     private static final String ANSI_GREEN = "\u001B[92m";
     private static final String ANSI_RESET = "\u001B[0m";
     private static final String ANSI_RED = "\u001B[31m";
 
-    private Map<String, RegionData> registeredRegions = new HashMap<>();
-    private Map<String, String> pendingDeletions = new HashMap<>();
+    private final Map<String, RegionData> registeredRegions = new HashMap<>();
+    private final Map<String, String> pendingDeletions = new HashMap<>();
 
     @Override
     public void onEnable() {
@@ -33,13 +34,13 @@ public class ArenaRegen extends JavaPlugin {
         saveDefaultConfig();
 
         // Register the event listeners
-        Bukkit.getPluginManager().registerEvents(new SelectionTool(), this);
+        Bukkit.getPluginManager().registerEvents(new SelectionToolListener(), this);
 
         // Register commands
-        getCommand("arenaregen").setExecutor(new ArenaRegenCommand(this));
+        Objects.requireNonNull(getCommand("arenaregen")).setExecutor(new ArenaRegenCommand(this, selectionToolListener));
 
         // Register tab completer
-        getCommand("arenaregen").setTabCompleter(new ArenaRegenCommand(this));
+        Objects.requireNonNull(getCommand("arenaregen")).setTabCompleter(new ArenaRegenCommand(this, selectionToolListener));
     }
 
     @Override

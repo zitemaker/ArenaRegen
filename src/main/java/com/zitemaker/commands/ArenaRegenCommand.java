@@ -1,7 +1,8 @@
 package com.zitemaker.commands;
 
 import com.zitemaker.ArenaRegen;
-import com.zitemaker.RegionData;
+import com.zitemaker.util.RegionData;
+import com.zitemaker.util.SelectionToolListener;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
@@ -14,19 +15,23 @@ import org.bukkit.command.TabExecutor;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
+import org.bukkit.util.Vector;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 public class ArenaRegenCommand implements TabExecutor {
 
     private final ArenaRegen plugin;
+    private final SelectionToolListener selectionListener;
 
-    public ArenaRegenCommand(ArenaRegen plugin) {
+    public ArenaRegenCommand(ArenaRegen plugin, SelectionToolListener selectionListener) {
         this.plugin = plugin;
+        this.selectionListener = selectionListener;
     }
 
     int arenaSizeLimit = 40000;
@@ -50,7 +55,12 @@ public class ArenaRegenCommand implements TabExecutor {
             return true;
         }
 
+
+        // ALL THE SUB COMMANDS!!
+
         switch (strings[0]) {
+
+            // CREATE SUBCOMMAND
             case "create" -> {
                 if (!(commandSender instanceof Player player)) {
                     commandSender.sendMessage(onlyForPlayers);
@@ -59,100 +69,109 @@ public class ArenaRegenCommand implements TabExecutor {
 
                 if (!commandSender.hasPermission("arenaregen.create")) {
                     commandSender.sendMessage(noPermission);
+                    return true;
                 }
 
-                if (strings.length != 8) {
-                    commandSender.sendMessage(ChatColor.RED + "Usage: /arenaregen create <name> <x1> <y1> <z1> <x2> <y2> <z2>");
+                if (strings.length != 2) {
+                    commandSender.sendMessage(ChatColor.RED + "Usage: /arenaregen create <name>");
                     return true;
                 }
 
                 String regionName = strings[1];
 
-                try {
+                if (plugin.getRegisteredRegions().containsKey(regionName)) {
+                    commandSender.sendMessage(ChatColor.RED + "A region with this name already exists.");
+                    return true;
+                }
 
-                    int x1 = Integer.parseInt(strings[2]);
-                    int y1 = Integer.parseInt(strings[3]);
-                    int z1 = Integer.parseInt(strings[4]);
-                    int x2 = Integer.parseInt(strings[5]);
-                    int y2 = Integer.parseInt(strings[6]);
-                    int z2 = Integer.parseInt(strings[7]);
+                Vector[] selection = selectionListener.getSelection(player);
+                if (selection == null || selection[0] == null || selection[1] == null) {
+                    commandSender.sendMessage(ChatColor.RED + "You must select both corners using the selection tool first!");
+                    return true;
+                }
 
-                    World world = player.getWorld();
+                World world = player.getWorld();
+                int minX = Math.min(selection[0].getBlockX(), selection[1].getBlockX());
+                int minY = Math.min(selection[0].getBlockY(), selection[1].getBlockY());
+                int minZ = Math.min(selection[0].getBlockZ(), selection[1].getBlockZ());
+                int maxX = Math.max(selection[0].getBlockX(), selection[1].getBlockX());
+                int maxY = Math.max(selection[0].getBlockY(), selection[1].getBlockY());
+                int maxZ = Math.max(selection[0].getBlockZ(), selection[1].getBlockZ());
 
-                    if (plugin.getRegisteredRegions().containsKey(regionName)) {
-                        commandSender.sendMessage(ChatColor.RED + "A region with this name already exists.");
-                        return true;
-                    }
+                if (!isCoordinateHeightValid(world, minY) || !isCoordinateHeightValid(world, maxY)) {
+                    commandSender.sendMessage(ChatColor.RED + "Invalid arena height! Must be between " +
+                            world.getMinHeight() + " and " + world.getMaxHeight() + ".");
+                    return true;
+                }
 
-                    if (!isCoordinateHeightValid(world, y1) || !isCoordinateHeightValid(world, y2)) {
-                        commandSender.sendMessage(ChatColor.RED + "Invalid arena height! Must be between "
-                                + world.getMinHeight() + " and " + world.getMaxHeight() + ".");
-                        return true;
-                    }
+                if (!regionSizeLimit(minX, minZ) || !regionSizeLimit(maxX, maxZ)) {
+                    commandSender.sendMessage(ChatColor.RED + "Arena must be within " + arenaSizeLimit + " blocks. " +
+                            "You can change the size limit in config.yml");
+                    return true;
+                }
 
-                    if (!regionSizeLimit(x1, z1) || !regionSizeLimit(x2, z2)) {
-                        commandSender.sendMessage(ChatColor.RED + "Arena must be in size limit! Must be within " + arenaSizeLimit + " blocks. " +
-                                "You can change the size limit in config.yml");
-                        return true;
-                    }
+                RegionData regionData = new RegionData();
 
-                    int minX = Math.min(x1, x2);
-                    int minY = Math.min(y1, y2);
-                    int minZ = Math.min(z1, z2);
-                    int maxX = Math.max(x1, x2);
-                    int maxY = Math.max(y1, y2);
-                    int maxZ = Math.max(z1, z2);
-
-                    RegionData regionData = new RegionData();
-
-                    for (int x = minX; x <= maxX; x++) {
-                        for (int y = minY; y <= maxY; y++) {
-                            for (int z = minZ; z <= maxZ; z++) {
-                                Location loc = new Location(world, x, y, z);
-                                BlockData blockData = loc.getBlock().getBlockData();
-                                regionData.addBlock(loc, blockData);
-                            }
+                for (int x = minX; x <= maxX; x++) {
+                    for (int y = minY; y <= maxY; y++) {
+                        for (int z = minZ; z <= maxZ; z++) {
+                            Location loc = new Location(world, x, y, z);
+                            regionData.addBlock(loc, loc.getBlock().getBlockData());
                         }
                     }
-
-                    plugin.getRegisteredRegions().put(regionName, regionData);
-                    commandSender.sendMessage(ChatColor.GREEN + "Region '" + regionName + "' has been successfully registered!");
-
-                } catch (NumberFormatException e) {
-                    commandSender.sendMessage(ChatColor.RED + "Invalid coordinates! Please enter valid integers.");
                 }
+
+                plugin.getRegisteredRegions().put(regionName, regionData);
+                selectionListener.clearSelection(player);
+                commandSender.sendMessage(ChatColor.GREEN + "Region '" + regionName + "' has been successfully registered!");
 
                 return true;
             }
 
+
+            // ------------------------- = -------------------------
+
+            // DELETE SUB COMMAND
             case "delete" -> {
+                String showUsage = ChatColor.translateAlternateColorCodes('&', "&cUsage: /arenaregen delete <arena>");
+
                 if (!commandSender.hasPermission("arenaregen.delete")) {
                     commandSender.sendMessage(noPermission);
                     return true;
                 }
 
-                if (strings.length < 2) {
-                    commandSender.sendMessage(ChatColor.RED + "Usage: /arenaregen delete <name>");
+                // Check for correct arguments
+                if (strings.length != 2) {
+                    commandSender.sendMessage(showUsage);
                     return true;
                 }
 
                 String regionName = strings[1];
 
-                if (strings.length == 2) {
-                    // First step: Ask for confirmation
-                    if (!plugin.getRegisteredRegions().containsKey(regionName)) {
-                        commandSender.sendMessage(ChatColor.RED + "No region with this name exists.");
-                        return true;
-                    }
-
-                    plugin.getPendingDeletions().put(commandSender.getName(), regionName);
-                    commandSender.sendMessage(ChatColor.YELLOW + "Are you sure you want to delete the region '" + regionName + "'?");
-                    commandSender.sendMessage(ChatColor.YELLOW + "Type '/arenaregen delete confirm' to proceed.");
+                // Check if the region exists
+                if (!plugin.getRegisteredRegions().containsKey(regionName)) {
+                    commandSender.sendMessage(ChatColor.RED + "No region with this name exists.");
                     return true;
                 }
 
-                if (strings.length == 3 && strings[1].equalsIgnoreCase("confirm")) {
-                    // Second step: Confirm and delete
+                // First step: Ask for confirmation
+                if (strings.length == 2) {
+                    plugin.getPendingDeletions().put(commandSender.getName(), regionName);
+                    commandSender.sendMessage(ChatColor.YELLOW + "Are you sure you want to delete the region '" + regionName + "'?");
+                    commandSender.sendMessage(ChatColor.YELLOW + "Type '/arenaregen delete confirm' to proceed.");
+
+                    // Expire the confirmation after 30 seconds (you can adjust the time)
+                    Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                        if (plugin.getPendingDeletions().containsKey(commandSender.getName())) {
+                            plugin.getPendingDeletions().remove(commandSender.getName());
+                            commandSender.sendMessage(ChatColor.RED + "Arena deletion confirmation has expired.");
+                        }
+                    }, 600L); // 600L = 30 seconds
+                    return true;
+                }
+
+                // Second step: Confirm and delete
+                if (strings.length == 3 && strings[2].equalsIgnoreCase("confirm")) {
                     String senderName = commandSender.getName();
 
                     if (!plugin.getPendingDeletions().containsKey(senderName)) {
@@ -172,27 +191,92 @@ public class ArenaRegenCommand implements TabExecutor {
                     return true;
                 }
 
-                commandSender.sendMessage(ChatColor.RED + "Invalid usage! Type '/arenaregen delete <name>' first, then '/arenaregen delete confirm'.");
+                commandSender.sendMessage(ChatColor.RED + "Invalid usage! Type '/arenaregen delete <name>' first, then '/arenaregen delete confirm' to delete.");
                 return true;
             }
 
+            // ------------------------- = -------------------------
+
+            // RESIZE SUB COMMAND
             case "resize" -> {
+                String showUsage = ChatColor.RED + "Usage: /arenaregen resize <arena>";
+
                 if (!(commandSender instanceof Player player)) {
                     commandSender.sendMessage(onlyForPlayers);
                     return true;
                 }
 
-                if (strings.length < 4) {
-                    commandSender.sendMessage(ChatColor.RED + "Usage: /rg update <name> <corner1> <corner2>");
+                if (!commandSender.hasPermission("arenaregen.resize")) {
+                    commandSender.sendMessage(noPermission);
                     return true;
                 }
-                updateRegion(commandSender, strings[1], strings[2], strings[3], player);
+
+                if (strings.length != 2) {
+                    commandSender.sendMessage(showUsage);
+                    return true;
+                }
+
+                String regionName = strings[1];
+
+                if (!plugin.getRegisteredRegions().containsKey(regionName)) {
+                    commandSender.sendMessage(ChatColor.RED + "No arena with this name exists.");
+                    return true;
+                }
+
+                Vector[] selection = selectionListener.getSelection(player);
+                if (selection == null || selection[0] == null || selection[1] == null) {
+                    commandSender.sendMessage(ChatColor.RED + "You must select both corners using the selection tool first!");
+                    return true;
+                }
+
+                World world = player.getWorld();
+                int minX = Math.min(selection[0].getBlockX(), selection[1].getBlockX());
+                int minY = Math.min(selection[0].getBlockY(), selection[1].getBlockY());
+                int minZ = Math.min(selection[0].getBlockZ(), selection[1].getBlockZ());
+                int maxX = Math.max(selection[0].getBlockX(), selection[1].getBlockX());
+                int maxY = Math.max(selection[0].getBlockY(), selection[1].getBlockY());
+                int maxZ = Math.max(selection[0].getBlockZ(), selection[1].getBlockZ());
+
+                RegionData regionData = new RegionData();
+
+                // Store new block data
+                for (int x = minX; x <= maxX; x++) {
+                    for (int y = minY; y <= maxY; y++) {
+                        for (int z = minZ; z <= maxZ; z++) {
+                            Location loc = new Location(world, x, y, z);
+                            regionData.addBlock(loc, loc.getBlock().getBlockData());
+                        }
+                    }
+                }
+
+                // Update the existing region
+                plugin.getRegisteredRegions().put(regionName, regionData);
+                selectionListener.clearSelection(player);
+                commandSender.sendMessage(ChatColor.GREEN + "Region '" + regionName + "' has been successfully resized!");
+
+                return true;
             }
 
-            case "regenerate" -> {
+
+            // ------------------------- = -------------------------
+
+            // REGENERATE SUB COMMAND
+            case "regenerate", "regen" -> {
+                String showUsage = ChatColor.translateAlternateColorCodes('&', "&cUsage: /arenaregen regenerate <arena>");
+
                 String targetArenaName = strings[1];
 
                 RegionData regionData = plugin.getRegisteredRegions().get(targetArenaName);
+
+                if (!commandSender.hasPermission("arenaregen.regenerate")) {
+                    commandSender.sendMessage(noPermission);
+                    return true;
+                }
+
+                if (strings.length != 2) {
+                    commandSender.sendMessage(showUsage);
+                    return true;
+                }
 
                 if (targetArenaName == null) {
                     commandSender.sendMessage(ChatColor.RED + "Please select an arena to regenerate.");
@@ -226,7 +310,7 @@ public class ArenaRegenCommand implements TabExecutor {
                         Location location = entry.getKey();
                         location.setWorld(referenceLocation.getWorld());
                         BlockData blockData = entry.getValue();
-                        Block block = location.getWorld().getBlockAt(location);
+                        Block block = Objects.requireNonNull(location.getWorld()).getBlockAt(location);
                         block.setBlockData(blockData, false);
                     } catch (Exception e) {
                         plugin.getLogger().warning("Failed to restore block at " + entry.getKey() + ": " + e.getMessage());
@@ -239,7 +323,7 @@ public class ArenaRegenCommand implements TabExecutor {
                             Location location = entry.getKey();
                             location.setWorld(referenceLocation.getWorld());
 
-                            for (Entity entity : location.getWorld().getNearbyEntities(location, 0.5, 0.5, 0.5)) {
+                            for (Entity entity : Objects.requireNonNull(location.getWorld()).getNearbyEntities(location, 0.5, 0.5, 0.5)) {
                                 entity.remove();
                             }
 
@@ -256,44 +340,85 @@ public class ArenaRegenCommand implements TabExecutor {
                 return true;
             }
 
+            // ------------------------- = -------------------------
+
+            // SETSPAWN SUB COMMAND
             case "setspawn" -> {
+                String showUsage = ChatColor.translateAlternateColorCodes('&', "&cUsage: /arenaregen setspawn <arena>");
+
                 if (!(commandSender instanceof Player player)) {
                     commandSender.sendMessage(onlyForPlayers);
                     return true;
                 }
 
-                if (strings.length < 2) {
-                    commandSender.sendMessage(ChatColor.RED + "Usage: /rg spawn <name>");
+                if (strings.length != 2) {
+                    commandSender.sendMessage(showUsage);
                     return true;
                 }
                 setSpawn(commandSender, strings[1], player.getLocation());
             }
 
+            // ------------------------- = -------------------------
+
+            // DELSPAWN SUB COMMAND
             case "delspawn" -> {
                 // work in progress4
             }
 
+            // ------------------------- = -------------------------
+
+            // TELEPORT, TP SUB COMMAND
             case "teleport", "tp" -> {
+                String showUsage = ChatColor.translateAlternateColorCodes('&', "&cUsage: /arenaregen teleport <arena>");
+
                 if (!(commandSender instanceof Player player)) {
                     commandSender.sendMessage(onlyForPlayers);
                     return true;
                 }
 
-                if (strings.length < 2) {
-                    commandSender.sendMessage(ChatColor.RED + "Usage: /rg tp <name>");
+                if (strings.length != 2) {
+                    commandSender.sendMessage(showUsage);
                     return true;
                 }
                 teleportToRegion(commandSender, strings[1], player);
             }
 
+            // ------------------------- = -------------------------
+
+            // LIST SUB COMMAND
             case "list" -> listRegions(commandSender);
 
+            // ------------------------- = -------------------------
+
+            // RELOAD SUB COMMAND
             case "reload" -> {
                 // work in progress8
             }
 
+            // ------------------------- = -------------------------
+
+            // HELP SUB COMMAND
             case "help" -> {
                 // work in progress9
+            }
+
+            // ------------------------- = -------------------------
+
+            // WAND, SELECTION SUB COMMAND
+            case "wand", "selection" -> {
+                String showUsage = ChatColor.translateAlternateColorCodes('&', "&cUsage: /arenaregen selection");
+
+                if (!(commandSender instanceof Player player)) {
+                    commandSender.sendMessage(onlyForPlayers);
+                    return true;
+                }
+
+                if (strings.length != 1) {
+                    commandSender.sendMessage(showUsage);
+                    return true;
+                }
+
+                selectionListener.giveSelectionTool(player);
             }
 
             default -> {
@@ -384,57 +509,6 @@ public class ArenaRegenCommand implements TabExecutor {
         sender.sendMessage(ChatColor.GREEN + "Teleported to spawn point of region '" + name + "'.");
     }
 
-    private void updateRegion(CommandSender sender, String name, String corner1, String corner2, Player player) {
-        RegionData regionData = plugin.getRegisteredRegions().get(name);
-        if (regionData == null) {
-            sender.sendMessage(ChatColor.RED + "Region '" + name + "' does not exist.");
-            return;
-        }
-
-        try {
-            // Parse corner1 coordinates
-            String[] corner1Coords = corner1.split(" ");
-            int x1 = Integer.parseInt(corner1Coords[0]);
-            int y1 = Integer.parseInt(corner1Coords[1]);
-            int z1 = Integer.parseInt(corner1Coords[2]);
-
-            // Parse corner2 coordinates
-            String[] corner2Coords = corner2.split(" ");
-            int x2 = Integer.parseInt(corner2Coords[0]);
-            int y2 = Integer.parseInt(corner2Coords[1]);
-            int z2 = Integer.parseInt(corner2Coords[2]);
-
-            // Clear existing blocks and entities
-            regionData.getBlockDataMap().clear();
-            regionData.getEntityMap().clear();
-
-            // Iterate through all blocks in the new region
-            for (int x = Math.min(x1, x2); x <= Math.max(x1, x2); x++) {
-                for (int y = Math.min(y1, y2); y <= Math.max(y1, y2); y++) {
-                    for (int z = Math.min(z1, z2); z <= Math.max(z1, z2); z++) {
-                        Location location = new Location(player.getWorld(), x, y, z);
-                        Block block = location.getBlock();
-                        regionData.addBlock(location, block.getBlockData());
-
-                        // Track entities if enabled
-                        if (plugin.getConfig().getBoolean("track-entities")) {
-                            for (Entity entity : location.getWorld().getNearbyEntities(location, 0.5, 0.5, 0.5)) {
-                                regionData.addEntity(location, entity.getType());
-                            }
-                        }
-                    }
-                }
-            }
-
-            sender.sendMessage(ChatColor.GREEN + "Region '" + name + "' has been updated.");
-        } catch (NumberFormatException e) {
-            sender.sendMessage(ChatColor.RED + "Invalid coordinates. Please use integers.");
-        } catch (Exception e) {
-            sender.sendMessage(ChatColor.RED + "An error occurred while updating the region.");
-            plugin.getLogger().severe("Error updating region: " + e.getMessage());
-        }
-    }
-
     @Override
     public @Nullable List<String> onTabComplete(@NotNull CommandSender commandSender, @NotNull Command command, @NotNull String s, @NotNull String @NotNull [] strings) {
         return handleTabComplete(strings);
@@ -442,13 +516,13 @@ public class ArenaRegenCommand implements TabExecutor {
 
     private List<String> handleTabComplete(String @NotNull [] args) {
         return switch (args.length) {
-            case 1 -> filterSuggestions(List.of("create", "regenerate", "setspawn", "delspawn", "teleport", "tp",
+            case 1 -> filterSuggestions(List.of("create", "regenerate", "regen", "setspawn", "delspawn", "teleport", "tp",
                     "list", "delete", "resize", "reload", "help", "wand", "selection"), args[0]);
 
-            case 2 -> args[0].equalsIgnoreCase("regenerate") || args[0].equalsIgnoreCase("delete")
-                    || args[0].equalsIgnoreCase("resize") || args[0].equalsIgnoreCase("setspawn")
-                    || args[0].equalsIgnoreCase("delspawn") || args[0].equalsIgnoreCase("teleport")
-                    || args[0].equalsIgnoreCase("tp")
+            case 2 -> args[0].equalsIgnoreCase("regenerate") || args[0].equalsIgnoreCase("regen")
+                    || args[0].equalsIgnoreCase("delete") || args[0].equalsIgnoreCase("resize")
+                    || args[0].equalsIgnoreCase("setspawn") || args[0].equalsIgnoreCase("delspawn")
+                    || args[0].equalsIgnoreCase("teleport") || args[0].equalsIgnoreCase("tp")
                     ? listRegionsForTabComplete(args[1])
                     : args[0].equalsIgnoreCase("create")
                     ? filterSuggestions(List.of("ArenaName"), args[1]) // Suggest Arena Name

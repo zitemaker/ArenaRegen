@@ -20,6 +20,10 @@ permissions:
   arenaregen.resize:
     description: Allows the player to resize regions.
     default: op
+  arenaregen.regenerate:
+    description: Allows the player to use the selection tool. Receives access to /arenaregen wand & /arenaregen selection
+  arenaregen.select:
+    description: Allows the player to use the selection tool. Receives access to /arenaregen wand & /arenaregen selection
   arenaregen.list:
     description: Allows the player to list all regions.
     default: op
@@ -38,5 +42,3 @@ permissions:
   arenaregen.help:
     description: Allows the player to view available commands.
     default: true
-  arenaregen.select:
-    description: Allows the player to use the selection tool. Receives access to /arenaregen wand & /arenaregen selection
