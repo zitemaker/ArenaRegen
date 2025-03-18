@@ -73,7 +73,7 @@ public class Logger {
     }
 
     private String formatMessage(LogLevel level, String message) {
-        message = color ? "\u00a7e[\u00a72Jails\u00a7e] \u00a7r%s%s".formatted(
+        message = color ? "\u00a7e[\u00a72ArenaRegen\u00a7e] \u00a7r%s%s".formatted(
                 switch (level) {
                     case INFO -> "";
                     case WARNING -> "\u00a7e";
