@@ -1,8 +1,8 @@
 package com.zitemaker.commands;
 
 import com.zitemaker.ArenaRegen;
-import com.zitemaker.util.RegionData;
-import com.zitemaker.util.SelectionToolListener;
+import com.zitemaker.helpers.RegionData;
+import com.zitemaker.helpers.SelectionToolListener;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
@@ -12,6 +12,7 @@ import org.bukkit.block.data.BlockData;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabExecutor;
+import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
@@ -39,11 +40,25 @@ public class ArenaRegenCommand implements TabExecutor {
     @Override
     public boolean onCommand(@NotNull CommandSender commandSender, @NotNull Command command, @NotNull String s, @NotNull String @NotNull [] strings) {
 
-        String incorrectSyntax = ChatColor.translateAlternateColorCodes('&',
-                "&cUnknown arguments. Type \"/arenaregen help\" to see usages");
-        String noPermission = ChatColor.translateAlternateColorCodes('&',
-                "&cYou do not have permission to run this command");
-        String onlyForPlayers = ChatColor.translateAlternateColorCodes('&', "&cOnly players can use this command.");
+        FileConfiguration conf = plugin.getConfig();
+
+        // Plugin prefix
+        String pluginPrefix = ChatColor.translateAlternateColorCodes('&', conf.getString("prefix", "&e[&2ArenaRegen&e]"));
+
+        // Messages with placeholders from the config
+        String incorrectSyntax = ChatColor.translateAlternateColorCodes('&', conf.getString("messages.incorrect-syntax", "&cUnknown arguments. Type \"/arenaregen help\" to see usages"));
+        String noPermission = ChatColor.translateAlternateColorCodes('&', conf.getString("messages.no-permission", "&cYou do not have permission to run this command"));
+        String onlyForPlayers = ChatColor.translateAlternateColorCodes('&', conf.getString("messages.only-for-players", "&cOnly players can use this command"));
+        String regionExists = ChatColor.translateAlternateColorCodes('&', conf.getString("messages.region-exists", "&cA region with this name already exists."));
+        String invalidHeight = ChatColor.translateAlternateColorCodes('&', conf.getString("messages.invalid-height", "&cInvalid arena height! Must be between {minHeight} and {maxHeight}."));
+        String regionSizeLimit = ChatColor.translateAlternateColorCodes('&', conf.getString("messages.region-size-limit", "&cArena must be within {arenaSizeLimit} blocks. You can change the size limit in config.yml"));
+        String regionCreated = ChatColor.translateAlternateColorCodes('&', conf.getString("messages.region-created", "&aRegion '{arena_name}' has been successfully registered!"));
+        String regionDeleted = ChatColor.translateAlternateColorCodes('&', conf.getString("messages.region-deleted", "&aRegion '{arena_name}' has been successfully deleted!"));
+        String regionResized = ChatColor.translateAlternateColorCodes('&', conf.getString("messages.region-resized", "&aRegion '{arena_name}' has been successfully resized!"));
+        String arenaNotFound = ChatColor.translateAlternateColorCodes('&', conf.getString("messages.arena-not-found", "&cArena '{arena_name}' does not exist."));
+        String regenComplete = ChatColor.translateAlternateColorCodes('&', conf.getString("messages.regen-complete", "&aArena '{arena_name}' has been successfully regenerated!"));
+        String spawnSet = ChatColor.translateAlternateColorCodes('&', conf.getString("messages.spawn-set", "&aSpawn point for arena '{arena_name}' has been set!"));
+        String teleportSuccess = ChatColor.translateAlternateColorCodes('&', conf.getString("messages.teleport-success", "&aTeleported to arena '{arena_name}'."));
 
         if (!ArenaRegen.hasAnyPermissions((Player) commandSender)) {
             commandSender.sendMessage(noPermission);
@@ -62,8 +77,10 @@ public class ArenaRegenCommand implements TabExecutor {
 
             // CREATE SUBCOMMAND
             case "create" -> {
+                String showUsage = ChatColor.translateAlternateColorCodes('&', "&cUsage: /arenaregen delete <arena>");
+
                 if (!(commandSender instanceof Player player)) {
-                    commandSender.sendMessage(onlyForPlayers);
+                    plugin.getLogger().info(onlyForPlayers);
                     return true;
                 }
 
@@ -73,11 +90,12 @@ public class ArenaRegenCommand implements TabExecutor {
                 }
 
                 if (strings.length != 2) {
-                    commandSender.sendMessage(ChatColor.RED + "Usage: /arenaregen create <name>");
+                    commandSender.sendMessage(pluginPrefix + " " + showUsage);
                     return true;
                 }
 
                 String regionName = strings[1];
+                regionCreated = regionCreated.replace("{arena_name}", regionName);
 
                 if (plugin.getRegisteredRegions().containsKey(regionName)) {
                     commandSender.sendMessage(ChatColor.RED + "A region with this name already exists.");
@@ -123,7 +141,7 @@ public class ArenaRegenCommand implements TabExecutor {
 
                 plugin.getRegisteredRegions().put(regionName, regionData);
                 selectionListener.clearSelection(player);
-                commandSender.sendMessage(ChatColor.GREEN + "Region '" + regionName + "' has been successfully registered!");
+                commandSender.sendMessage(regionCreated);
 
                 return true;
             }
@@ -142,11 +160,12 @@ public class ArenaRegenCommand implements TabExecutor {
 
                 // Check for correct arguments
                 if (strings.length != 2) {
-                    commandSender.sendMessage(showUsage);
+                    commandSender.sendMessage(pluginPrefix + " " + showUsage);
                     return true;
                 }
 
                 String regionName = strings[1];
+                regionDeleted = regionDeleted.replace("{arena_name}", regionName);
 
                 // Check if the region exists
                 if (!plugin.getRegisteredRegions().containsKey(regionName)) {
@@ -187,7 +206,7 @@ public class ArenaRegenCommand implements TabExecutor {
                     }
 
                     plugin.getRegisteredRegions().remove(confirmedRegion);
-                    commandSender.sendMessage(ChatColor.GREEN + "Region '" + confirmedRegion + "' has been successfully deleted!");
+                    commandSender.sendMessage(regionDeleted);
                     return true;
                 }
 
@@ -212,11 +231,12 @@ public class ArenaRegenCommand implements TabExecutor {
                 }
 
                 if (strings.length != 2) {
-                    commandSender.sendMessage(showUsage);
+                    commandSender.sendMessage(pluginPrefix + " " + showUsage);
                     return true;
                 }
 
                 String regionName = strings[1];
+                regionResized = regionResized.replace("{arena_name}", regionName);
 
                 if (!plugin.getRegisteredRegions().containsKey(regionName)) {
                     commandSender.sendMessage(ChatColor.RED + "No arena with this name exists.");
@@ -252,7 +272,7 @@ public class ArenaRegenCommand implements TabExecutor {
                 // Update the existing region
                 plugin.getRegisteredRegions().put(regionName, regionData);
                 selectionListener.clearSelection(player);
-                commandSender.sendMessage(ChatColor.GREEN + "Region '" + regionName + "' has been successfully resized!");
+                commandSender.sendMessage(regionResized);
 
                 return true;
             }
@@ -265,6 +285,8 @@ public class ArenaRegenCommand implements TabExecutor {
                 String showUsage = ChatColor.translateAlternateColorCodes('&', "&cUsage: /arenaregen regenerate <arena>");
 
                 String targetArenaName = strings[1];
+                regenComplete = regenComplete.replace("{arena_name}", targetArenaName);
+                arenaNotFound = arenaNotFound.replace("{arena_name}", targetArenaName);
 
                 RegionData regionData = plugin.getRegisteredRegions().get(targetArenaName);
 
@@ -274,7 +296,7 @@ public class ArenaRegenCommand implements TabExecutor {
                 }
 
                 if (strings.length != 2) {
-                    commandSender.sendMessage(showUsage);
+                    commandSender.sendMessage(pluginPrefix + " " + showUsage);
                     return true;
                 }
 
@@ -284,7 +306,7 @@ public class ArenaRegenCommand implements TabExecutor {
                 }
 
                 if (regionData == null) {
-                    commandSender.sendMessage(ChatColor.RED + "Arena '" + targetArenaName + "' does not exist.");
+                    commandSender.sendMessage(arenaNotFound);
                     return true;
                 }
 
@@ -333,9 +355,7 @@ public class ArenaRegenCommand implements TabExecutor {
                         }
                     }
                 }
-
-                String message = ChatColor.translateAlternateColorCodes('&', plugin.getConfig().getString("messages.arena-regen", "&aArena Regen"));
-                commandSender.sendMessage(message);
+                commandSender.sendMessage(regenComplete);
 
                 return true;
             }
@@ -345,6 +365,8 @@ public class ArenaRegenCommand implements TabExecutor {
             // SETSPAWN SUB COMMAND
             case "setspawn" -> {
                 String showUsage = ChatColor.translateAlternateColorCodes('&', "&cUsage: /arenaregen setspawn <arena>");
+                String targetArenaName = strings[1];
+                spawnSet = spawnSet.replace("{arena_name}", targetArenaName);
 
                 if (!(commandSender instanceof Player player)) {
                     commandSender.sendMessage(onlyForPlayers);
@@ -352,10 +374,20 @@ public class ArenaRegenCommand implements TabExecutor {
                 }
 
                 if (strings.length != 2) {
-                    commandSender.sendMessage(showUsage);
+                    commandSender.sendMessage(pluginPrefix + " " + showUsage);
                     return true;
                 }
-                setSpawn(commandSender, strings[1], player.getLocation());
+
+                Location location = player.getLocation();
+
+                RegionData regionData = plugin.getRegisteredRegions().get(targetArenaName);
+                if (regionData == null) {
+                    commandSender.sendMessage(ChatColor.RED + "Region '" + targetArenaName + "' does not exist.");
+                    return true;
+                }
+
+                regionData.setSpawnLocation(location);
+                commandSender.sendMessage(spawnSet);
             }
 
             // ------------------------- = -------------------------
@@ -370,6 +402,8 @@ public class ArenaRegenCommand implements TabExecutor {
             // TELEPORT, TP SUB COMMAND
             case "teleport", "tp" -> {
                 String showUsage = ChatColor.translateAlternateColorCodes('&', "&cUsage: /arenaregen teleport <arena>");
+                String targetArenaName = strings[1];
+                teleportSuccess = teleportSuccess.replace("{arena_name}", targetArenaName);
 
                 if (!(commandSender instanceof Player player)) {
                     commandSender.sendMessage(onlyForPlayers);
@@ -377,10 +411,24 @@ public class ArenaRegenCommand implements TabExecutor {
                 }
 
                 if (strings.length != 2) {
-                    commandSender.sendMessage(showUsage);
+                    commandSender.sendMessage(pluginPrefix + " " + showUsage);
                     return true;
                 }
-                teleportToRegion(commandSender, strings[1], player);
+
+                RegionData regionData = plugin.getRegisteredRegions().get(targetArenaName);
+                if (regionData == null) {
+                    commandSender.sendMessage(ChatColor.RED + "Region '" + targetArenaName + "' does not exist.");
+                    return true;
+                }
+
+                Location spawnLocation = regionData.getSpawnLocation();
+                if (spawnLocation == null) {
+                    commandSender.sendMessage(ChatColor.RED + "Please set a spawn point for region '" + targetArenaName + "' first.");
+                    return true;
+                }
+
+                player.teleport(spawnLocation);
+                commandSender.sendMessage(teleportSuccess);
             }
 
             // ------------------------- = -------------------------
@@ -414,7 +462,7 @@ public class ArenaRegenCommand implements TabExecutor {
                 }
 
                 if (strings.length != 1) {
-                    commandSender.sendMessage(showUsage);
+                    commandSender.sendMessage(pluginPrefix + " " + showUsage);
                     return true;
                 }
 
@@ -479,34 +527,6 @@ public class ArenaRegenCommand implements TabExecutor {
                 ));
             }
         }
-    }
-
-    private void setSpawn(CommandSender sender, String name, Location location) {
-        RegionData regionData = plugin.getRegisteredRegions().get(name);
-        if (regionData == null) {
-            sender.sendMessage(ChatColor.RED + "Region '" + name + "' does not exist.");
-            return;
-        }
-
-        regionData.setSpawnLocation(location);
-        sender.sendMessage(ChatColor.GREEN + "Spawn point for region '" + name + "' has been set.");
-    }
-
-    private void teleportToRegion(CommandSender sender, String name, Player player) {
-        RegionData regionData = plugin.getRegisteredRegions().get(name);
-        if (regionData == null) {
-            sender.sendMessage(ChatColor.RED + "Region '" + name + "' does not exist.");
-            return;
-        }
-
-        Location spawnLocation = regionData.getSpawnLocation();
-        if (spawnLocation == null) {
-            sender.sendMessage(ChatColor.RED + "Please set a spawn point for region '" + name + "' first.");
-            return;
-        }
-
-        player.teleport(spawnLocation);
-        sender.sendMessage(ChatColor.GREEN + "Teleported to spawn point of region '" + name + "'.");
     }
 
     @Override

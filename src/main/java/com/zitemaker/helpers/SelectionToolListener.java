@@ -1,4 +1,4 @@
-package com.zitemaker.util;
+package com.zitemaker.helpers;
 
 import com.zitemaker.ArenaRegen;
 import org.bukkit.ChatColor;
@@ -14,10 +14,7 @@ import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.util.Vector;
 import org.jetbrains.annotations.NotNull;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Objects;
-import java.util.UUID;
+import java.util.*;
 
 public class SelectionToolListener implements Listener {
 
@@ -42,7 +39,7 @@ public class SelectionToolListener implements Listener {
         ItemStack item = player.getInventory().getItemInMainHand();
 
         if (item.getType() != Material.GOLDEN_HOE) return; // Must be a golden hoe
-        if (!player.hasPermission("arena.select") && !player.isOp() && player.getGameMode() != GameMode.CREATIVE) return;
+        if (!player.hasPermission("arena.select") && player.getGameMode() != GameMode.CREATIVE) return;
 
         event.setCancelled(true);
         UUID playerId = player.getUniqueId();

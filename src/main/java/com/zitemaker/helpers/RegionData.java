@@ -1,4 +1,4 @@
-package com.zitemaker.util;
+package com.zitemaker.helpers;
 
 import org.bukkit.Location;
 import org.bukkit.block.data.BlockData;

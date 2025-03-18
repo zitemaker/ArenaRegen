@@ -1,8 +1,9 @@
 package com.zitemaker;
 
 import com.zitemaker.commands.ArenaRegenCommand;
-import com.zitemaker.util.RegionData;
-import com.zitemaker.util.SelectionToolListener;
+import com.zitemaker.helpers.RegionData;
+import com.zitemaker.helpers.SelectionToolListener;
+import com.zitemaker.utils.*;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -16,38 +17,50 @@ public class ArenaRegen extends JavaPlugin {
 
     SelectionToolListener selectionToolListener = new SelectionToolListener(this);
 
-    // ANSI color code for green
-    private static final String ANSI_GREEN = "\u001B[92m";
-    private static final String ANSI_RESET = "\u001B[0m";
-    private static final String ANSI_RED = "\u001B[31m";
-
     private final Map<String, RegionData> registeredRegions = new HashMap<>();
     private final Map<String, String> pendingDeletions = new HashMap<>();
+    private final Console console = new SpigotConsole();
+    private final Logger logger = new Logger(new JavaPlatformLogger(console, getLogger()), true);
+
+    @Override
+    public void onLoad() {
+
+        // Plugin load success message
+        logger.info(ARChatColor.GREEN + "NoCreeperExplosion.jar v" + getDescription().getVersion() + " has been loaded successfully");
+    }
 
     @Override
     public void onEnable() {
-        // Plugin startup success message
-        getLogger().info(ANSI_GREEN + "ArenaRegen.jar v" + getDescription().getVersion() + " has been enabled successfully" + ANSI_RESET);
 
-        // Save default config
-        getConfig().options().copyDefaults();
+        logger.info("");
+        logger.info(ARChatColor.GOLD + "    +===============+");
+        logger.info(ARChatColor.GOLD + "    |   ArenaRegen  |");
+        logger.info(ARChatColor.GOLD + "    |---------------|");
+        logger.info(ARChatColor.GOLD + "    |  Free Version |");
+        logger.info(ARChatColor.GOLD + "    +===============+");
+        logger.info("");
+        logger.info(ARChatColor.GREEN + "    ArenaRegen v" + getDescription().getVersion() + " has been enabled.");
+        logger.info("");
+        logger.info(ARChatColor.AQUA + "    Purchase ArenaRegen+ for more features!");
+        logger.info(ARChatColor.GREEN + "    " + getPurchaseLink());
+        logger.info("");
+
+
         saveDefaultConfig();
 
-        // Register the event listeners
+
         Bukkit.getPluginManager().registerEvents(new SelectionToolListener(this), this);
 
-        // Register commands
+
         Objects.requireNonNull(getCommand("arenaregen")).setExecutor(new ArenaRegenCommand(this, selectionToolListener));
 
-        // Register tab completer
+
         Objects.requireNonNull(getCommand("arenaregen")).setTabCompleter(new ArenaRegenCommand(this, selectionToolListener));
     }
 
     @Override
     public void onDisable() {
-
-        // Plugin disable success message
-        getLogger().info(ANSI_RED + "ArenaRegen.jar v" + getDescription().getVersion() + " has been disabled successfully" + ANSI_RESET);
+        logger.info(ARChatColor.RED + "ArenaRegen v" + getDescription().getVersion() + " has been disabled.");
     }
 
     public Map<String, RegionData> getRegisteredRegions() {
@@ -77,5 +90,9 @@ public class ArenaRegen extends JavaPlugin {
             }
         }
         return false;
+    }
+
+    public String getPurchaseLink(){
+        return "https://zitemaker.tebex.io";
     }
 }
