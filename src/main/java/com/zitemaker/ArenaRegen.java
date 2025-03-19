@@ -15,7 +15,7 @@ import java.util.Objects;
 
 public class ArenaRegen extends JavaPlugin {
 
-    SelectionToolListener selectionToolListener = new SelectionToolListener(this);
+    private final SelectionToolListener selectionToolListener = new SelectionToolListener(this);
 
     private final Map<String, RegionData> registeredRegions = new HashMap<>();
     private final Map<String, String> pendingDeletions = new HashMap<>();
@@ -24,14 +24,12 @@ public class ArenaRegen extends JavaPlugin {
 
     @Override
     public void onLoad() {
-
         // Plugin load success message
-        logger.info(ARChatColor.GREEN + "NoCreeperExplosion.jar v" + getDescription().getVersion() + " has been loaded successfully");
+        logger.info(ARChatColor.GREEN + "ArenaRegen.jar v" + getDescription().getVersion() + " has been loaded successfully");
     }
 
     @Override
     public void onEnable() {
-
         logger.info("");
         logger.info(ARChatColor.GOLD + "    +===============+");
         logger.info(ARChatColor.GOLD + "    |   ArenaRegen  |");
@@ -45,17 +43,15 @@ public class ArenaRegen extends JavaPlugin {
         logger.info(ARChatColor.GREEN + "    " + getPurchaseLink());
         logger.info("");
 
-
         saveDefaultConfig();
 
+        // Register the SAME instance of SelectionToolListener
+        Bukkit.getPluginManager().registerEvents(selectionToolListener, this);
 
-        Bukkit.getPluginManager().registerEvents(new SelectionToolListener(this), this);
-
-
-        Objects.requireNonNull(getCommand("arenaregen")).setExecutor(new ArenaRegenCommand(this, selectionToolListener));
-
-
-        Objects.requireNonNull(getCommand("arenaregen")).setTabCompleter(new ArenaRegenCommand(this, selectionToolListener));
+        // use same instance for both cmd executor and tab completer
+        ArenaRegenCommand commandExecutor = new ArenaRegenCommand(this, selectionToolListener);
+        Objects.requireNonNull(getCommand("arenaregen")).setExecutor(commandExecutor);
+        Objects.requireNonNull(getCommand("arenaregen")).setTabCompleter(commandExecutor);
     }
 
     @Override
@@ -66,6 +62,7 @@ public class ArenaRegen extends JavaPlugin {
     public Map<String, RegionData> getRegisteredRegions() {
         return registeredRegions;
     }
+
     public Map<String, String> getPendingDeletions() {
         return pendingDeletions;
     }
@@ -86,7 +83,7 @@ public class ArenaRegen extends JavaPlugin {
     public static boolean hasAnyPermissions(Player player) {
         for (String permission : ARENAREGEN_PERMISSIONS) {
             if (player.hasPermission(permission)) {
-                return true; // return true if player has atleast ONE permission like broo
+                return true; // return true if player has at least ONE permission like broo dayum
             }
         }
         return false;
