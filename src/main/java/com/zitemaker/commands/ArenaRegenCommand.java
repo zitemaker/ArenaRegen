@@ -137,7 +137,7 @@ public class ArenaRegenCommand implements TabExecutor {
                     Bukkit.getScheduler().runTask(plugin, () -> {
                         plugin.getRegisteredRegions().put(regionName, regionData);
                         plugin.markRegionDirty(regionName);
-                        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> plugin.saveRegions());
+                        Bukkit.getScheduler().runTaskAsynchronously(plugin, plugin::saveRegions);
                         selectionListener.clearSelection(player);
                         commandSender.sendMessage(regionCreated.replace("{arena_name}", regionName));
                     });
@@ -199,7 +199,7 @@ public class ArenaRegenCommand implements TabExecutor {
                     regionData.clearRegion(confirmedRegion);
                     plugin.getRegisteredRegions().remove(confirmedRegion);
                     plugin.markRegionDirty(confirmedRegion);
-                    Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> plugin.saveRegions());
+                    Bukkit.getScheduler().runTaskAsynchronously(plugin, plugin::saveRegions);
                     commandSender.sendMessage(regionDeleted);
                     return true;
                 }
@@ -262,7 +262,7 @@ public class ArenaRegenCommand implements TabExecutor {
                     Bukkit.getScheduler().runTask(plugin, () -> {
                         plugin.getRegisteredRegions().put(regionName, regionData);
                         plugin.markRegionDirty(regionName);
-                        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> plugin.saveRegions());
+                        Bukkit.getScheduler().runTaskAsynchronously(plugin, plugin::saveRegions);
                         selectionListener.clearSelection(player);
                         commandSender.sendMessage(regionResized.replace("{arena_name}", regionName));
                     });
@@ -338,7 +338,7 @@ public class ArenaRegenCommand implements TabExecutor {
                         Map.Entry<Location, BlockData> entry = blockList.get(i);
                         Location loc = entry.getKey();
                         loc.setWorld(referenceLocation.getWorld());
-                        Block block = loc.getWorld().getBlockAt(loc);
+                        Block block = Objects.requireNonNull(loc.getWorld()).getBlockAt(loc);
                         block.setBlockData(entry.getValue(), false);
                     }
                     index.set(end);
@@ -359,7 +359,7 @@ public class ArenaRegenCommand implements TabExecutor {
                             for (Map.Entry<Location, EntityType> entry : regionData.getEntityMap().entrySet()) {
                                 Location loc = entry.getKey();
                                 loc.setWorld(referenceLocation.getWorld());
-                                loc.getWorld().spawnEntity(loc, entry.getValue());
+                                Objects.requireNonNull(loc.getWorld()).spawnEntity(loc, entry.getValue());
                             }
                         }
                         commandSender.sendMessage(regenComplete.replace("{arena_name}", targetArenaName));
@@ -399,7 +399,7 @@ public class ArenaRegenCommand implements TabExecutor {
 
                 regionData.setSpawnLocation(location);
                 plugin.markRegionDirty(targetArenaName);
-                Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> plugin.saveRegions());
+                Bukkit.getScheduler().runTaskAsynchronously(plugin, plugin::saveRegions);
                 commandSender.sendMessage(spawnSet);
                 return true;
             }
@@ -427,7 +427,7 @@ public class ArenaRegenCommand implements TabExecutor {
 
                 regionData.setSpawnLocation(null);
                 plugin.markRegionDirty(targetArenaName);
-                Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> plugin.saveRegions());
+                Bukkit.getScheduler().runTaskAsynchronously(plugin, plugin::saveRegions);
                 commandSender.sendMessage(spawnDeleted);
                 return true;
             }

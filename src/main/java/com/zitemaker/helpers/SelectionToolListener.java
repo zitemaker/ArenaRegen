@@ -124,7 +124,7 @@ public class SelectionToolListener implements Listener {
         if (task != null) task.cancel();
     }
 
-    // this is supposed to change the selected block to a gold block only in the client side. however, it wasnt working and i just gave up
+    // this is supposed to change the selected block to a gold block only in the client side. however, it wasn't working and I just gave up
     private void updateCornerDisplay(Player player, int index, Vector corner, Location[] displayed) {
         Location oldLoc = displayed[index];
         Location newLoc = corner.toLocation(player.getWorld());

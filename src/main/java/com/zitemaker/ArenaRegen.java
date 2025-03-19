@@ -116,7 +116,7 @@ public class ArenaRegen extends JavaPlugin {
         regionsConfig = YamlConfiguration.loadConfiguration(regionsFile);
 
         if (regionsConfig.contains("regions")) {
-            for (String regionName : regionsConfig.getConfigurationSection("regions").getKeys(false)) {
+            for (String regionName : Objects.requireNonNull(regionsConfig.getConfigurationSection("regions")).getKeys(false)) {
                 RegionData regionData = new RegionData(this);
                 regionData.loadFromConfig(regionsConfig, "regions." + regionName);
                 registeredRegions.put(regionName, regionData);

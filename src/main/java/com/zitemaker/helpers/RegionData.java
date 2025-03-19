@@ -10,6 +10,7 @@ import org.bukkit.entity.EntityType;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 
 public class RegionData {
 
@@ -51,7 +52,7 @@ public class RegionData {
     public void saveToConfig(FileConfiguration config, String path) {
         if (!blockDataMap.isEmpty()) {
             World world = blockDataMap.keySet().iterator().next().getWorld();
-            config.set(path + ".world", world.getName());
+            config.set(path + ".world", Objects.requireNonNull(world).getName());
             for (Map.Entry<Location, BlockData> entry : blockDataMap.entrySet()) {
                 String key = coordsToString(entry.getKey());
                 config.set(path + ".blocks." + key, entry.getValue().getAsString());
@@ -71,7 +72,7 @@ public class RegionData {
         }
 
         if (config.contains(path + ".blocks")) {
-            for (String key : config.getConfigurationSection(path + ".blocks").getKeys(false)) {
+            for (String key : Objects.requireNonNull(config.getConfigurationSection(path + ".blocks")).getKeys(false)) {
                 try {
                     Location loc = stringToCoords(key, world);
                     if (loc == null) continue;
