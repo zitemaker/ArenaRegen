@@ -39,33 +39,45 @@ public class SelectionToolListener implements Listener {
         ItemStack item = player.getInventory().getItemInMainHand();
 
         if (item.getType() != Material.GOLDEN_HOE) return; // Must be a golden hoe
-        if (!player.hasPermission("arena.select") && player.getGameMode() != GameMode.CREATIVE) return;
+        if (!player.hasPermission("arenaregen.create") && !player.hasPermission("arenaregen.resize") && player.getGameMode() != GameMode.CREATIVE) return;
 
         event.setCancelled(true);
+
+        if (event.getClickedBlock() == null) return;
+
         UUID playerId = player.getUniqueId();
-        Vector[] corners = selections.getOrDefault(playerId, new Vector[2]);
+        Vector[] corners = selections.computeIfAbsent(playerId, k -> new Vector[2]);
 
         if (event.getAction() == Action.LEFT_CLICK_BLOCK) {
-            Vector newCorner = Objects.requireNonNull(event.getClickedBlock()).getLocation().toVector();
-            if (corners[0] == null || !corners[0].equals(newCorner)) {
-                corners[0] = newCorner;
-                player.sendMessage(ChatColor.GREEN + "First corner set at: " + formatVector(newCorner));
-            }
+            Vector newCorner = event.getClickedBlock().getLocation().toVector();
+            corners[0] = newCorner;
+            player.sendMessage(ChatColor.GREEN + "First corner set at: " + formatVector(newCorner));
+            selections.put(playerId, corners);
+            resetExpiration(playerId);
         } else if (event.getAction() == Action.RIGHT_CLICK_BLOCK) {
-            Vector newCorner = Objects.requireNonNull(event.getClickedBlock()).getLocation().toVector();
-            if (corners[1] == null || !corners[1].equals(newCorner)) {
-                corners[1] = newCorner;
-                player.sendMessage(ChatColor.GREEN + "Second corner set at: " + formatVector(newCorner));
-            }
+            Vector newCorner = event.getClickedBlock().getLocation().toVector();
+            corners[1] = newCorner;
+            player.sendMessage(ChatColor.GREEN + "Second corner set at: " + formatVector(newCorner));
+            selections.put(playerId, corners);
+            resetExpiration(playerId);
         }
-
-        selections.put(playerId, corners);
-        resetExpiration(playerId);
     }
 
     public Vector[] getSelection(@NotNull Player player) {
         Vector[] corners = selections.get(player.getUniqueId());
-        return (corners != null && corners[0] != null && corners[1] != null) ? corners : null;
+        if (corners == null) {
+            player.sendMessage(ChatColor.RED + "No selection found. Please use the golden hoe to select corners.");
+            return null;
+        }
+        if (corners[0] == null) {
+            player.sendMessage(ChatColor.RED + "First corner not set. Left-click with golden hoe to set.");
+            return null;
+        }
+        if (corners[1] == null) {
+            player.sendMessage(ChatColor.RED + "Second corner not set. Right-click with golden hoe to set.");
+            return null;
+        }
+        return corners;
     }
 
     public void clearSelection(@NotNull Player player) {
