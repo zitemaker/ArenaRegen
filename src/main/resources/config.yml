@@ -14,82 +14,44 @@
 
 prefix: "&e[&2ArenaRegen&e]"
 
-# General settings
-general:
-  broadcast-on-jail: true
-  jail-broadcast-message: "{prefix} &6{player} has been jailed for {duration}. Reason: {reason}!"
-  broadcast-on-escape: true
-  broadcast-on-unjail: true # Notify all server players when a player is unjailed
-  unjail-broadcast-message: "{prefix} &a{player} has been released from jail!"
-  # Where should a player be teleported to when they get unjailed (WORLD_SPAWN/ORIGINAL_LOCATION) WORLD_SPAWN will teleport them to the world spawn and ORIGINAL_LOCATION will teleport them to the location they were at when they got jailed.
-  default-unjail-location: WORLD_SPAWN     # WORLD_SPAWN or ORIGINAL_LOCATION
+# How many blocks can be in each section.
+MaxSectionSize: 28800
 
-  # WORLD_SPAWN = sends players back to the world spawn
-  # ORIGINAL_LOCATION = sends player back to their previous location before being jailed
+# How many blocks are analyzed in arena creation per second. Increasing
+# this will increase the speed arenas are created but will cause more lag.
+AnalyzeBlockSpeed: 49600
 
-jail-settings:
-  keep-inventory: false # should players keep their items when jailed or will they be given a set of items
-  jail-items: # items given to jailed players when keep-inventory is false. keep this empty if you don't want to give anything to prisoners
-    - item: BAKED_POTATO
-      amount: 32
-    - item: WATER_BUCKET
-      amount: 1
-    - item: BREAD
-      amount: 16
-  punish-on-escape: true # whether a player should get punished or not if they escape jail. you need to define the jail area for this. if set to false, it will only show alerts.
-  escape-punishment: KILL    # KILL, TELEPORT_BACK, BAN, or UNJAIL
-  ban-duration: "1d" # (10s/10m/10h/10d)
-  escape-punishment-message:
-    kill:
-      player: "{prefix} &cYou were killed for trying to escape jail!"
-      broadcast: "{prefix} &c{player} was killed for attempting to escape jail!"
-    teleport_back:
-      player: "{prefix} &eYou have been teleported back for trying to escape jail!"
-      broadcast: "{prefix} &e{player} was teleported back for attempting to escape jail!"
-    ban:
-      player: "{prefix} &4You have been banned for trying to escape jail!"
-      broadcast: "{prefix} &4{player} was banned for attempting to escape jail!"
-    unjail:
-      player: "{prefix} &aYou have been unjailed for escaping jail!"
-      broadcast: "{prefix} &a{player} has been unjailed after escaping jail!"
-  change-skin: true # whether the player's skin should change when they get jailed (you need the SkinsRestorer plugin installed on your server for this)
-  skin-username: ShortMute954 # whose skin to use when a player gets jailed (Default: ShortMute954)
-  enable-jailed-role: true # whether players should have a "Jailed" text next to their name when they send anything in chat
-  jailed-role: "§c[Jailed]§r" # the text to show next to a player's name when they're jailed
+# What item should the selection tool be for creating the arenas
+SelectionToolItem: GOLDEN_HOE
 
-# Handcuff settings
-handcuff-settings:
-  slow-movement: true            # Make handcuffed players slower
-  blindness: true                # Give handcuffed players the blindness effect
-  disable-items: true            # Prevent using items while handcuffed
-  disable-block-place: true      # Prevent placing blocks while handcuffed
-  disable-block-break: true      # Prevent breaking blocks while handcuffed
-  disable-pvp: true              # Prevent PVP while handcuffed
-  handcuff-speed: 0.05           # Default speed in Minecraft is 0.1. [Warning!! DO NOT SET TO ANYTHING higher than 0.1]
-  broadcast-on-handcuff: true    # Notify all players when someone is handcuffed
-  broadcast-message: "{prefix} &c{player} has been handcuffed by {handcuffer}"
+# The amount of blocks to reset per second. Normal is the default speed
+# if none is specified when resetting an arena. Must be an integer
+# (a whole number) above 20
+Speeds:
+  VerySlow: 200
+  Slow: 1000
+  Normal: 10000
+  Fast: 40000
+  VeryFast: 100000
+  Extreme: 200000
 
-# Blocked commands when jailed
-# Players will not be able to use the following commands while jailed
-blocked-commands:
-  - "tpa"
-  - "home"
-  - "spawn"
-  - "team"
-  - "rtp"
-  - "tpr"
-  - "warp"
-command-blocked-message: "&cYou cannot use this command while jailed!"
+# How often the game will update you on the reset progress of arenas.
+# The interval is how long until it can update you again (in seconds),
+# while the percentage is how much it must achieve since it last
+# notified you before it can do so again.
+ResetUpdate:
+  Interval: 10
+  Percent: 5
 
-# Define restrictions for players who are in jail
-# Set to 'false' if you want to restrict certain actions from the list below
-jail-restrictions:
-  block-break: false    # If false, players cannot break blocks while jailed.
-  block-place: false    # If false, players cannot place blocks while jailed.
-  attack: false         # If false, players cannot attack entities while jailed.
-  vehicle-ride: false   # If false, players cannot ride vehicles (e.g., boats, minecarts) while jailed.
-  entity-ride: false    # If false, players cannot mount any entities (e.g. horses, llamas, players, camels) while jailed.
-  block-mount: false    # If false, players cannot mount on any blocks while jailed.
-  items: false          # If false, players cannot use items while jailed.
-  ender-pearl: false    # If false, players cannot use ender pearls while jailed.
-  allow-movement: true # If false, players cannot move while jailed.
+# If compression is somehow having issues, this will stop new arenas from being created compressed
+# You can convert existing arenas by double clicking the plugin jar file (so this must be done on
+# your PC)
+DisableCompression: false
+
+# The teleport command suggested to the user from clicking an arena in /arena list
+# Variables: player, x, y, z, world
+TeleportCommandSuggestion: '/tp <x> <y> <z>'
+
+# If an arena is created in an old version and the plugin has not been updated yet, you
+# can enable this to allow the arena to still load anyway.
+IgnoreOutdatedMaterials: false
