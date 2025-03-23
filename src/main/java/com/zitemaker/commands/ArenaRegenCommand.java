@@ -148,63 +148,67 @@ public class ArenaRegenCommand implements TabExecutor {
             case "delete" -> {
                 String showUsage = ChatColor.translateAlternateColorCodes('&', "&cUsage: /arenaregen delete <arena>");
 
+                // Check permission
                 if (!commandSender.hasPermission("arenaregen.delete")) {
                     commandSender.sendMessage(noPermission);
                     return true;
                 }
 
+                // Check if the command has the correct number of arguments
                 if (strings.length != 2) {
                     commandSender.sendMessage(pluginPrefix + " " + showUsage);
                     return true;
                 }
 
                 String regionName = strings[1];
-                regionDeleted = regionDeleted.replace("{arena_name}", regionName);
 
+                // Check if the region exists
                 if (!plugin.getRegisteredRegions().containsKey(regionName)) {
                     commandSender.sendMessage(ChatColor.RED + "No region with this name exists.");
                     return true;
                 }
 
-                if (strings.length == 2) {
-                    plugin.getPendingDeletions().put(commandSender.getName(), regionName);
-                    commandSender.sendMessage(ChatColor.YELLOW + "Are you sure you want to delete the region '" + regionName + "'?");
-                    commandSender.sendMessage(ChatColor.YELLOW + "Type '/arenaregen delete confirm' to proceed.");
+                // Add the region to pending deletions
+                plugin.getPendingDeletions().put(commandSender.getName(), regionName);
+                commandSender.sendMessage(ChatColor.YELLOW + "Are you sure you want to delete the region '" + regionName + "'?");
+                commandSender.sendMessage(ChatColor.YELLOW + "Type '/arenaregen confirm' to proceed.");
 
-                    Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                        if (plugin.getPendingDeletions().containsKey(commandSender.getName())) {
-                            plugin.getPendingDeletions().remove(commandSender.getName());
-                            commandSender.sendMessage(ChatColor.RED + "Arena deletion confirmation has expired.");
-                        }
-                    }, 600L);
+                // Schedule removal of the pending deletion after 60 seconds (1200 ticks)
+                Bukkit.getScheduler().runTaskLater(plugin, () -> plugin.getPendingDeletions().remove(commandSender.getName()), 1200L);
+
+                return true;
+            }
+
+            case "confirm" -> {
+                // Check if the sender has a pending deletion
+                String senderName = commandSender.getName();
+
+                if (!plugin.getPendingDeletions().containsKey(senderName)) {
+                    commandSender.sendMessage(ChatColor.RED + "No pending region deletion found. Use '/arenaregen delete <name>' first.");
                     return true;
                 }
 
-                if (strings.length == 3 && strings[2].equalsIgnoreCase("confirm")) {
-                    String senderName = commandSender.getName();
+                // Get the region name from pending deletions
+                String confirmedRegion = plugin.getPendingDeletions().remove(senderName);
 
-                    if (!plugin.getPendingDeletions().containsKey(senderName)) {
-                        commandSender.sendMessage(ChatColor.RED + "No pending region deletion found. Use '/arenaregen delete <name>' first.");
-                        return true;
-                    }
-
-                    String confirmedRegion = plugin.getPendingDeletions().remove(senderName);
-
-                    if (!plugin.getRegisteredRegions().containsKey(confirmedRegion)) {
-                        commandSender.sendMessage(ChatColor.RED + "The region '" + confirmedRegion + "' no longer exists.");
-                        return true;
-                    }
-
-                    RegionData regionData = plugin.getRegisteredRegions().get(confirmedRegion);
-                    regionData.clearRegion(confirmedRegion);
-                    plugin.getRegisteredRegions().remove(confirmedRegion);
-                    plugin.markRegionDirty(confirmedRegion);
-                    Bukkit.getScheduler().runTaskAsynchronously(plugin, plugin::saveRegions);
-                    commandSender.sendMessage(regionDeleted);
+                // Check if the region still exists
+                if (!plugin.getRegisteredRegions().containsKey(confirmedRegion)) {
+                    commandSender.sendMessage(ChatColor.RED + "The region '" + confirmedRegion + "' no longer exists.");
                     return true;
                 }
 
-                commandSender.sendMessage(ChatColor.RED + "Invalid usage! Type '/arenaregen delete <name>' first, then '/arenaregen delete confirm' to delete.");
+                // Delete the region
+                RegionData regionData = plugin.getRegisteredRegions().get(confirmedRegion);
+                regionData.clearRegion(confirmedRegion);
+                plugin.getRegisteredRegions().remove(confirmedRegion);
+
+                // Save the changes asynchronously
+                Bukkit.getScheduler().runTaskAsynchronously(plugin, plugin::saveRegions);
+
+                // Notify the sender
+                regionDeleted = regionDeleted.replace("{arena_name}", confirmedRegion); // Replace placeholder with the actual region name
+                commandSender.sendMessage(regionDeleted);
+
                 return true;
             }
 
