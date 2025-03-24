@@ -28,8 +28,8 @@ public class ArenaRegen extends JavaPlugin {
     private final Logger logger = new Logger(new JavaPlatformLogger(console, getLogger()), true);
     private final Set<String> dirtyRegions = new HashSet<>();
 
-    private File regionsFile;
-    private FileConfiguration regionsConfig;
+    public File regionsFile;
+    public FileConfiguration regionsConfig;
 
     @Override
     public void onLoad() {

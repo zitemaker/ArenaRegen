@@ -8,21 +8,21 @@
 #
 # Development Team: Zitemaker Studios
 # Discord: http://dsc.gg/zitemaker
-#
 # Please refer to our documentation website if you are having trouble with the configuration
 # Documentation Website: https://zitemakers-organization.gitbook.io/arenaregen
 
 prefix: "&e[&2ArenaRegen&e]"
 
-# How many blocks can be in each section.
-MaxSectionSize: 28800
+general:
+  # How many blocks can be in each section.
+  MaxSectionSize: 28800
 
-# How many blocks are analyzed in arena creation per second. Increasing
-# this will increase the speed arenas are created but will cause more lag.
-AnalyzeBlockSpeed: 49600
+  # How many blocks are analyzed in arena creation per second. Increasing
+  # this will increase the speed arenas are created but will cause more lag.
+  AnalyzeBlockSpeed: 49600
 
-# What item should the selection tool be for creating the arenas
-SelectionToolItem: GOLDEN_HOE
+  # What item should the selection tool be for creating the arenas
+  SelectionToolItem: GOLDEN_HOE
 
 # The amount of blocks to reset per second. Normal is the default speed
 # if none is specified when resetting an arena. Must be an integer
