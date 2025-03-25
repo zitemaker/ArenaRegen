@@ -109,14 +109,19 @@ public class ArenaRegen extends JavaPlugin {
             arenasDir.mkdirs();
             return;
         }
-        for (File file : arenasDir.listFiles((dir, name) -> name.endsWith(".datc"))) {
+        File[] files = arenasDir.listFiles((dir, name) -> name.endsWith(".datc"));
+        if (files == null) return;
+
+        for (File file : files) {
             String regionName = file.getName().replace(".datc", "");
             RegionData regionData = new RegionData(this);
             try {
                 regionData.loadFromDatc(file);
                 registeredRegions.put(regionName, regionData);
-            } catch (IOException e) {
-                getLogger().severe("Failed to load " + regionName + ".datc: " + e.getMessage());
+                logger.info(ARChatColor.GREEN + "Loaded arena '" + regionName + "' successfully.");
+            } catch (Exception e) {
+                logger.info(ARChatColor.RED + "Failed to load arena '" + regionName + "' from " + file.getName() + ": " + e.getMessage());
+                logger.info(ARChatColor.YELLOW + "Skipping '" + regionName + "'. You may need to delete or fix the file.");
             }
         }
     }

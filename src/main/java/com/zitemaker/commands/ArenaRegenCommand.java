@@ -36,10 +36,17 @@ public class ArenaRegenCommand implements TabExecutor {
         this.selectionListener = selectionListener;
     }
 
-    int arenaSizeLimit = 40000;
+    public long arenaSizeLimit;
+
 
     @Override
     public boolean onCommand(@NotNull CommandSender commandSender, @NotNull Command command, @NotNull String s, @NotNull String @NotNull [] strings) {
+
+        if (!(commandSender instanceof Player)){
+            commandSender.sendMessage(ChatColor.RED + "You must be a player to do that.");
+            return false;
+        }
+
 
         FileConfiguration conf = plugin.getConfig();
 
@@ -51,6 +58,7 @@ public class ArenaRegenCommand implements TabExecutor {
         String regionExists = ChatColor.translateAlternateColorCodes('&', conf.getString("messages.region-exists", "&cA region with this name already exists."));
         String invalidHeight = ChatColor.translateAlternateColorCodes('&', conf.getString("messages.invalid-height", "&cInvalid arena height! Must be between {minHeight} and {maxHeight}."));
         String regionSizeLimit = ChatColor.translateAlternateColorCodes('&', conf.getString("messages.region-size-limit", "&cArena must be within {arenaSizeLimit} blocks. You can change the size limit in config.yml"));
+        arenaSizeLimit = plugin.getConfig().getLong("general.arena-size-limit", 1000000L);
         String regionCreated = ChatColor.translateAlternateColorCodes('&', conf.getString("messages.region-created", "&aRegion '{arena_name}' has been successfully registered!"));
         String regionDeleted = ChatColor.translateAlternateColorCodes('&', conf.getString("messages.region-deleted", "&aRegion '{arena_name}' has been successfully deleted!"));
         String regionResized = ChatColor.translateAlternateColorCodes('&', conf.getString("messages.region-resized", "&aRegion '{arena_name}' has been successfully resized!"));
@@ -122,10 +130,9 @@ public class ArenaRegenCommand implements TabExecutor {
                 int height = maxY - minY + 1;
                 int depth = maxZ - minZ + 1;
                 long volume = (long) width * height * depth;
-                long arenaSizeLimit = plugin.getConfig().getLong("arena-size-limit", 1000000L);
+
                 if (volume > arenaSizeLimit) {
-                    commandSender.sendMessage(ChatColor.RED + "Arena size too large! Selected volume is " + volume +
-                            " blocks, limit is " + arenaSizeLimit + " blocks. You can change the size limit in config.yml");
+                    commandSender.sendMessage(regionSizeLimit.replace("{arenaSizeLimit}", String.valueOf(arenaSizeLimit)));
                     return true;
                 }
 
@@ -205,7 +212,6 @@ public class ArenaRegenCommand implements TabExecutor {
 
                 return true;
             }
-
 
             case "delete" -> {
                 String showUsage = ChatColor.translateAlternateColorCodes('&', "&cUsage: /arenaregen delete <arena>");
@@ -389,6 +395,7 @@ public class ArenaRegenCommand implements TabExecutor {
 
                 commandSender.sendMessage(ChatColor.YELLOW + "Regenerating region '" + targetArenaName + "', please wait...");
                 int blocksPerTick = plugin.getConfig().getInt("regen.blocks-per-tick", 1000);
+                boolean regenOnlyModified = plugin.getConfig().getBoolean("regen.regen-only-modified", false);
                 AtomicInteger sectionIndex = new AtomicInteger(0);
                 List<String> sectionNames = new ArrayList<>(regionData.sectionedBlockData.keySet());
                 AtomicInteger totalBlocksReset = new AtomicInteger(0);
@@ -445,8 +452,18 @@ public class ArenaRegenCommand implements TabExecutor {
                         Location loc = entry.getKey();
                         loc.setWorld(world);
                         Block block = world.getBlockAt(loc);
-                        block.setBlockData(entry.getValue(), false);
-                        totalBlocksReset.incrementAndGet();
+                        BlockData originalData = entry.getValue();
+                        BlockData currentData = block.getBlockData();
+
+                        if (regenOnlyModified) {
+                            if (!currentData.equals(originalData)) {
+                                block.setBlockData(originalData, false);
+                                totalBlocksReset.incrementAndGet();
+                            }
+                        } else {
+                            block.setBlockData(originalData, false);
+                            totalBlocksReset.incrementAndGet();
+                        }
                         blockIndex++;
                     }
 
@@ -635,6 +652,7 @@ public class ArenaRegenCommand implements TabExecutor {
 
 
     private boolean isRegionSizeValid(int minX, int maxX, int minY, int maxY, int minZ, int maxZ) {
+        arenaSizeLimit = plugin.getConfig().getLong("general.arena-size-limit", 1000000L);
         int width = maxX - minX + 1;
         int height = maxY - minY + 1;
         int depth = maxZ - minZ + 1;

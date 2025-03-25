@@ -132,8 +132,12 @@ public class RegionData {
                     if (loc == null) continue;
                     String blockDataStr = config.getString(path + ".sections." + section + "." + key);
                     if (blockDataStr == null) continue;
-                    BlockData blockData = Bukkit.createBlockData(blockDataStr);
-                    sectionData.put(loc, blockData);
+                    try {
+                        BlockData blockData = Bukkit.createBlockData(blockDataStr);
+                        sectionData.put(loc, blockData);
+                    } catch (IllegalArgumentException e) {
+                        //plugin.getLogger().warning("Failed to parse block data '" + blockDataStr + "' from config at " + key + ": " + e.getMessage());
+                    }
                 }
                 sectionedBlockData.put(section, sectionData);
             }
@@ -183,12 +187,17 @@ public class RegionData {
 
         ByteArrayOutputStream keyStream = new ByteArrayOutputStream();
         for (String blockType : blockTypes) {
-            keyStream.write(blockType.getBytes(StandardCharsets.US_ASCII));
+            if (blockType == null || blockType.isEmpty()) {
+                plugin.getLogger().warning("Null or empty block type detected during save, replacing with minecraft:air");
+                keyStream.write("minecraft:air".getBytes(StandardCharsets.UTF_8));
+            } else {
+                keyStream.write(blockType.getBytes(StandardCharsets.UTF_8));
+            }
             keyStream.write(KEY_SPLIT);
         }
         byte[] keyBytes = keyStream.toByteArray();
         if (keyBytes.length > 0) {
-            keyBytes = Arrays.copyOf(keyBytes, keyBytes.length - 1);
+            keyBytes = Arrays.copyOf(keyBytes, keyBytes.length - 1); // Remove trailing KEY_SPLIT
         }
         byteStream.write(keyBytes);
         byteStream.write(SECTION_SPLIT);
@@ -209,10 +218,18 @@ public class RegionData {
             blockBuffer.putInt(blocks.size());
             for (Map.Entry<Location, BlockData> blockEntry : blocks.entrySet()) {
                 Location loc = blockEntry.getKey();
+                BlockData blockData = blockEntry.getValue();
+                String blockDataStr = blockData != null ? blockData.getAsString() : "minecraft:air";
+                int typeIndex = blockTypes.indexOf(blockDataStr);
+                if (typeIndex == -1) {
+                    plugin.getLogger().warning("Block type '" + blockDataStr + "' not found in blockTypes during save, adding it");
+                    blockTypes.add(blockDataStr);
+                    typeIndex = blockTypes.size() - 1;
+                }
                 blockBuffer.putInt(loc.getBlockX());
                 blockBuffer.putInt(loc.getBlockY());
                 blockBuffer.putInt(loc.getBlockZ());
-                blockBuffer.putInt(blockTypes.indexOf(blockEntry.getValue().getAsString()));
+                blockBuffer.putInt(typeIndex);
             }
             byteStream.write(blockBuffer.array());
         }
@@ -239,6 +256,7 @@ public class RegionData {
                 break;
             }
         }
+        if (firstSplit == -1) throw new IOException("Invalid .datc file: No header section split found");
         String header = new String(Arrays.copyOfRange(readBytes, 0, firstSplit), StandardCharsets.US_ASCII);
         String[] headerParts = header.split(",");
         creator = headerParts[1];
@@ -266,25 +284,30 @@ public class RegionData {
                 break;
             }
         }
+        if (keySplit == -1) throw new IOException("Invalid .datc file: No block types section split found");
         byte[] keyBytes = Arrays.copyOfRange(readBytes, firstSplit + 1, keySplit);
         blockTypes.clear();
         if (keyBytes.length > 0) {
             int start = 0;
             for (int i = 0; i < keyBytes.length; i++) {
                 if (keyBytes[i] == KEY_SPLIT) {
-                    blockTypes.add(new String(Arrays.copyOfRange(keyBytes, start, i), StandardCharsets.US_ASCII));
+                    String blockType = new String(Arrays.copyOfRange(keyBytes, start, i), StandardCharsets.UTF_8);
+                    blockTypes.add(blockType);
                     start = i + 1;
                 }
             }
             if (start < keyBytes.length) {
-                blockTypes.add(new String(Arrays.copyOfRange(keyBytes, start, keyBytes.length), StandardCharsets.US_ASCII));
+                String blockType = new String(Arrays.copyOfRange(keyBytes, start, keyBytes.length), StandardCharsets.UTF_8);
+                blockTypes.add(blockType);
             }
         }
 
         buffer.position(keySplit + 1);
+        if (buffer.remaining() < 2) throw new IOException("Invalid .datc file: Insufficient data for section count");
         int sectionCount = buffer.getShort();
         int[] sectionIds = new int[sectionCount];
         for (int i = 0; i < sectionCount; i++) {
+            if (buffer.remaining() < 4) throw new IOException("Invalid .datc file: Insufficient data for section IDs");
             sectionIds[i] = buffer.getInt();
         }
 
@@ -297,17 +320,32 @@ public class RegionData {
                     break;
                 }
             }
+            if (nameEnd == -1) throw new IOException("Invalid .datc file: No section name split found");
             String sectionName = new String(Arrays.copyOfRange(readBytes, buffer.position(), nameEnd), StandardCharsets.UTF_8);
             buffer.position(nameEnd + 1);
+            if (buffer.remaining() < 4) throw new IOException("Invalid .datc file: Insufficient data for block count");
             int blockCount = buffer.getInt();
             Map<Location, BlockData> blocks = new HashMap<>();
             for (int j = 0; j < blockCount; j++) {
+                if (buffer.remaining() < 16) throw new IOException("Invalid .datc file: Insufficient data for block entry");
                 int x = buffer.getInt();
                 int y = buffer.getInt();
                 int z = buffer.getInt();
                 int typeIndex = buffer.getInt();
+                if (typeIndex < 0 || typeIndex >= blockTypes.size()) {
+                    plugin.getLogger().warning("Invalid block type index " + typeIndex + " in section " + sectionName + " at (" + x + "," + y + "," + z + ")");
+                    blocks.put(new Location(world, x, y, z), Bukkit.createBlockData("minecraft:air"));
+                    continue;
+                }
                 Location loc = new Location(world, x, y, z);
-                blocks.put(loc, Bukkit.createBlockData(blockTypes.get(typeIndex)));
+                String blockTypeStr = blockTypes.get(typeIndex);
+                try {
+                    BlockData blockData = Bukkit.createBlockData(blockTypeStr);
+                    blocks.put(loc, blockData);
+                } catch (IllegalArgumentException e) {
+                    //plugin.getLogger().warning("Failed to parse block data '" + blockTypeStr + "' at " + loc + ": " + e.getMessage());
+                    blocks.put(loc, Bukkit.createBlockData("minecraft:air"));
+                }
             }
             sectionedBlockData.put(sectionName, blocks);
         }
