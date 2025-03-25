@@ -5,8 +5,6 @@ import com.zitemaker.helpers.RegionData;
 import com.zitemaker.helpers.SelectionToolListener;
 import com.zitemaker.utils.*;
 import org.bukkit.Bukkit;
-import org.bukkit.configuration.file.FileConfiguration;
-import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -27,9 +25,6 @@ public class ArenaRegen extends JavaPlugin {
     private final Console console = new SpigotConsole();
     private final Logger logger = new Logger(new JavaPlatformLogger(console, getLogger()), true);
     private final Set<String> dirtyRegions = new HashSet<>();
-
-    public File regionsFile;
-    public FileConfiguration regionsConfig;
 
     @Override
     public void onLoad() {
@@ -109,32 +104,35 @@ public class ArenaRegen extends JavaPlugin {
     }
 
     public void loadRegions() {
-        regionsFile = new File(getDataFolder(), "regions.yml");
-        if (!regionsFile.exists()) {
-            saveResource("regions.yml", false);
+        File arenasDir = new File(getDataFolder(), "arenas");
+        if (!arenasDir.exists()) {
+            arenasDir.mkdirs();
+            return;
         }
-        regionsConfig = YamlConfiguration.loadConfiguration(regionsFile);
-
-        if (regionsConfig.contains("regions")) {
-            for (String regionName : Objects.requireNonNull(regionsConfig.getConfigurationSection("regions")).getKeys(false)) {
-                RegionData regionData = new RegionData(this);
-                regionData.loadFromConfig(regionsConfig, "regions." + regionName);
+        for (File file : arenasDir.listFiles((dir, name) -> name.endsWith(".datc"))) {
+            String regionName = file.getName().replace(".datc", "");
+            RegionData regionData = new RegionData(this);
+            try {
+                regionData.loadFromDatc(file);
                 registeredRegions.put(regionName, regionData);
+            } catch (IOException e) {
+                getLogger().severe("Failed to load " + regionName + ".datc: " + e.getMessage());
             }
         }
     }
 
     public void saveRegions() {
+        File arenasDir = new File(getDataFolder(), "arenas");
+        arenasDir.mkdirs();
         for (String regionName : registeredRegions.keySet()) {
             if (dirtyRegions.contains(regionName)) {
-                registeredRegions.get(regionName).saveToConfig(regionsConfig, "regions." + regionName);
+                File datcFile = new File(arenasDir, regionName + ".datc");
+                try {
+                    registeredRegions.get(regionName).saveToDatc(datcFile);
+                } catch (IOException e) {
+                    getLogger().severe("Failed to save " + regionName + ".datc: " + e.getMessage());
+                }
             }
-        }
-
-        try {
-            regionsConfig.save(regionsFile);
-        } catch (IOException e) {
-            logger.info(ARChatColor.RED + "Failed to save regions.yml: " + e.getMessage());
         }
     }
 

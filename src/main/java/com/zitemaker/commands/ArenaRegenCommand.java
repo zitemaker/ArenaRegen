@@ -21,6 +21,7 @@ import org.bukkit.util.Vector;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -71,6 +72,7 @@ public class ArenaRegenCommand implements TabExecutor {
         }
 
         switch (strings[0]) {
+
             case "create" -> {
                 String showUsage = ChatColor.translateAlternateColorCodes('&', "&cUsage: /arenaregen create <arena>");
 
@@ -110,17 +112,18 @@ public class ArenaRegenCommand implements TabExecutor {
                 int maxY = Math.max(selection[0].getBlockY(), selection[1].getBlockY());
                 int maxZ = Math.max(selection[0].getBlockZ(), selection[1].getBlockZ());
 
-                if (!isCoordinateHeightValid(world, minY) || !isCoordinateHeightValid(world, maxY)) {
+                if (minY < world.getMinHeight() || maxY > world.getMaxHeight()) {
                     commandSender.sendMessage(ChatColor.RED + "Invalid arena height! Must be between " +
                             world.getMinHeight() + " and " + world.getMaxHeight() + ".");
                     return true;
                 }
 
-                if (!isRegionSizeValid(minX, maxX, minY, maxY, minZ, maxZ)) {
-                    int width = maxX - minX + 1;
-                    int height = maxY - minY + 1;
-                    int depth = maxZ - minZ + 1;
-                    long volume = (long) width * height * depth;
+                int width = maxX - minX + 1;
+                int height = maxY - minY + 1;
+                int depth = maxZ - minZ + 1;
+                long volume = (long) width * height * depth;
+                long arenaSizeLimit = plugin.getConfig().getLong("arena-size-limit", 1000000L);
+                if (volume > arenaSizeLimit) {
                     commandSender.sendMessage(ChatColor.RED + "Arena size too large! Selected volume is " + volume +
                             " blocks, limit is " + arenaSizeLimit + " blocks. You can change the size limit in config.yml");
                     return true;
@@ -132,44 +135,68 @@ public class ArenaRegenCommand implements TabExecutor {
                         System.currentTimeMillis(),
                         world.getName(),
                         Bukkit.getVersion(),
-                        maxX - minX + 1,
-                        maxY - minY + 1,
-                        maxZ - minZ + 1,
-                        0 // Initial section count
+                        width,
+                        height,
+                        depth
                 );
 
-                // Immediately register and save to regions.yml
                 plugin.getRegisteredRegions().put(regionName, regionData);
-                regionData.saveToConfig(plugin.regionsConfig, "regions." + regionName);
+                File arenasDir = new File(plugin.getDataFolder(), "arenas");
+                arenasDir.mkdirs();
+                File datcFile = new File(arenasDir, regionName + ".datc");
                 try {
-                    plugin.regionsConfig.save(plugin.regionsFile);
+                    regionData.saveToDatc(datcFile);
                 } catch (IOException e) {
-                    plugin.getLogger().severe("Failed to save regions.yml: " + e.getMessage());
+                    plugin.getLogger().severe("Failed to save " + regionName + ".datc: " + e.getMessage());
                 }
 
                 commandSender.sendMessage(ChatColor.YELLOW + "Analyzing and creating region '" + regionName + "', please wait...");
 
                 Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+                    Map<Location, BlockData> allBlocks = new HashMap<>();
                     for (int x = minX; x <= maxX; x++) {
                         for (int y = minY; y <= maxY; y++) {
                             for (int z = minZ; z <= maxZ; z++) {
                                 Location loc = new Location(world, x, y, z);
                                 BlockData blockData = loc.getBlock().getBlockData();
-                                regionData.addBlockToSection(
-                                        (y == minY) ? "floor" :
-                                                (y == maxY) ? "ceiling" :
-                                                        (x == minX || x == maxX || z == minZ || z == maxZ) ? "walls" :
-                                                                "other",
-                                        loc, blockData
-                                );
+                                allBlocks.put(loc, blockData);
                             }
                         }
                     }
 
-                    regionData.setSectionCount(regionData.sectionedBlockData.size());
+                    int chunkMinX = minX >> 4;
+                    int chunkMinZ = minZ >> 4;
+                    int chunkMaxX = maxX >> 4;
+                    int chunkMaxZ = maxZ >> 4;
+                    int sectionId = 0;
+
+                    for (int chunkX = chunkMinX; chunkX <= chunkMaxX; chunkX++) {
+                        for (int chunkZ = chunkMinZ; chunkZ <= chunkMaxZ; chunkZ++) {
+                            int xStart = Math.max(chunkX << 4, minX);
+                            int zStart = Math.max(chunkZ << 4, minZ);
+                            int xEnd = Math.min((chunkX << 4) + 15, maxX);
+                            int zEnd = Math.min((chunkZ << 4) + 15, maxZ);
+                            Map<Location, BlockData> sectionBlocks = new HashMap<>();
+
+                            for (int x = xStart; x <= xEnd; x++) {
+                                for (int y = minY; y <= maxY; y++) {
+                                    for (int z = zStart; z <= zEnd; z++) {
+                                        Location loc = new Location(world, x, y, z);
+                                        sectionBlocks.put(loc, allBlocks.get(loc));
+                                    }
+                                }
+                            }
+
+                            regionData.addSection("chunk_" + sectionId++, sectionBlocks);
+                        }
+                    }
 
                     Bukkit.getScheduler().runTask(plugin, () -> {
-                        regionData.saveToConfig(plugin.regionsConfig, "regions." + regionName);
+                        try {
+                            regionData.saveToDatc(datcFile);
+                        } catch (IOException e) {
+                            plugin.getLogger().severe("Failed to save " + regionName + ".datc: " + e.getMessage());
+                        }
                         plugin.markRegionDirty(regionName);
                         selectionListener.clearSelection(player);
                         commandSender.sendMessage(regionCreated.replace("{arena_name}", regionName));
@@ -178,7 +205,6 @@ public class ArenaRegenCommand implements TabExecutor {
 
                 return true;
             }
-
 
 
             case "delete" -> {
@@ -298,8 +324,7 @@ public class ArenaRegenCommand implements TabExecutor {
                         oldRegionData.getMinecraftVersion(),
                         maxX - minX + 1,
                         maxY - minY + 1,
-                        maxZ - minZ + 1,
-                        1
+                        maxZ - minZ + 1
                 );
 
                 commandSender.sendMessage(ChatColor.YELLOW + "Resizing region '" + regionName + "', please wait...");
@@ -357,78 +382,79 @@ public class ArenaRegenCommand implements TabExecutor {
                     return true;
                 }
 
-                Location finalMin = null;
-                Location finalMax = null;
-                List<Map.Entry<Location, BlockData>> blockList = new ArrayList<>();
-
-                for (Map<Location, BlockData> section : regionData.sectionedBlockData.values()) {
-                    blockList.addAll(section.entrySet());
-                    for (Location loc : section.keySet()) {
-                        if (finalMin == null) {
-                            finalMin = new Location(world, loc.getX(), loc.getY(), loc.getZ());
-                            finalMax = new Location(world, loc.getX(), loc.getY(), loc.getZ());
-                        } else {
-                            finalMin.setX(Math.min(finalMin.getX(), loc.getX()));
-                            finalMin.setY(Math.min(finalMin.getY(), loc.getY()));
-                            finalMin.setZ(Math.min(finalMin.getZ(), loc.getZ()));
-                            finalMax.setX(Math.max(finalMax.getX(), loc.getX()));
-                            finalMax.setY(Math.max(finalMax.getY(), loc.getY()));
-                            finalMax.setZ(Math.max(finalMax.getZ(), loc.getZ()));
-                        }
-                    }
-                }
-
-                if (finalMin == null || finalMax == null || blockList.isEmpty()) {
-                    commandSender.sendMessage(ChatColor.RED + "No block data found for region.");
+                if (regionData.sectionedBlockData.isEmpty()) {
+                    commandSender.sendMessage(ChatColor.RED + "No sections found for region '" + targetArenaName + "'.");
                     return true;
                 }
 
-                final Location minBound = finalMin;
-                final Location maxBound = finalMax;
-
-                int blocksPerTick = 1000;
-                AtomicInteger index = new AtomicInteger(0);
-
                 commandSender.sendMessage(ChatColor.YELLOW + "Regenerating region '" + targetArenaName + "', please wait...");
+                int blocksPerTick = plugin.getConfig().getInt("regen.blocks-per-tick", 1000);
+                AtomicInteger sectionIndex = new AtomicInteger(0);
+                List<String> sectionNames = new ArrayList<>(regionData.sectionedBlockData.keySet());
+                AtomicInteger totalBlocksReset = new AtomicInteger(0);
+                long startTime = System.currentTimeMillis();
+
                 Bukkit.getScheduler().runTaskTimer(plugin, task -> {
-                    int start = index.get();
-                    int end = Math.min(start + blocksPerTick, blockList.size());
-
-                    for (int i = start; i < end; i++) {
-                        Map.Entry<Location, BlockData> entry = blockList.get(i);
-                        Location loc = entry.getKey();
-                        loc.setWorld(world);
-                        Block block = world.getBlockAt(loc);
-                        block.setBlockData(entry.getValue(), false);
-                    }
-
-                    index.set(end);
-                    if (index.get() >= blockList.size()) {
-
-                        for (Entity entity : world.getEntities()) {
-                            if (!(entity instanceof Player) &&
-                                    (entity instanceof Item || entity.getType() != EntityType.PLAYER)) {
-                                Location loc = entity.getLocation();
-                                if (loc.getX() >= minBound.getX() && loc.getX() <= maxBound.getX() &&
-                                        loc.getY() >= minBound.getY() && loc.getY() <= maxBound.getY() &&
-                                        loc.getZ() >= minBound.getZ() && loc.getZ() <= maxBound.getZ()) {
-                                    entity.remove();
+                    int currentSection = sectionIndex.get();
+                    if (currentSection >= sectionNames.size()) {
+                        Location min = null;
+                        Location max = null;
+                        for (Map<Location, BlockData> section : regionData.sectionedBlockData.values()) {
+                            for (Location loc : section.keySet()) {
+                                if (min == null) {
+                                    min = new Location(world, loc.getX(), loc.getY(), loc.getZ());
+                                    max = new Location(world, loc.getX(), loc.getY(), loc.getZ());
+                                } else {
+                                    min.setX(Math.min(min.getX(), loc.getX()));
+                                    min.setY(Math.min(min.getY(), loc.getY()));
+                                    min.setZ(Math.min(min.getZ(), loc.getZ()));
+                                    max.setX(Math.max(max.getX(), loc.getX()));
+                                    max.setY(Math.max(max.getY(), loc.getY()));
+                                    max.setZ(Math.max(max.getZ(), loc.getZ()));
                                 }
                             }
                         }
 
-                        if (plugin.getConfig().getBoolean("track-entities", true)) {
-                            for (Map.Entry<Location, EntityType> entry : regionData.entityMap.entrySet()) {
-                                Location loc = entry.getKey();
-                                loc.setWorld(world);
-                                world.spawnEntity(loc, entry.getValue());
+                        if (min != null && max != null) {
+                            for (Entity entity : world.getEntities()) {
+                                if (!(entity instanceof Player) && (entity instanceof Item || entity.getType() != EntityType.PLAYER)) {
+                                    Location loc = entity.getLocation();
+                                    if (loc.getX() >= min.getX() && loc.getX() <= max.getX() &&
+                                            loc.getY() >= min.getY() && loc.getY() <= max.getY() &&
+                                            loc.getZ() >= min.getZ() && loc.getZ() <= max.getZ()) {
+                                        entity.remove();
+                                    }
+                                }
                             }
                         }
 
-                        commandSender.sendMessage(regenComplete.replace("{arena_name}", targetArenaName));
+                        long timeTaken = System.currentTimeMillis() - startTime;
+                        commandSender.sendMessage(regenComplete.replace("{arena_name}", targetArenaName) +
+                                ChatColor.GRAY + " (" + totalBlocksReset.get() + " blocks reset in " + (timeTaken / 1000.0) + "s)");
                         task.cancel();
+                        return;
+                    }
+
+                    String sectionName = sectionNames.get(currentSection);
+                    Map<Location, BlockData> section = regionData.sectionedBlockData.get(sectionName);
+                    List<Map.Entry<Location, BlockData>> blockList = new ArrayList<>(section.entrySet());
+                    int blockIndex = 0;
+
+                    while (blockIndex < blockList.size() && totalBlocksReset.get() < blocksPerTick * (currentSection + 1)) {
+                        Map.Entry<Location, BlockData> entry = blockList.get(blockIndex);
+                        Location loc = entry.getKey();
+                        loc.setWorld(world);
+                        Block block = world.getBlockAt(loc);
+                        block.setBlockData(entry.getValue(), false);
+                        totalBlocksReset.incrementAndGet();
+                        blockIndex++;
+                    }
+
+                    if (blockIndex >= blockList.size()) {
+                        sectionIndex.incrementAndGet();
                     }
                 }, 0L, 1L);
+
                 return true;
             }
 
