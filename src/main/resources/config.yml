@@ -21,7 +21,7 @@ MaxSectionSize: 28800
 # this will increase the speed arenas are created but will cause more lag.
 AnalyzeBlockSpeed: 49600
 
-# What item should the selection tool be for creating the arenas
+# What item should the selection tool be for creating the arenas.
 SelectionToolItem: GOLDEN_HOE
 
 # The amount of blocks to reset per second. Normal is the default speed
@@ -44,13 +44,9 @@ ResetUpdate:
   Percent: 5
 
 # If compression is somehow having issues, this will stop new arenas from being created compressed
-# You can convert existing arenas by double clicking the plugin jar file (so this must be done on
+# You can convert existing arenas by double-clicking the plugin jar file (so this must be done on
 # your PC)
 DisableCompression: false
-
-# The teleport command suggested to the user from clicking an arena in /arena list
-# Variables: player, x, y, z, world
-TeleportCommandSuggestion: '/tp <x> <y> <z>'
 
 # If an arena is created in an old version and the plugin has not been updated yet, you
 # can enable this to allow the arena to still load anyway.
