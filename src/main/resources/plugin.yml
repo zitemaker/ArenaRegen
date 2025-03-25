@@ -6,7 +6,7 @@ description: A plugin that registers and regenerates regions using coordinates.
 author: YourName
 commands:
   arenaregen:
-    description: Lets your configure everthing
+    description: The base command.
     usage: /arenaregen
     aliases: [ar]
 
