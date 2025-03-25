@@ -1,12 +1,11 @@
 # English messages for the ArenaRegen plugin
-prefix: "&e[&2ArenaRegen&e]"
 messages:
   incorrect-syntax: "&cUnknown arguments. Type &e\"/arenaregen help\" &cto see usages."
   no-permission: "&cYou do not have permission to run this command."
   only-for-players: "&cOnly players can use this command."
   region-exists: "&cA region with this name already exists."
   invalid-height: "&cInvalid arena height! Must be between {minHeight} and {maxHeight}."
-  region-size-limit: "&cArena must be within {arenaSizeLimit} blocks. You can change the size limit in config.yml."
+  region-size-limit: "&cArena must be within {arena_size_limit} blocks. You can change the size limit in config.yml."
   region-created: "&aRegion '{arena_name}' has been successfully registered!"
   region-deleted: "&aRegion '{arena_name}' has been successfully deleted!"
   region-resized: "&aRegion '{arena_name}' has been successfully resized!"

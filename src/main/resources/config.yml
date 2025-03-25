@@ -14,8 +14,8 @@
 prefix: "&e[&2ArenaRegen&e]"
 
 general:
-  # How many blocks can be in each section.
-  arena-size-limit: 10000000
+  # How many blocks large can a region be.
+  arena-size-limit: 50000
 
   # How many blocks are analyzed in arena creation per second. Increasing
   # this will increase the speed arenas are created but will cause more lag.

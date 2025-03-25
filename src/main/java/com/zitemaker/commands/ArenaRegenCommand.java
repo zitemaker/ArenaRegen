@@ -49,25 +49,26 @@ public class ArenaRegenCommand implements TabExecutor {
 
 
         FileConfiguration conf = plugin.getConfig();
+        FileConfiguration msg = plugin.getMessagesConfig();
 
         String pluginPrefix = ChatColor.translateAlternateColorCodes('&', conf.getString("prefix", "&e[&2ArenaRegen&e]"));
 
-        String incorrectSyntax = ChatColor.translateAlternateColorCodes('&', conf.getString("messages.incorrect-syntax", "&cUnknown arguments. Type \"/arenaregen help\" to see usages"));
-        String noPermission = ChatColor.translateAlternateColorCodes('&', conf.getString("messages.no-permission", "&cYou do not have permission to run this command"));
-        String onlyForPlayers = ChatColor.translateAlternateColorCodes('&', conf.getString("messages.only-for-players", "&cOnly players can use this command"));
-        String regionExists = ChatColor.translateAlternateColorCodes('&', conf.getString("messages.region-exists", "&cA region with this name already exists."));
-        String invalidHeight = ChatColor.translateAlternateColorCodes('&', conf.getString("messages.invalid-height", "&cInvalid arena height! Must be between {minHeight} and {maxHeight}."));
-        String regionSizeLimit = ChatColor.translateAlternateColorCodes('&', conf.getString("messages.region-size-limit", "&cArena must be within {arenaSizeLimit} blocks. You can change the size limit in config.yml"));
-        arenaSizeLimit = plugin.getConfig().getLong("general.arena-size-limit", 1000000L);
-        String regionCreated = ChatColor.translateAlternateColorCodes('&', conf.getString("messages.region-created", "&aRegion '{arena_name}' has been successfully registered!"));
-        String regionDeleted = ChatColor.translateAlternateColorCodes('&', conf.getString("messages.region-deleted", "&aRegion '{arena_name}' has been successfully deleted!"));
-        String regionResized = ChatColor.translateAlternateColorCodes('&', conf.getString("messages.region-resized", "&aRegion '{arena_name}' has been successfully resized!"));
-        String arenaNotFound = ChatColor.translateAlternateColorCodes('&', conf.getString("messages.arena-not-found", "&cArena '{arena_name}' does not exist."));
-        String regenComplete = ChatColor.translateAlternateColorCodes('&', conf.getString("messages.regen-complete", "&aArena '{arena_name}' has been successfully regenerated!"));
-        String spawnSet = ChatColor.translateAlternateColorCodes('&', conf.getString("messages.spawn-set", "&aSpawn point for arena '{arena_name}' has been set!"));
-        String spawnDeleted = ChatColor.translateAlternateColorCodes('&', conf.getString("messages.spawn-deleted", "&aSpawn point for arena '{arena_name}' has been removed!"));
-        String teleportSuccess = ChatColor.translateAlternateColorCodes('&', conf.getString("messages.teleport-success", "&aTeleported to arena '{arena_name}'."));
-        String reloadSuccess = ChatColor.translateAlternateColorCodes('&', conf.getString("messages.reload-success", "&aConfiguration reloaded successfully!"));
+        String incorrectSyntax = ChatColor.translateAlternateColorCodes('&', msg.getString("messages.incorrect-syntax", "&cUnknown arguments. Type \"/arenaregen help\" to see usages"));
+        String noPermission = ChatColor.translateAlternateColorCodes('&', msg.getString("messages.no-permission", "&cYou do not have permission to run this command"));
+        String onlyForPlayers = ChatColor.translateAlternateColorCodes('&', msg.getString("messages.only-for-players", "&cOnly players can use this command"));
+        String regionExists = ChatColor.translateAlternateColorCodes('&', msg.getString("messages.region-exists", "&cA region with this name already exists."));
+        String invalidHeight = ChatColor.translateAlternateColorCodes('&', msg.getString("messages.invalid-height", "&cInvalid arena height! Must be between {minHeight} and {maxHeight}."));
+        String regionSizeLimit = ChatColor.translateAlternateColorCodes('&', msg.getString("messages.region-size-limit", "&cArena must be within {arena_size_limit} blocks. You can change the size limit in config.yml"));
+        arenaSizeLimit = plugin.getConfig().getLong("general.arena-size-limit", 50000L);
+        String regionCreated = ChatColor.translateAlternateColorCodes('&', msg.getString("messages.region-created", "&aRegion '{arena_name}' has been successfully registered!"));
+        String regionDeleted = ChatColor.translateAlternateColorCodes('&', msg.getString("messages.region-deleted", "&aRegion '{arena_name}' has been successfully deleted!"));
+        String regionResized = ChatColor.translateAlternateColorCodes('&', msg.getString("messages.region-resized", "&aRegion '{arena_name}' has been successfully resized!"));
+        String arenaNotFound = ChatColor.translateAlternateColorCodes('&', msg.getString("messages.arena-not-found", "&cArena '{arena_name}' does not exist."));
+        String regenComplete = ChatColor.translateAlternateColorCodes('&', msg.getString("messages.regen-complete", "&aArena '{arena_name}' has been successfully regenerated!"));
+        String spawnSet = ChatColor.translateAlternateColorCodes('&', msg.getString("messages.spawn-set", "&aSpawn point for arena '{arena_name}' has been set!"));
+        String spawnDeleted = ChatColor.translateAlternateColorCodes('&', msg.getString("messages.spawn-deleted", "&aSpawn point for arena '{arena_name}' has been removed!"));
+        String teleportSuccess = ChatColor.translateAlternateColorCodes('&', msg.getString("messages.teleport-success", "&aTeleported to arena '{arena_name}'."));
+        String reloadSuccess = ChatColor.translateAlternateColorCodes('&', msg.getString("messages.reload-success", "&aConfiguration reloaded successfully!"));
 
         if (!ArenaRegen.hasAnyPermissions((Player) commandSender)) {
             commandSender.sendMessage(noPermission);
@@ -132,7 +133,7 @@ public class ArenaRegenCommand implements TabExecutor {
                 long volume = (long) width * height * depth;
 
                 if (volume > arenaSizeLimit) {
-                    commandSender.sendMessage(regionSizeLimit.replace("{arenaSizeLimit}", String.valueOf(arenaSizeLimit)));
+                    commandSender.sendMessage(regionSizeLimit.replace("{arena_size_limit}", String.valueOf(arenaSizeLimit)));
                     return true;
                 }
 
@@ -593,6 +594,7 @@ public class ArenaRegenCommand implements TabExecutor {
                 plugin.reloadConfig();
                 plugin.getRegisteredRegions().clear();
                 plugin.loadRegions();
+                plugin.loadMessagesFile();
                 commandSender.sendMessage(reloadSuccess);
                 return true;
             }
@@ -660,17 +662,6 @@ public class ArenaRegenCommand implements TabExecutor {
         return volume <= arenaSizeLimit;
     }
 
-    /* stupid method
-    private boolean regionSizeLimit(int x, int z) {
-        return (x * z) <= arenaSizeLimit;
-    }
-
-     */
-
-    private boolean isCoordinateHeightValid(@NotNull World world, int y) {
-        return y > world.getMinHeight() && y < world.getMaxHeight();
-    }
-
     private void listRegions(CommandSender sender) {
         Map<String, RegionData> regions = plugin.getRegisteredRegions();
         if (regions.isEmpty()) {
@@ -723,7 +714,7 @@ public class ArenaRegenCommand implements TabExecutor {
                     .append("\n  Creator: ").append(ChatColor.WHITE).append(regionData.getCreator())
                     .append(ChatColor.GRAY)
                     .append("\n  Created: ").append(ChatColor.WHITE)
-                    .append(new Date(regionData.getCreationDate()).toString())
+                    .append(new Date(regionData.getCreationDate()))
                     .append(ChatColor.GRAY)
                     .append("\n  World: ").append(ChatColor.WHITE).append(regionData.getWorldName())
                     .append(ChatColor.GRAY)

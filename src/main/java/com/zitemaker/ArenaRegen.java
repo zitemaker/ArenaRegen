@@ -5,6 +5,8 @@ import com.zitemaker.helpers.RegionData;
 import com.zitemaker.helpers.SelectionToolListener;
 import com.zitemaker.utils.*;
 import org.bukkit.Bukkit;
+import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -16,8 +18,12 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.HashSet;
+import java.util.logging.Level;
 
 public class ArenaRegen extends JavaPlugin {
+
+    private File messagesFile;
+    private FileConfiguration messagesConfig;
 
     private final SelectionToolListener selectionToolListener = new SelectionToolListener(this);
     private final Map<String, RegionData> registeredRegions = new HashMap<>();
@@ -101,6 +107,28 @@ public class ArenaRegen extends JavaPlugin {
 
     public String getPurchaseLink() {
         return "https://zitemaker.tebex.io";
+    }
+
+    public void loadMessagesFile() {
+        messagesFile = new File(getDataFolder(), "messages.yml");
+
+        if (!messagesFile.exists()) {
+            saveResource("messages.yml", false); // Copy from jar if missing
+        }
+
+        messagesConfig = YamlConfiguration.loadConfiguration(messagesFile);
+    }
+
+    public FileConfiguration getMessagesConfig() {
+        return messagesConfig;
+    }
+
+    public void saveMessagesFile() {
+        try {
+            messagesConfig.save(messagesFile);
+        } catch (IOException e) {
+            getLogger().log(Level.SEVERE, "Could not save messages.yml!", e);
+        }
     }
 
     public void loadRegions() {
