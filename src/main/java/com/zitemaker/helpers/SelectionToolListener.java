@@ -1,11 +1,13 @@
 package com.zitemaker.helpers;
 
 import com.zitemaker.ArenaRegen;
+
 import org.bukkit.ChatColor;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.data.BlockData;
+import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -26,17 +28,30 @@ public class SelectionToolListener implements Listener {
     private final Map<UUID, Vector[]> selections = new HashMap<>();
     private final Map<UUID, BukkitRunnable> expirationTasks = new HashMap<>();
     private final Map<UUID, Location[]> displayedCorners = new HashMap<>();
+    private final Material wandMaterial;
 
     private static final BlockData HIGHLIGHT_BLOCK = Material.GOLD_BLOCK.createBlockData();
+    private static final Material DEFAULT_WAND_MATERIAL = Material.GOLDEN_HOE;
 
     public SelectionToolListener(ArenaRegen plugin) {
         this.plugin = plugin;
+
+
+        String wandToolString = plugin.getConfig().getString("general.selection-tool", "Material.GOLDEN_HOE");
+        Material configuredMaterial;
+        try {
+            configuredMaterial = Material.valueOf(wandToolString.replace("Material.", "").toUpperCase());
+        } catch (IllegalArgumentException e) {
+            plugin.console.sendMessage(ChatColor.RED + "[ArenaRegen] Invalid wand-tool material '" + wandToolString + "' in config.yml. Defaulting to GOLDEN_HOE.");
+            configuredMaterial = DEFAULT_WAND_MATERIAL;
+        }
+        this.wandMaterial = configuredMaterial;
     }
 
     public void giveSelectionTool(@NotNull Player player) {
-        ItemStack goldenHoe = new ItemStack(Material.GOLDEN_HOE);
-        player.getInventory().addItem(goldenHoe);
-        player.sendMessage(ChatColor.GREEN + "You have been given the Selection Tool!");
+        ItemStack wandTool = new ItemStack(wandMaterial);
+        player.getInventory().addItem(wandTool);
+        player.sendMessage(ChatColor.GREEN + "You have been given the Flag Selection Tool (" + wandMaterial.name() + "). Use the /jailsetflag command after selecting the two corners.");
     }
 
     @EventHandler
@@ -44,8 +59,8 @@ public class SelectionToolListener implements Listener {
         Player player = event.getPlayer();
         ItemStack item = player.getInventory().getItemInMainHand();
 
-        if (item.getType() != Material.GOLDEN_HOE) return; // must be a golden hoe
-        if (!player.hasPermission("arenaregen.create") && !player.hasPermission("arenaregen.resize") && player.getGameMode() != GameMode.CREATIVE) return;
+        if (item.getType() != wandMaterial) return;
+        if (!player.hasPermission("jails.setflag")) return;
 
         event.setCancelled(true);
 
@@ -75,15 +90,15 @@ public class SelectionToolListener implements Listener {
     public Vector[] getSelection(@NotNull Player player) {
         Vector[] corners = selections.get(player.getUniqueId());
         if (corners == null) {
-            player.sendMessage(ChatColor.RED + "No selection found. Please use the golden hoe to select corners.");
+            player.sendMessage(ChatColor.RED + "No selection found. Use the /jailwand command to get the selection tool.");
             return null;
         }
         if (corners[0] == null) {
-            player.sendMessage(ChatColor.RED + "First corner not set. Left-click with golden hoe to set.");
+            player.sendMessage(ChatColor.RED + "First corner not set. Left-click with the selection tool to set.");
             return null;
         }
         if (corners[1] == null) {
-            player.sendMessage(ChatColor.RED + "Second corner not set. Right-click with golden hoe to set.");
+            player.sendMessage(ChatColor.RED + "Second corner not set. Right-click with the selection tool to set.");
             return null;
         }
         return corners;
@@ -91,7 +106,7 @@ public class SelectionToolListener implements Listener {
 
     public void clearSelection(@NotNull Player player) {
         UUID playerId = player.getUniqueId();
-        Vector[] corners = selections.remove(playerId);
+        selections.remove(playerId);
         Location[] displayed = displayedCorners.remove(playerId);
         if (displayed != null) {
             revertCornerDisplay(player, displayed);
@@ -124,16 +139,13 @@ public class SelectionToolListener implements Listener {
         if (task != null) task.cancel();
     }
 
-    // this is supposed to change the selected block to a gold block only in the client side. however, it wasn't working and I just gave up
     private void updateCornerDisplay(Player player, int index, Vector corner, Location[] displayed) {
         Location oldLoc = displayed[index];
         Location newLoc = corner.toLocation(player.getWorld());
 
-
         if (oldLoc != null && !oldLoc.equals(newLoc)) {
             player.sendBlockChange(oldLoc, oldLoc.getBlock().getBlockData());
         }
-
 
         player.sendBlockChange(newLoc, HIGHLIGHT_BLOCK);
         displayed[index] = newLoc;

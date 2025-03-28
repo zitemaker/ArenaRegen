@@ -4,7 +4,7 @@ messages:
   no-permission: "&cYou do not have permission to run this command."
   only-for-players: "&cOnly players can use this command."
   region-exists: "&cA region with this name already exists."
-  invalid-height: "&cInvalid arena height! Must be between {minHeight} and {maxHeight}."
+  invalid-height: "&cInvalid arena height! Must be between {minHeight} and {maxHeight} blocks."
   region-size-limit: "&cArena must be within {arena_size_limit} blocks. You can change the size limit in config.yml."
   region-created: "&aRegion '{arena_name}' has been successfully registered!"
   region-deleted: "&aRegion '{arena_name}' has been successfully deleted!"
@@ -13,3 +13,4 @@ messages:
   regen-complete: "&aArena '{arena_name}' has been successfully regenerated!"
   spawn-set: "&aSpawn point for arena '{arena_name}' has been set!"
   teleport-success: "&aTeleported to arena '{arena_name}'."
+  max-arenas-reached: "&cMaximum number of arenas ({max_arenas}) reached!"

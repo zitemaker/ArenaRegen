@@ -5,6 +5,8 @@ import com.zitemaker.helpers.RegionData;
 import com.zitemaker.helpers.SelectionToolListener;
 import com.zitemaker.utils.*;
 import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
+import org.bukkit.Material;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
@@ -28,9 +30,28 @@ public class ArenaRegen extends JavaPlugin {
     private final SelectionToolListener selectionToolListener = new SelectionToolListener(this);
     private final Map<String, RegionData> registeredRegions = new HashMap<>();
     private final Map<String, String> pendingDeletions = new HashMap<>();
-    private final Console console = new SpigotConsole();
+    private final Map<String, String> pendingRegenerations = new HashMap<>();
+    public final Console console = new SpigotConsole();
     private final Logger logger = new Logger(new JavaPlatformLogger(console, getLogger()), true);
     private final Set<String> dirtyRegions = new HashSet<>();
+
+    // config stuff
+    public String prefix;
+    public String regenType;
+    public String regenSpeed;
+    public int customRegenSpeed;
+    public int analyzeSpeed;
+    public int arenaSize;
+    public int maxArenas;
+    public boolean confirmationPrompt;
+    public boolean trackEntities;
+    public boolean regenOnlyModified;
+    public boolean cancelRegen;
+    public boolean killPlayers;
+    public boolean executeCommands;
+    public List<String> commands;
+    public boolean teleportToSpawn;
+    public Material selectionTool;
 
     @Override
     public void onLoad() {
@@ -52,7 +73,9 @@ public class ArenaRegen extends JavaPlugin {
         logger.info(ARChatColor.GREEN + "    " + getPurchaseLink());
         logger.info("");
 
-        saveDefaultConfig();
+        reloadPluginConfig();
+        loadMessagesFile();
+        saveMessagesFile();
         loadRegions();
 
         Bukkit.getPluginManager().registerEvents(selectionToolListener, this);
@@ -75,12 +98,41 @@ public class ArenaRegen extends JavaPlugin {
         logger.info(ARChatColor.RED + "ArenaRegen v" + getDescription().getVersion() + " has been disabled.");
     }
 
+    public void loadConfigValues() {
+        this.prefix = ChatColor.translateAlternateColorCodes('&', getConfig().getString("prefix", "&e[&2ArenaRegen&e]"));
+        this.regenType = getConfig().getString("regen.regen-speed-type", "PRESET").toUpperCase();
+        this.regenSpeed = getConfig().getString("regen.regen-speed", "FAST").toUpperCase();
+        this.customRegenSpeed = getConfig().getInt("regen.custom-regen-speed", 10000);
+        this.analyzeSpeed = getConfig().getInt("general.analyze-speed", 40000);
+        this.arenaSize = getConfig().getInt("general.arena-size-limit", 40000);
+        this.maxArenas = getConfig().getInt("general.max-arenas", 100);
+        this.confirmationPrompt = getConfig().getBoolean("regen.confirmation-prompt", false);
+        this.trackEntities = getConfig().getBoolean("regen.track-entities", true);
+        this.regenOnlyModified = getConfig().getBoolean("regen.regen-only-modified", false);
+        this.cancelRegen = getConfig().getBoolean("regen.players-inside-arena.cancel-regen", false);
+        this.killPlayers = getConfig().getBoolean("regen.players-inside-arena.kill", false);
+        this.executeCommands = getConfig().getBoolean("regen.players-inside-arena.execute-commands", true);
+        this.commands = getConfig().getStringList("regen.players-inside-arena.commands");
+        this.teleportToSpawn = getConfig().getBoolean("regen.players-inside-arena.teleport-to-spawn", true);
+        this.selectionTool = Material.valueOf(getConfig().getString("general.selection-tool", "GOLDEN_HOE").toUpperCase());
+    }
+
+    public void reloadPluginConfig() {
+        saveDefaultConfig();
+        reloadConfig();
+        loadConfigValues();
+    }
+
     public Map<String, RegionData> getRegisteredRegions() {
         return registeredRegions;
     }
 
     public Map<String, String> getPendingDeletions() {
         return pendingDeletions;
+    }
+
+    public Map<String, String> getPendingRegenerations() {
+        return pendingRegenerations;
     }
 
     private static final List<String> ARENAREGEN_PERMISSIONS = List.of(
@@ -111,11 +163,9 @@ public class ArenaRegen extends JavaPlugin {
 
     public void loadMessagesFile() {
         messagesFile = new File(getDataFolder(), "messages.yml");
-
         if (!messagesFile.exists()) {
-            saveResource("messages.yml", false); // Copy from jar if missing
+            saveResource("messages.yml", false);
         }
-
         messagesConfig = YamlConfiguration.loadConfiguration(messagesFile);
     }
 

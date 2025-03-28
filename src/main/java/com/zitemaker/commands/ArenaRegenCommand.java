@@ -42,22 +42,17 @@ public class ArenaRegenCommand implements TabExecutor {
     @Override
     public boolean onCommand(@NotNull CommandSender commandSender, @NotNull Command command, @NotNull String s, @NotNull String @NotNull [] strings) {
 
-        if (!(commandSender instanceof Player)){
-            commandSender.sendMessage(ChatColor.RED + "You must be a player to do that.");
-            return false;
-        }
-
 
         FileConfiguration conf = plugin.getConfig();
         FileConfiguration msg = plugin.getMessagesConfig();
 
-        String pluginPrefix = ChatColor.translateAlternateColorCodes('&', conf.getString("prefix", "&e[&2ArenaRegen&e]"));
+        String pluginPrefix = plugin.prefix;
 
         String incorrectSyntax = ChatColor.translateAlternateColorCodes('&', msg.getString("messages.incorrect-syntax", "&cUnknown arguments. Type \"/arenaregen help\" to see usages"));
         String noPermission = ChatColor.translateAlternateColorCodes('&', msg.getString("messages.no-permission", "&cYou do not have permission to run this command"));
         String onlyForPlayers = ChatColor.translateAlternateColorCodes('&', msg.getString("messages.only-for-players", "&cOnly players can use this command"));
         String regionExists = ChatColor.translateAlternateColorCodes('&', msg.getString("messages.region-exists", "&cA region with this name already exists."));
-        String invalidHeight = ChatColor.translateAlternateColorCodes('&', msg.getString("messages.invalid-height", "&cInvalid arena height! Must be between {minHeight} and {maxHeight}."));
+        String invalidHeight = ChatColor.translateAlternateColorCodes('&', msg.getString("messages.invalid-height", "&cInvalid arena height! Must be between {minHeight} and {maxHeight} blocks."));
         String regionSizeLimit = ChatColor.translateAlternateColorCodes('&', msg.getString("messages.region-size-limit", "&cArena must be within {arena_size_limit} blocks. You can change the size limit in config.yml"));
         arenaSizeLimit = plugin.getConfig().getLong("general.arena-size-limit", 50000L);
         String regionCreated = ChatColor.translateAlternateColorCodes('&', msg.getString("messages.region-created", "&aRegion '{arena_name}' has been successfully registered!"));
@@ -69,8 +64,9 @@ public class ArenaRegenCommand implements TabExecutor {
         String spawnDeleted = ChatColor.translateAlternateColorCodes('&', msg.getString("messages.spawn-deleted", "&aSpawn point for arena '{arena_name}' has been removed!"));
         String teleportSuccess = ChatColor.translateAlternateColorCodes('&', msg.getString("messages.teleport-success", "&aTeleported to arena '{arena_name}'."));
         String reloadSuccess = ChatColor.translateAlternateColorCodes('&', msg.getString("messages.reload-success", "&aConfiguration reloaded successfully!"));
+        String maxArenasReached = ChatColor.translateAlternateColorCodes('&', msg.getString("messages.max-arenas-reached", "&cMaximum number of arenas ({max_arenas}) reached!"));
 
-        if (!ArenaRegen.hasAnyPermissions((Player) commandSender)) {
+        if (commandSender instanceof Player && !ArenaRegen.hasAnyPermissions((Player) commandSender)) {
             commandSender.sendMessage(noPermission);
             return true;
         }
@@ -103,7 +99,14 @@ public class ArenaRegenCommand implements TabExecutor {
                 String regionName = strings[1];
 
                 if (plugin.getRegisteredRegions().containsKey(regionName)) {
-                    commandSender.sendMessage(ChatColor.RED + "A region with this name already exists.");
+                    commandSender.sendMessage(regionExists);
+                    return true;
+                }
+
+
+                int maxArenas = plugin.maxArenas;
+                if (plugin.getRegisteredRegions().size() >= maxArenas) {
+                    commandSender.sendMessage(maxArenasReached.replace("{max_arenas}", String.valueOf(maxArenas)));
                     return true;
                 }
 
@@ -122,8 +125,9 @@ public class ArenaRegenCommand implements TabExecutor {
                 int maxZ = Math.max(selection[0].getBlockZ(), selection[1].getBlockZ());
 
                 if (minY < world.getMinHeight() || maxY > world.getMaxHeight()) {
-                    commandSender.sendMessage(ChatColor.RED + "Invalid arena height! Must be between " +
-                            world.getMinHeight() + " and " + world.getMaxHeight() + ".");
+                    invalidHeight = invalidHeight.replace("{minHeight}", String.valueOf(world.getMinHeight()));
+                    invalidHeight = invalidHeight.replace("{maxHeight}", String.valueOf(world.getMinHeight()));
+                    commandSender.sendMessage(invalidHeight);
                     return true;
                 }
 
@@ -131,9 +135,9 @@ public class ArenaRegenCommand implements TabExecutor {
                 int height = maxY - minY + 1;
                 int depth = maxZ - minZ + 1;
                 long volume = (long) width * height * depth;
-
+                int arenaSizeLimit = plugin.arenaSize;
                 if (volume > arenaSizeLimit) {
-                    commandSender.sendMessage(regionSizeLimit.replace("{arena_size_limit}", String.valueOf(arenaSizeLimit)));
+                    commandSender.sendMessage(regionSizeLimit.replace("{arena_max_size}", String.valueOf(arenaSizeLimit)));
                     return true;
                 }
 
@@ -160,56 +164,69 @@ public class ArenaRegenCommand implements TabExecutor {
 
                 commandSender.sendMessage(ChatColor.YELLOW + "Analyzing and creating region '" + regionName + "', please wait...");
 
-                Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-                    Map<Location, BlockData> allBlocks = new HashMap<>();
-                    for (int x = minX; x <= maxX; x++) {
-                        for (int y = minY; y <= maxY; y++) {
-                            for (int z = minZ; z <= maxZ; z++) {
-                                Location loc = new Location(world, x, y, z);
-                                BlockData blockData = loc.getBlock().getBlockData();
-                                allBlocks.put(loc, blockData);
-                            }
-                        }
+
+                int blocksPerSecond = plugin.analyzeSpeed;
+                int blocksPerTick = blocksPerSecond / 20;
+                Map<Location, BlockData> allBlocks = new HashMap<>();
+                AtomicInteger blocksProcessed = new AtomicInteger(0);
+
+                Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, task -> {
+                    int startCount = blocksProcessed.get();
+                    int targetCount = Math.min(startCount + blocksPerTick, (int) volume);
+
+                    for (int i = startCount; i < targetCount; i++) {
+                        int x = minX + (i % width);
+                        int y = minY + ((i / width) % height);
+                        int z = minZ + (i / (width * height));
+                        Location loc = new Location(world, x, y, z);
+                        BlockData blockData = loc.getBlock().getBlockData();
+                        allBlocks.put(loc, blockData);
                     }
 
-                    int chunkMinX = minX >> 4;
-                    int chunkMinZ = minZ >> 4;
-                    int chunkMaxX = maxX >> 4;
-                    int chunkMaxZ = maxZ >> 4;
-                    int sectionId = 0;
+                    blocksProcessed.set(targetCount);
 
-                    for (int chunkX = chunkMinX; chunkX <= chunkMaxX; chunkX++) {
-                        for (int chunkZ = chunkMinZ; chunkZ <= chunkMaxZ; chunkZ++) {
-                            int xStart = Math.max(chunkX << 4, minX);
-                            int zStart = Math.max(chunkZ << 4, minZ);
-                            int xEnd = Math.min((chunkX << 4) + 15, maxX);
-                            int zEnd = Math.min((chunkZ << 4) + 15, maxZ);
-                            Map<Location, BlockData> sectionBlocks = new HashMap<>();
+                    if (blocksProcessed.get() >= volume) {
+                        task.cancel();
 
-                            for (int x = xStart; x <= xEnd; x++) {
-                                for (int y = minY; y <= maxY; y++) {
-                                    for (int z = zStart; z <= zEnd; z++) {
-                                        Location loc = new Location(world, x, y, z);
-                                        sectionBlocks.put(loc, allBlocks.get(loc));
+                        int chunkMinX = minX >> 4;
+                        int chunkMinZ = minZ >> 4;
+                        int chunkMaxX = maxX >> 4;
+                        int chunkMaxZ = maxZ >> 4;
+                        int sectionId = 0;
+
+                        for (int chunkX = chunkMinX; chunkX <= chunkMaxX; chunkX++) {
+                            for (int chunkZ = chunkMinZ; chunkZ <= chunkMaxZ; chunkZ++) {
+                                int xStart = Math.max(chunkX << 4, minX);
+                                int zStart = Math.max(chunkZ << 4, minZ);
+                                int xEnd = Math.min((chunkX << 4) + 15, maxX);
+                                int zEnd = Math.min((chunkZ << 4) + 15, maxZ);
+                                Map<Location, BlockData> sectionBlocks = new HashMap<>();
+
+                                for (int x = xStart; x <= xEnd; x++) {
+                                    for (int y = minY; y <= maxY; y++) {
+                                        for (int z = zStart; z <= zEnd; z++) {
+                                            Location loc = new Location(world, x, y, z);
+                                            sectionBlocks.put(loc, allBlocks.get(loc));
+                                        }
                                     }
                                 }
+
+                                regionData.addSection("chunk_" + sectionId++, sectionBlocks);
                             }
-
-                            regionData.addSection("chunk_" + sectionId++, sectionBlocks);
                         }
+
+                        Bukkit.getScheduler().runTask(plugin, () -> {
+                            try {
+                                regionData.saveToDatc(datcFile);
+                            } catch (IOException e) {
+                                plugin.getLogger().severe("Failed to save " + regionName + ".datc: " + e.getMessage());
+                            }
+                            plugin.markRegionDirty(regionName);
+                            selectionListener.clearSelection(player);
+                            commandSender.sendMessage(regionCreated.replace("{arena_name}", regionName));
+                        });
                     }
-
-                    Bukkit.getScheduler().runTask(plugin, () -> {
-                        try {
-                            regionData.saveToDatc(datcFile);
-                        } catch (IOException e) {
-                            plugin.getLogger().severe("Failed to save " + regionName + ".datc: " + e.getMessage());
-                        }
-                        plugin.markRegionDirty(regionName);
-                        selectionListener.clearSelection(player);
-                        commandSender.sendMessage(regionCreated.replace("{arena_name}", regionName));
-                    });
-                });
+                }, 0L, 1L);
 
                 return true;
             }
@@ -241,8 +258,6 @@ public class ArenaRegenCommand implements TabExecutor {
                 plugin.getPendingDeletions().put(commandSender.getName(), regionName);
                 commandSender.sendMessage(ChatColor.YELLOW + "Are you sure you want to delete the region '" + regionName + "'?");
                 commandSender.sendMessage(ChatColor.YELLOW + "Type '/arenaregen confirm' to proceed.");
-
-
                 Bukkit.getScheduler().runTaskLater(plugin, () -> plugin.getPendingDeletions().remove(commandSender.getName()), 1200L);
 
                 return true;
@@ -364,7 +379,12 @@ public class ArenaRegenCommand implements TabExecutor {
             }
 
             case "regenerate", "regen" -> {
+
+                plugin.getLogger().info(strings.toString());
                 String showUsage = ChatColor.translateAlternateColorCodes('&', "&cUsage: /arenaregen regenerate <arena>");
+                String confirmPrompt = ChatColor.YELLOW + "Are you sure you want to regenerate the region '{arena_name}'? Type '/arenaregen regen confirm' to proceed.";
+                String noPending = ChatColor.RED + "No pending region regeneration found. Use '/arenaregen regen <name>' first.";
+                String playersInsideCancel = ChatColor.RED + "Regeneration of '{arena_name}' canceled due to players inside the arena.";
 
                 if (!commandSender.hasPermission("arenaregen.regenerate")) {
                     commandSender.sendMessage(noPermission);
@@ -376,35 +396,30 @@ public class ArenaRegenCommand implements TabExecutor {
                     return true;
                 }
 
-                String targetArenaName = strings[1];
-                RegionData regionData = plugin.getRegisteredRegions().get(targetArenaName);
-                if (regionData == null) {
-                    commandSender.sendMessage(arenaNotFound.replace("{arena_name}", targetArenaName));
-                    return true;
-                }
+                String input = strings[1];
 
-                World world = Bukkit.getWorld(regionData.worldName);
-                if (world == null) {
-                    commandSender.sendMessage(ChatColor.RED + "World '" + regionData.worldName + "' not found.");
-                    return true;
-                }
+                Runnable regenerateArena = new Runnable() {
+                    private final String arenaName = input;
 
-                if (regionData.sectionedBlockData.isEmpty()) {
-                    commandSender.sendMessage(ChatColor.RED + "No sections found for region '" + targetArenaName + "'.");
-                    return true;
-                }
+                    @Override
+                    public void run() {
+                        RegionData regionData = plugin.getRegisteredRegions().get(arenaName);
+                        if (regionData == null) {
+                            commandSender.sendMessage(arenaNotFound.replace("{arena_name}", arenaName));
+                            return;
+                        }
 
-                commandSender.sendMessage(ChatColor.YELLOW + "Regenerating region '" + targetArenaName + "', please wait...");
-                int blocksPerTick = plugin.getConfig().getInt("regen.blocks-per-tick", 1000);
-                boolean regenOnlyModified = plugin.getConfig().getBoolean("regen.regen-only-modified", false);
-                AtomicInteger sectionIndex = new AtomicInteger(0);
-                List<String> sectionNames = new ArrayList<>(regionData.sectionedBlockData.keySet());
-                AtomicInteger totalBlocksReset = new AtomicInteger(0);
-                long startTime = System.currentTimeMillis();
+                        World world = Bukkit.getWorld(regionData.worldName);
+                        if (world == null) {
+                            commandSender.sendMessage(ChatColor.RED + "World '" + regionData.worldName + "' not found.");
+                            return;
+                        }
 
-                Bukkit.getScheduler().runTaskTimer(plugin, task -> {
-                    int currentSection = sectionIndex.get();
-                    if (currentSection >= sectionNames.size()) {
+                        if (regionData.sectionedBlockData.isEmpty()) {
+                            commandSender.sendMessage(ChatColor.RED + "No sections found for region '" + arenaName + "'.");
+                            return;
+                        }
+
                         Location min = null;
                         Location max = null;
                         for (Map<Location, BlockData> section : regionData.sectionedBlockData.values()) {
@@ -423,59 +438,279 @@ public class ArenaRegenCommand implements TabExecutor {
                             }
                         }
 
-                        if (min != null && max != null) {
-                            for (Entity entity : world.getEntities()) {
-                                if (!(entity instanceof Player) && (entity instanceof Item || entity.getType() != EntityType.PLAYER)) {
-                                    Location loc = entity.getLocation();
-                                    if (loc.getX() >= min.getX() && loc.getX() <= max.getX() &&
-                                            loc.getY() >= min.getY() && loc.getY() <= max.getY() &&
-                                            loc.getZ() >= min.getZ() && loc.getZ() <= max.getZ()) {
-                                        entity.remove();
+                        final Location finalMin = min;
+                        final Location finalMax = max;
+
+                        List<Player> playersInside = new ArrayList<>();
+                        for (Player p : world.getPlayers()) {
+                            Location loc = p.getLocation();
+                            if (loc.getX() >= finalMin.getX() && loc.getX() <= finalMax.getX() &&
+                                    loc.getY() >= finalMin.getY() && loc.getY() <= finalMax.getY() &&
+                                    loc.getZ() >= finalMin.getZ() && loc.getZ() <= finalMax.getZ()) {
+                                playersInside.add(p);
+                            }
+                        }
+
+                        if (!playersInside.isEmpty()) {
+                            if (plugin.cancelRegen) {
+                                commandSender.sendMessage(playersInsideCancel.replace("{arena_name}", arenaName));
+                                return;
+                            }
+
+                            for (Player p : playersInside) {
+                                if (plugin.killPlayers) {
+                                    p.setHealth(0.0);
+                                }
+                                if (plugin.teleportToSpawn) {
+                                    p.teleport(world.getSpawnLocation());
+                                }
+                                if (plugin.executeCommands && !plugin.commands.isEmpty()) {
+                                    for (String cmd : plugin.commands) {
+                                        Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd.replace("{player}", p.getName()));
                                     }
                                 }
                             }
                         }
 
-                        long timeTaken = System.currentTimeMillis() - startTime;
-                        commandSender.sendMessage(regenComplete.replace("{arena_name}", targetArenaName) +
-                                ChatColor.GRAY + " (" + totalBlocksReset.get() + " blocks reset in " + (timeTaken / 1000.0) + "s)");
-                        task.cancel();
-                        return;
-                    }
+                        commandSender.sendMessage(ChatColor.YELLOW + "Regenerating region '" + arenaName + "', please wait...");
+                        int blocksPerTick = plugin.regenType.equals("PRESET") ? switch (plugin.regenSpeed.toUpperCase()) {
+                            case "SLOW" -> 1000;
+                            case "NORMAL" -> 10000;
+                            case "FAST" -> 40000;
+                            case "VERYFAST" -> 100000;
+                            case "EXTREME" -> 4000000;
+                            default -> 10000;
+                        } : plugin.customRegenSpeed;
 
-                    String sectionName = sectionNames.get(currentSection);
-                    Map<Location, BlockData> section = regionData.sectionedBlockData.get(sectionName);
-                    List<Map.Entry<Location, BlockData>> blockList = new ArrayList<>(section.entrySet());
-                    int blockIndex = 0;
+                        AtomicInteger sectionIndex = new AtomicInteger(0);
+                        List<String> sectionNames = new ArrayList<>(regionData.sectionedBlockData.keySet());
+                        AtomicInteger totalBlocksReset = new AtomicInteger(0);
+                        long startTime = System.currentTimeMillis();
 
-                    while (blockIndex < blockList.size() && totalBlocksReset.get() < blocksPerTick * (currentSection + 1)) {
-                        Map.Entry<Location, BlockData> entry = blockList.get(blockIndex);
-                        Location loc = entry.getKey();
-                        loc.setWorld(world);
-                        Block block = world.getBlockAt(loc);
-                        BlockData originalData = entry.getValue();
-                        BlockData currentData = block.getBlockData();
+                        Bukkit.getScheduler().runTaskTimer(plugin, task -> {
+                            int currentSection = sectionIndex.get();
+                            if (currentSection >= sectionNames.size()) {
+                                if (finalMin != null && finalMax != null && plugin.trackEntities) {
+                                    for (Entity entity : world.getEntities()) {
+                                        if (!(entity instanceof Player) && (entity instanceof Item || entity.getType() != EntityType.PLAYER)) {
+                                            Location loc = entity.getLocation();
+                                            if (loc.getX() >= finalMin.getX() && loc.getX() <= finalMax.getX() &&
+                                                    loc.getY() >= finalMin.getY() && loc.getY() <= finalMax.getY() &&
+                                                    loc.getZ() >= finalMin.getZ() && loc.getZ() <= finalMax.getZ()) {
+                                                entity.remove();
+                                            }
+                                        }
+                                    }
+                                }
 
-                        if (regenOnlyModified) {
-                            if (!currentData.equals(originalData)) {
-                                block.setBlockData(originalData, false);
-                                totalBlocksReset.incrementAndGet();
+                                long timeTaken = System.currentTimeMillis() - startTime;
+                                commandSender.sendMessage(regenComplete.replace("{arena_name}", arenaName) +
+                                        ChatColor.GRAY + " (" + totalBlocksReset.get() + " blocks reset in " + (timeTaken / 1000.0) + "s)");
+                                task.cancel();
+                                return;
                             }
-                        } else {
-                            block.setBlockData(originalData, false);
-                            totalBlocksReset.incrementAndGet();
+
+                            String sectionName = sectionNames.get(currentSection);
+                            Map<Location, BlockData> section = regionData.sectionedBlockData.get(sectionName);
+                            List<Map.Entry<Location, BlockData>> blockList = new ArrayList<>(section.entrySet());
+                            int blockIndex = 0;
+
+                            while (blockIndex < blockList.size() && totalBlocksReset.get() < blocksPerTick * (currentSection + 1)) {
+                                Map.Entry<Location, BlockData> entry = blockList.get(blockIndex);
+                                Location loc = entry.getKey();
+                                loc.setWorld(world);
+                                Block block = world.getBlockAt(loc);
+                                BlockData originalData = entry.getValue();
+                                BlockData currentData = block.getBlockData();
+
+                                if (plugin.regenOnlyModified) {
+                                    if (!currentData.equals(originalData)) {
+                                        block.setBlockData(originalData, false);
+                                        totalBlocksReset.incrementAndGet();
+                                    }
+                                } else {
+                                    block.setBlockData(originalData, false);
+                                    totalBlocksReset.incrementAndGet();
+                                }
+                                blockIndex++;
+                            }
+
+                            if (blockIndex >= blockList.size()) {
+                                sectionIndex.incrementAndGet();
+                            }
+                        }, 0L, 1L);
+                    }
+                };
+
+                if (plugin.confirmationPrompt) {
+                    if (input.equalsIgnoreCase("confirm")) {
+                        String senderName = commandSender.getName();
+                        String targetArenaName = plugin.getPendingRegenerations().remove(senderName);
+                        if (targetArenaName == null) {
+                            commandSender.sendMessage(noPending);
+                            return true;
                         }
-                        blockIndex++;
-                    }
+                        Runnable confirmedRegen = new Runnable() {
+                            private final String arenaName = targetArenaName;
 
-                    if (blockIndex >= blockList.size()) {
-                        sectionIndex.incrementAndGet();
-                    }
-                }, 0L, 1L);
+                            @Override
+                            public void run() {
+                                RegionData regionData = plugin.getRegisteredRegions().get(arenaName);
+                                if (regionData == null) {
+                                    commandSender.sendMessage(arenaNotFound.replace("{arena_name}", arenaName));
+                                    return;
+                                }
 
-                return true;
+                                World world = Bukkit.getWorld(regionData.worldName);
+                                if (world == null) {
+                                    commandSender.sendMessage(ChatColor.RED + "World '" + regionData.worldName + "' not found.");
+                                    return;
+                                }
+
+                                if (regionData.sectionedBlockData.isEmpty()) {
+                                    commandSender.sendMessage(ChatColor.RED + "No sections found for region '" + arenaName + "'.");
+                                    return;
+                                }
+
+                                Location min = null;
+                                Location max = null;
+                                for (Map<Location, BlockData> section : regionData.sectionedBlockData.values()) {
+                                    for (Location loc : section.keySet()) {
+                                        if (min == null) {
+                                            min = new Location(world, loc.getX(), loc.getY(), loc.getZ());
+                                            max = new Location(world, loc.getX(), loc.getY(), loc.getZ());
+                                        } else {
+                                            min.setX(Math.min(min.getX(), loc.getX()));
+                                            min.setY(Math.min(min.getY(), loc.getY()));
+                                            min.setZ(Math.min(min.getZ(), loc.getZ()));
+                                            max.setX(Math.max(max.getX(), loc.getX()));
+                                            max.setY(Math.max(max.getY(), loc.getY()));
+                                            max.setZ(Math.max(max.getZ(), loc.getZ()));
+                                        }
+                                    }
+                                }
+
+                                final Location finalMin = min;
+                                final Location finalMax = max;
+
+                                List<Player> playersInside = new ArrayList<>();
+                                for (Player p : world.getPlayers()) {
+                                    Location loc = p.getLocation();
+                                    if (loc.getX() >= finalMin.getX() && loc.getX() <= finalMax.getX() &&
+                                            loc.getY() >= finalMin.getY() && loc.getY() <= finalMax.getY() &&
+                                            loc.getZ() >= finalMin.getZ() && loc.getZ() <= finalMax.getZ()) {
+                                        playersInside.add(p);
+                                    }
+                                }
+
+                                if (!playersInside.isEmpty()) {
+                                    if (plugin.cancelRegen) {
+                                        commandSender.sendMessage(playersInsideCancel.replace("{arena_name}", arenaName));
+                                        return;
+                                    }
+
+                                    for (Player p : playersInside) {
+                                        if (plugin.killPlayers) {
+                                            p.setHealth(0.0);
+                                        }
+                                        if (plugin.teleportToSpawn) {
+                                            p.teleport(world.getSpawnLocation());
+                                        }
+                                        if (plugin.executeCommands && !plugin.commands.isEmpty()) {
+                                            for (String cmd : plugin.commands) {
+                                                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd.replace("{player}", p.getName()));
+                                            }
+                                        }
+                                    }
+                                }
+
+                                commandSender.sendMessage(ChatColor.YELLOW + "Regenerating region '" + arenaName + "', please wait...");
+                                int blocksPerTick = plugin.regenType.equals("PRESET") ? switch (plugin.regenSpeed.toUpperCase()) {
+                                    case "SLOW" -> 1000;
+                                    case "NORMAL" -> 10000;
+                                    case "FAST" -> 40000;
+                                    case "VERYFAST" -> 100000;
+                                    case "EXTREME" -> 4000000;
+                                    default -> 10000;
+                                } : plugin.customRegenSpeed;
+
+                                AtomicInteger sectionIndex = new AtomicInteger(0);
+                                List<String> sectionNames = new ArrayList<>(regionData.sectionedBlockData.keySet());
+                                AtomicInteger totalBlocksReset = new AtomicInteger(0);
+                                long startTime = System.currentTimeMillis();
+
+                                Bukkit.getScheduler().runTaskTimer(plugin, task -> {
+                                    int currentSection = sectionIndex.get();
+                                    if (currentSection >= sectionNames.size()) {
+                                        if (finalMin != null && finalMax != null && plugin.trackEntities) {
+                                            for (Entity entity : world.getEntities()) {
+                                                if (!(entity instanceof Player) && (entity instanceof Item || entity.getType() != EntityType.PLAYER)) {
+                                                    Location loc = entity.getLocation();
+                                                    if (loc.getX() >= finalMin.getX() && loc.getX() <= finalMax.getX() &&
+                                                            loc.getY() >= finalMin.getY() && loc.getY() <= finalMax.getY() &&
+                                                            loc.getZ() >= finalMin.getZ() && loc.getZ() <= finalMax.getZ()) {
+                                                        entity.remove();
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        long timeTaken = System.currentTimeMillis() - startTime;
+                                        commandSender.sendMessage(regenComplete.replace("{arena_name}", arenaName) +
+                                                ChatColor.GRAY + " (" + totalBlocksReset.get() + " blocks reset in " + (timeTaken / 1000.0) + "s)");
+                                        task.cancel();
+                                        return;
+                                    }
+
+                                    String sectionName = sectionNames.get(currentSection);
+                                    Map<Location, BlockData> section = regionData.sectionedBlockData.get(sectionName);
+                                    List<Map.Entry<Location, BlockData>> blockList = new ArrayList<>(section.entrySet());
+                                    int blockIndex = 0;
+
+                                    while (blockIndex < blockList.size() && totalBlocksReset.get() < blocksPerTick * (currentSection + 1)) {
+                                        Map.Entry<Location, BlockData> entry = blockList.get(blockIndex);
+                                        Location loc = entry.getKey();
+                                        loc.setWorld(world);
+                                        Block block = world.getBlockAt(loc);
+                                        BlockData originalData = entry.getValue();
+                                        BlockData currentData = block.getBlockData();
+
+                                        if (plugin.regenOnlyModified) {
+                                            if (!currentData.equals(originalData)) {
+                                                block.setBlockData(originalData, false);
+                                                totalBlocksReset.incrementAndGet();
+                                            }
+                                        } else {
+                                            block.setBlockData(originalData, false);
+                                            totalBlocksReset.incrementAndGet();
+                                        }
+                                        blockIndex++;
+                                    }
+
+                                    if (blockIndex >= blockList.size()) {
+                                        sectionIndex.incrementAndGet();
+                                    }
+                                }, 0L, 1L);
+                            }
+                        };
+                        confirmedRegen.run();
+                        return true;
+                    } else {
+                        String regionName = input;
+                        if (!plugin.getRegisteredRegions().containsKey(regionName)) {
+                            commandSender.sendMessage(arenaNotFound.replace("{arena_name}", regionName));
+                            return true;
+                        }
+                        plugin.getPendingRegenerations().put(commandSender.getName(), regionName);
+                        commandSender.sendMessage(confirmPrompt.replace("{arena_name}", regionName));
+                        Bukkit.getScheduler().runTaskLater(plugin, () -> plugin.getPendingRegenerations().remove(commandSender.getName()), 1200L);
+                        return true;
+                    }
+                } else {
+                    regenerateArena.run();
+                    return true;
+                }
             }
-
             case "setspawn" -> {
                 String showUsage = ChatColor.translateAlternateColorCodes('&', "&cUsage: /arenaregen setspawn <arena>");
                 String targetArenaName = strings[1];
@@ -591,7 +826,7 @@ public class ArenaRegenCommand implements TabExecutor {
                     return true;
                 }
 
-                plugin.reloadConfig();
+                plugin.reloadPluginConfig();
                 plugin.getRegisteredRegions().clear();
                 plugin.loadRegions();
                 plugin.loadMessagesFile();

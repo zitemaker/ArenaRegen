@@ -8,22 +8,27 @@
 #
 # Development Team: Zitemaker Studios
 # Discord: http://dsc.gg/zitemaker
-# Please refer to our documentation website if you are having trouble with the configuration
-# Documentation Website: https://zitemakers-organization.gitbook.io/arenaregen
+# Documentation: https://zitemakers-organization.gitbook.io/arenaregen
 
 prefix: "&e[&2ArenaRegen&e]"
 
 general:
-  # How many blocks large can a region be.
-  arena-size-limit: 50000
-
-  # How many blocks are analyzed in arena creation per second. Increasing
-  # this will increase the speed arenas are created but will cause more lag.
-  AnalyzeBlockSpeed: 49600
-
-  # What item should the selection tool be for creating the arenas
-  SelectionToolItem: GOLDEN_HOE
+  arena-size-limit: 40000
+  max-arenas: 100
+  analyze-speed: 40000
+  selection-tool: GOLDEN_HOE
 
 regen:
-  regen-speed: 1000 # How many blocks to regenerate every tick
-  regen-only-modified: false # Should the plugin only regenerate blocks that have been modified?
+  regen-speed-type: PRESET # PRESET or CUSTOM
+  regen-speed: FAST # SLOW, NORMAL, FAST, VERYFAST, EXTREME (used if regen-speed-type is PRESET)
+  custom-regen-speed: 10000 # Integer value used if regen-speed-type is CUSTOM
+  track-entities: true
+  regen-only-modified: false
+  confirmation-prompt: false
+  players-inside-arena:
+    cancel-regen: false
+    kill: false
+    execute-commands: true
+    commands:
+      - "say {player} is inside the arena!"
+    teleport-to-spawn: true
