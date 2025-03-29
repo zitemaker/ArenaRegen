@@ -13,22 +13,22 @@
 prefix: "&e[&2ArenaRegen&e]"
 
 general:
-  arena-size-limit: 40000
-  max-arenas: 100
-  analyze-speed: 40000
-  selection-tool: GOLDEN_HOE
+  arena-size-limit: 40000 # Maximum area of an arena in blocks
+  max-arenas: 100 # The maximum number of arenas that can be created.
+  analyze-speed: 40000 # How many blocks to analyze per second when creating an arena
+  selection-tool: GOLDEN_HOE # The item to be used as the selection tool
 
 regen:
   regen-speed-type: PRESET # PRESET or CUSTOM
   regen-speed: FAST # SLOW, NORMAL, FAST, VERYFAST, EXTREME (used if regen-speed-type is PRESET)
   custom-regen-speed: 10000 # Integer value used if regen-speed-type is CUSTOM
-  track-entities: true
-  regen-only-modified: false
-  confirmation-prompt: false
-  players-inside-arena:
-    cancel-regen: false
-    kill: false
-    execute-commands: true
-    commands:
+  track-entities: true # Whether entities should be tracked after creating an arena and removed when regenerating the arena
+  regen-only-modified: false # Whether it should only regenerate modified blocks or not
+  confirmation-prompt: false # Whether it should show a confirmation prompt when using the regenerate command
+  players-inside-arena: # Actions to be taken on players who are inside the arena while it is regenerating
+    cancel-regen: false # Cancel the regeneration
+    kill: false # Kill the player
+    execute-commands: false # Execute commands of your choice
+    commands: # The commands to be executed
       - "say {player} is inside the arena!"
-    teleport-to-spawn: true
+    teleport-to-spawn: true # Teleport the player to world spawn
