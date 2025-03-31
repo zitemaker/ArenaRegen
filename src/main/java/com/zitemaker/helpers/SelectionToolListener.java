@@ -51,7 +51,7 @@ public class SelectionToolListener implements Listener {
     public void giveSelectionTool(@NotNull Player player) {
         ItemStack wandTool = new ItemStack(wandMaterial);
         player.getInventory().addItem(wandTool);
-        player.sendMessage(ChatColor.GREEN + "You have been given the Flag Selection Tool (" + wandMaterial.name() + ")!");
+        player.sendMessage(ChatColor.GREEN + "You have been given the Arena Selection Tool (" + wandMaterial.name() + ")!");
     }
 
     @EventHandler
