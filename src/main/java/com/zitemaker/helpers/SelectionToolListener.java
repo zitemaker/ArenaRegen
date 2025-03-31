@@ -60,7 +60,7 @@ public class SelectionToolListener implements Listener {
         ItemStack item = player.getInventory().getItemInMainHand();
 
         if (item.getType() != wandMaterial) return;
-        if (!player.hasPermission("jails.setflag")) return;
+        if (!player.hasPermission("arenaregen.select")) return;
 
         event.setCancelled(true);
 
@@ -90,7 +90,7 @@ public class SelectionToolListener implements Listener {
     public Vector[] getSelection(@NotNull Player player) {
         Vector[] corners = selections.get(player.getUniqueId());
         if (corners == null) {
-            player.sendMessage(ChatColor.RED + "No selection found. Use the /jailwand command to get the selection tool.");
+            player.sendMessage(ChatColor.RED + "No selection found. Use the /ar wand command to get the selection tool.");
             return null;
         }
         if (corners[0] == null) {
