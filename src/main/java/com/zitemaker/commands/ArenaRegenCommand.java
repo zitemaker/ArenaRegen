@@ -137,7 +137,7 @@ public class ArenaRegenCommand implements TabExecutor {
                 long volume = (long) width * height * depth;
                 int arenaSizeLimit = plugin.arenaSize;
                 if (volume > arenaSizeLimit) {
-                    commandSender.sendMessage(regionSizeLimit.replace("{arena_max_size}", String.valueOf(arenaSizeLimit)));
+                    commandSender.sendMessage(regionSizeLimit.replace("{arena_size_limit}", String.valueOf(arenaSizeLimit)));
                     return true;
                 }
 
@@ -379,8 +379,6 @@ public class ArenaRegenCommand implements TabExecutor {
             }
 
             case "regenerate", "regen" -> {
-
-                plugin.getLogger().info(strings.toString());
                 String showUsage = ChatColor.translateAlternateColorCodes('&', "&cUsage: /arenaregen regenerate <arena>");
                 String confirmPrompt = ChatColor.YELLOW + "Are you sure you want to regenerate the region '{arena_name}'? Type '/arenaregen regen confirm' to proceed.";
                 String noPending = ChatColor.RED + "No pending region regeneration found. Use '/arenaregen regen <name>' first.";
@@ -827,8 +825,6 @@ public class ArenaRegenCommand implements TabExecutor {
                 }
 
                 plugin.reloadPluginConfig();
-                plugin.getRegisteredRegions().clear();
-                plugin.loadRegions();
                 plugin.loadMessagesFile();
                 commandSender.sendMessage(reloadSuccess);
                 return true;

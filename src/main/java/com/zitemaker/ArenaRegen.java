@@ -53,6 +53,8 @@ public class ArenaRegen extends JavaPlugin {
     public boolean teleportToSpawn;
     public Material selectionTool;
 
+    private int saveTaskId = -1;
+
     @Override
     public void onLoad() {
         logger.info(ARChatColor.GREEN + "ArenaRegen.jar v" + getDescription().getVersion() + " has been loaded successfully");
@@ -84,18 +86,76 @@ public class ArenaRegen extends JavaPlugin {
         Objects.requireNonNull(getCommand("arenaregen")).setExecutor(commandExecutor);
         Objects.requireNonNull(getCommand("arenaregen")).setTabCompleter(commandExecutor);
 
-        Bukkit.getScheduler().runTaskTimerAsynchronously(this, () -> {
+        saveTaskId = Bukkit.getScheduler().runTaskTimerAsynchronously(this, () -> {
             if (!dirtyRegions.isEmpty()) {
                 saveRegions();
                 dirtyRegions.clear();
             }
-        }, 0L, 6000L);
+        }, 0L, 6000L).getTaskId();
     }
 
     @Override
     public void onDisable() {
-        saveRegions();
+        if (saveTaskId != -1) {
+            Bukkit.getScheduler().cancelTask(saveTaskId);
+            saveTaskId = -1;
+        }
+        logger.info(ARChatColor.GOLD + "Saving all arenas before shutdown...");
+        saveRegionsSynchronously();
         logger.info(ARChatColor.RED + "ArenaRegen v" + getDescription().getVersion() + " has been disabled.");
+
+    }
+
+    private void saveRegionsSynchronously() {
+        File arenasDir = new File(getDataFolder(), "arenas");
+        if (!arenasDir.exists()) {
+            arenasDir.mkdirs();
+            console.sendMessage(" Created arenas directory: " + arenasDir.getPath());
+        }
+
+        Map<String, RegionData> regionsToSave;
+        synchronized (registeredRegions) {
+            regionsToSave = new HashMap<>(registeredRegions);
+        }
+
+        if (regionsToSave.isEmpty()) {
+            console.sendMessage("No regions to save.");
+            dirtyRegions.clear();
+            return;
+        }
+
+        console.sendMessage("Saving " + regionsToSave.size() + " regions synchronously...");
+
+        int savedRegions = 0;
+        StringBuilder errorSummary = new StringBuilder();
+
+        for (String regionName : regionsToSave.keySet()) {
+            File datcFile = new File(arenasDir, regionName + ".datc");
+            try {
+                RegionData regionData = regionsToSave.get(regionName);
+                regionData.saveToDatc(datcFile);
+                savedRegions++;
+                getLogger().info("Saved region '" + regionName + "' to " + datcFile.getPath());
+            } catch (IOException e) {
+                getLogger().severe("Failed to save region '" + regionName + "' to " + datcFile.getPath() + ": " + e.getMessage());
+                errorSummary.append(ARChatColor.RED)
+                        .append(" - Region '").append(regionName).append("': ").append(e.getMessage()).append("\n");
+            }
+        }
+
+        console.sendMessage("Successfully saved " + savedRegions + " out of " + regionsToSave.size() + " regions.");
+
+        if (savedRegions < regionsToSave.size()) {
+            console.sendMessage(ARChatColor.RED + "Errors occurred while saving the following regions:");
+            console.sendMessage(errorSummary.toString());
+        }
+
+        if (savedRegions == regionsToSave.size()) {
+            dirtyRegions.clear();
+            console.sendMessage("Cleared dirty regions list.");
+        } else {
+            console.sendMessage("Preserving dirty regions list due to save errors.");
+        }
     }
 
     public void loadConfigValues() {
