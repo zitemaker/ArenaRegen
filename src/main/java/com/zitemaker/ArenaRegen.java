@@ -2,7 +2,6 @@ package com.zitemaker;
 
 import com.zitemaker.commands.ArenaRegenCommand;
 import com.zitemaker.helpers.RegionData;
-import com.zitemaker.helpers.SelectionToolListener;
 import com.zitemaker.utils.*;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
@@ -27,7 +26,6 @@ public class ArenaRegen extends JavaPlugin {
     private File messagesFile;
     private FileConfiguration messagesConfig;
 
-    private final SelectionToolListener selectionToolListener = new SelectionToolListener(this);
     private final Map<String, RegionData> registeredRegions = new HashMap<>();
     private final Map<String, String> pendingDeletions = new HashMap<>();
     private final Map<String, String> pendingRegenerations = new HashMap<>();
@@ -80,9 +78,8 @@ public class ArenaRegen extends JavaPlugin {
         saveMessagesFile();
         loadRegions();
 
-        Bukkit.getPluginManager().registerEvents(selectionToolListener, this);
 
-        ArenaRegenCommand commandExecutor = new ArenaRegenCommand(this, selectionToolListener);
+        ArenaRegenCommand commandExecutor = new ArenaRegenCommand(this);
         Objects.requireNonNull(getCommand("arenaregen")).setExecutor(commandExecutor);
         Objects.requireNonNull(getCommand("arenaregen")).setTabCompleter(commandExecutor);
 

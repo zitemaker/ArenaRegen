@@ -2,11 +2,7 @@ package com.zitemaker.commands;
 
 import com.zitemaker.ArenaRegen;
 import com.zitemaker.helpers.RegionData;
-import com.zitemaker.helpers.SelectionToolListener;
-import org.bukkit.Bukkit;
-import org.bukkit.ChatColor;
-import org.bukkit.Location;
-import org.bukkit.World;
+import org.bukkit.*;
 import org.bukkit.block.Block;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.command.Command;
@@ -17,6 +13,13 @@ import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Item;
 import org.bukkit.entity.Player;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.block.Action;
+import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.inventory.EquipmentSlot;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.util.Vector;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -26,14 +29,27 @@ import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class ArenaRegenCommand implements TabExecutor {
+public class ArenaRegenCommand implements TabExecutor, Listener {
 
     private final ArenaRegen plugin;
-    private final SelectionToolListener selectionListener;
+    private final Map<UUID, Vector[]> selections = new HashMap<>();
+    private final Map<UUID, BukkitRunnable> expirationTasks = new HashMap<>();
+    private final Material wandMaterial;
+    private static final long ACTION_COOLDOWN_MS = 500;
+    private static final Material DEFAULT_WAND_MATERIAL = Material.GOLDEN_HOE;
+    private final Map<UUID, Long> lastActionTimes = new HashMap<>();
 
-    public ArenaRegenCommand(ArenaRegen plugin, SelectionToolListener selectionListener) {
+    public ArenaRegenCommand(ArenaRegen plugin) {
         this.plugin = plugin;
-        this.selectionListener = selectionListener;
+        String wandToolString = String.valueOf(plugin.selectionTool);
+        Material configuredMaterial;
+        try {
+            configuredMaterial = plugin.selectionTool;
+        } catch (IllegalArgumentException e) {
+            plugin.console.sendMessage(ChatColor.RED + "[ArenaRegen] Invalid selection-tool material '" + wandToolString + "' in config.yml. Defaulting to GOLDEN_HOE.");
+            configuredMaterial = DEFAULT_WAND_MATERIAL;
+        }
+        this.wandMaterial = configuredMaterial;
     }
 
     public long arenaSizeLimit;
@@ -110,7 +126,7 @@ public class ArenaRegenCommand implements TabExecutor {
                     return true;
                 }
 
-                Vector[] selection = selectionListener.getSelection(player);
+                Vector[] selection = getSelection(player);
                 if (selection == null || selection[0] == null || selection[1] == null) {
                     commandSender.sendMessage(ChatColor.RED + "You must select both corners using the selection tool first!");
                     return true;
@@ -222,7 +238,7 @@ public class ArenaRegenCommand implements TabExecutor {
                                 plugin.getLogger().severe("Failed to save " + regionName + ".datc: " + e.getMessage());
                             }
                             plugin.markRegionDirty(regionName);
-                            selectionListener.clearSelection(player);
+                            clearSelection(player);
                             commandSender.sendMessage(regionCreated.replace("{arena_name}", regionName));
                         });
                     }
@@ -320,7 +336,7 @@ public class ArenaRegenCommand implements TabExecutor {
                     return true;
                 }
 
-                Vector[] selection = selectionListener.getSelection(player);
+                Vector[] selection = getSelection(player);
                 if (selection == null || selection[0] == null || selection[1] == null) {
                     commandSender.sendMessage(ChatColor.RED + "You must select both corners using the selection tool first!");
                     return true;
@@ -371,7 +387,7 @@ public class ArenaRegenCommand implements TabExecutor {
                         plugin.getRegisteredRegions().put(regionName, regionData);
                         plugin.markRegionDirty(regionName);
                         Bukkit.getScheduler().runTaskAsynchronously(plugin, plugin::saveRegions);
-                        selectionListener.clearSelection(player);
+                        clearSelection(player);
                         commandSender.sendMessage(regionResized.replace("{arena_name}", regionName));
                     });
                 });
@@ -869,7 +885,7 @@ public class ArenaRegenCommand implements TabExecutor {
                     return true;
                 }
 
-                selectionListener.giveSelectionTool(player);
+                giveSelectionTool(player);
                 return true;
             }
 
@@ -1026,5 +1042,97 @@ public class ArenaRegenCommand implements TabExecutor {
             }
         }
         return filtered;
+    }
+
+    // selection tool stuff
+    public void giveSelectionTool(@NotNull Player player) {
+        ItemStack wandTool = new ItemStack(wandMaterial);
+        player.getInventory().addItem(wandTool);
+        player.sendMessage(ChatColor.GREEN + "You have been given the Arena Selection Tool (" + wandMaterial.name() + ")!");
+    }
+
+    @EventHandler
+    public void onPlayerInteract(@NotNull PlayerInteractEvent event) {
+        if (event.getHand() != EquipmentSlot.HAND) return;
+
+        Player player = event.getPlayer();
+        ItemStack item = player.getInventory().getItemInMainHand();
+
+        if (item.getType() != wandMaterial || !player.hasPermission("arenaregen.select")) return;
+        if (event.getClickedBlock() == null) return;
+
+        UUID playerId = player.getUniqueId();
+        Vector clickedPos = event.getClickedBlock().getLocation().toVector();
+        long currentTime = System.currentTimeMillis();
+
+        if (currentTime - lastActionTimes.getOrDefault(playerId, 0L) < ACTION_COOLDOWN_MS) {
+            event.setCancelled(true);
+            return;
+        }
+
+        lastActionTimes.put(playerId, currentTime);
+
+        if (event.getAction() == Action.LEFT_CLICK_BLOCK) {
+            event.setCancelled(true);
+            handleCornerSelection(playerId, clickedPos, 0, "First");
+        } else if (event.getAction() == Action.RIGHT_CLICK_BLOCK) {
+            handleCornerSelection(playerId, clickedPos, 1, "Second");
+        }
+    }
+
+    private void handleCornerSelection(UUID playerId, Vector clickedPos, int index, String cornerName) {
+        Player player = plugin.getServer().getPlayer(playerId);
+        if (player == null) return;
+
+        Vector[] corners = selections.computeIfAbsent(playerId, k -> new Vector[2]);
+
+        if (corners[index] == null || !corners[index].equals(clickedPos)) {
+            corners[index] = clickedPos;
+            player.sendMessage(ChatColor.GREEN + cornerName + " corner set at: " + formatVector(clickedPos));
+            resetExpiration(playerId);
+        }
+    }
+
+    public Vector[] getSelection(@NotNull Player player) {
+        Vector[] corners = selections.get(player.getUniqueId());
+        if (corners == null || corners[0] == null || corners[1] == null) {
+            player.sendMessage(ChatColor.RED + "Incomplete selection. Use the selection tool to set both corners.");
+            return null;
+        }
+        return corners;
+    }
+
+    public void clearSelection(@NotNull Player player) {
+        UUID playerId = player.getUniqueId();
+        selections.remove(playerId);
+        cancelExpiration(playerId);
+        lastActionTimes.remove(playerId);
+    }
+
+    private void resetExpiration(UUID playerId) {
+        cancelExpiration(playerId);
+        BukkitRunnable task = new BukkitRunnable() {
+            @Override
+            public void run() {
+                Player player = plugin.getServer().getPlayer(playerId);
+                if (player != null) {
+                    clearSelection(player);
+                } else {
+                    selections.remove(playerId);
+                    expirationTasks.remove(playerId);
+                    lastActionTimes.remove(playerId);
+                }
+            }
+        };
+        task.runTaskLater(plugin, 3 * 60 * 20);
+        expirationTasks.put(playerId, task);
+    }
+
+    private void cancelExpiration(UUID playerId) {
+        BukkitRunnable task = expirationTasks.remove(playerId);
+        if (task != null) task.cancel();
+    }
+    private @NotNull String formatVector(@NotNull Vector vector) {
+        return "(" + vector.getBlockX() + ", " + vector.getBlockY() + ", " + vector.getBlockZ() + ")";
     }
 }
