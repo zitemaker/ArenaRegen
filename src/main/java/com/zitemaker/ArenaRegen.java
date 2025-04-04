@@ -14,6 +14,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 import java.io.File;
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -26,9 +27,9 @@ public class ArenaRegen extends JavaPlugin {
     private File messagesFile;
     private FileConfiguration messagesConfig;
 
-    private final Map<String, RegionData> registeredRegions = new HashMap<>();
-    private final Map<String, String> pendingDeletions = new HashMap<>();
-    private final Map<String, String> pendingRegenerations = new HashMap<>();
+    private final Map<String, RegionData> registeredRegions = new ConcurrentHashMap<>();
+    private final Map<String, String> pendingDeletions = new ConcurrentHashMap<>();
+    private final Map<String, String> pendingRegenerations = new ConcurrentHashMap<>();
     public final Console console = new SpigotConsole();
     private final Logger logger = new Logger(new JavaPlatformLogger(console, getLogger()), true);
     private final Set<String> dirtyRegions = new HashSet<>();
