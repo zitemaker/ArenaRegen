@@ -1,7 +1,7 @@
 <p align="center">
 <a href="https://github.com/zitemaker/ArenaRegen/releases/"><img src="https://img.shields.io/github/downloads/zitemaker/ArenaRegen/latest/total.svg" alt="Github Downloads"></a>
-<a href="https://www.spigotmc.org/resources/123183/"><img src="https://img.shields.io/spiget/downloads/123731?label=Spigot%20Downloads" alt="Spigot downloads"></a>
-<a href="https://www.spigotmc.org/resources/123183/"><img src="https://img.shields.io/spiget/rating/123731" alt="Spigot rating"></a>
+<a href="https://www.spigotmc.org/resources/arenaregen.123731/"><img src="https://img.shields.io/spiget/downloads/123731?label=Spigot%20Downloads" alt="Spigot downloads"></a>
+<a href="https://www.spigotmc.org/resources/arenaregen.123731/"><img src="https://img.shields.io/spiget/rating/123731" alt="Spigot rating"></a>
 
 </p>
 
