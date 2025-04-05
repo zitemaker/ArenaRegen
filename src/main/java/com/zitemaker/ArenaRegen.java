@@ -83,6 +83,7 @@ public class ArenaRegen extends JavaPlugin {
         ArenaRegenCommand commandExecutor = new ArenaRegenCommand(this);
         Objects.requireNonNull(getCommand("arenaregen")).setExecutor(commandExecutor);
         Objects.requireNonNull(getCommand("arenaregen")).setTabCompleter(commandExecutor);
+        Bukkit.getPluginManager().registerEvents(commandExecutor, this);
 
         saveTaskId = Bukkit.getScheduler().runTaskTimerAsynchronously(this, () -> {
             if (!dirtyRegions.isEmpty()) {
