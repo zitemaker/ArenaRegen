@@ -1,7 +1,7 @@
 name: ArenaRegen
 version: 1.0.1
 main: com.zitemaker.ArenaRegen
-api-version: 1.21
+api-version: 1.18
 description: A plugin that registers and regenerates regions using coordinates.
 author: Zitemaker
 commands:
