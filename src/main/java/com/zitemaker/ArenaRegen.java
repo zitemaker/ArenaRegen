@@ -32,7 +32,7 @@ public class ArenaRegen extends JavaPlugin {
     private final Map<String, String> pendingRegenerations = new ConcurrentHashMap<>();
     public final Console console = new SpigotConsole();
     private final Logger logger = new Logger(new JavaPlatformLogger(console, getLogger()), true);
-    private final Set<String> dirtyRegions = new HashSet<>();
+    public final Set<String> dirtyRegions = new HashSet<>();
 
     // config stuff
     public String prefix;
@@ -50,7 +50,7 @@ public class ArenaRegen extends JavaPlugin {
     public boolean executeCommands;
     public List<String> commands;
     public boolean teleportToSpawn;
-    public Material selectionTool;
+    public String selectionTool;
 
     private int saveTaskId = -1;
 
@@ -173,7 +173,7 @@ public class ArenaRegen extends JavaPlugin {
         this.executeCommands = getConfig().getBoolean("regen.players-inside-arena.execute-commands", true);
         this.commands = getConfig().getStringList("regen.players-inside-arena.commands");
         this.teleportToSpawn = getConfig().getBoolean("regen.players-inside-arena.teleport-to-spawn", true);
-        this.selectionTool = Material.valueOf(getConfig().getString("general.selection-tool", "GOLDEN_HOE").toUpperCase());
+        this.selectionTool = getConfig().getString("general.selection-tool", "GOLDEN_HOE").toUpperCase();
     }
 
     public void reloadPluginConfig() {
@@ -193,6 +193,8 @@ public class ArenaRegen extends JavaPlugin {
     public Map<String, String> getPendingRegenerations() {
         return pendingRegenerations;
     }
+
+    public Set<String> getDirtyRegions() { return dirtyRegions; }
 
     private static final List<String> ARENAREGEN_PERMISSIONS = List.of(
             "arenaregen.create",

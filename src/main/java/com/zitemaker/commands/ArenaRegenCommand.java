@@ -1,6 +1,7 @@
 package com.zitemaker.commands;
 
 import com.zitemaker.ArenaRegen;
+import com.zitemaker.helpers.EntitySerializer;
 import com.zitemaker.helpers.RegionData;
 import org.bukkit.*;
 import org.bukkit.block.Block;
@@ -19,6 +20,7 @@ import org.bukkit.event.block.Action;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.util.Vector;
 import org.jetbrains.annotations.NotNull;
@@ -34,26 +36,17 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
     private final ArenaRegen plugin;
     private final Map<UUID, Vector[]> selections = new HashMap<>();
     private final Map<UUID, BukkitRunnable> expirationTasks = new HashMap<>();
-    private final Material wandMaterial;
     private static final long ACTION_COOLDOWN_MS = 500;
-    private static final Material DEFAULT_WAND_MATERIAL = Material.GOLDEN_HOE;
     private final Map<UUID, Long> lastActionTimes = new HashMap<>();
+    private long lastConfigCheck;
+    private static final long CONFIG_CHECK_INTERVAL = 1000;
 
     public ArenaRegenCommand(ArenaRegen plugin) {
         this.plugin = plugin;
-        String wandToolString = String.valueOf(plugin.selectionTool);
-        Material configuredMaterial;
-        try {
-            configuredMaterial = plugin.selectionTool;
-        } catch (IllegalArgumentException e) {
-            plugin.console.sendMessage(ChatColor.RED + "[ArenaRegen] Invalid selection-tool material '" + wandToolString + "' in config.yml. Defaulting to GOLDEN_HOE.");
-            configuredMaterial = DEFAULT_WAND_MATERIAL;
-        }
-        this.wandMaterial = configuredMaterial;
     }
 
     public long arenaSizeLimit;
-
+    private Material wandMaterial;
 
     @Override
     public boolean onCommand(@NotNull CommandSender commandSender, @NotNull Command command, @NotNull String s, @NotNull String @NotNull [] strings) {
@@ -95,34 +88,26 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
         switch (strings[0]) {
 
             case "create" -> {
-                String showUsage = ChatColor.translateAlternateColorCodes('&', "&cUsage: /arenaregen create <arena>");
-
                 if (!(commandSender instanceof Player player)) {
                     plugin.getLogger().info(onlyForPlayers);
                     return true;
                 }
-
                 if (!commandSender.hasPermission("arenaregen.create")) {
                     commandSender.sendMessage(noPermission);
                     return true;
                 }
-
                 if (strings.length != 2) {
-                    commandSender.sendMessage(pluginPrefix + " " + showUsage);
+                    commandSender.sendMessage(pluginPrefix + " " + ChatColor.translateAlternateColorCodes('&', "&cUsage: /arenaregen create <arena>"));
                     return true;
                 }
 
                 String regionName = strings[1];
-
                 if (plugin.getRegisteredRegions().containsKey(regionName)) {
                     commandSender.sendMessage(regionExists);
                     return true;
                 }
-
-
-                int maxArenas = plugin.maxArenas;
-                if (plugin.getRegisteredRegions().size() >= maxArenas) {
-                    commandSender.sendMessage(maxArenasReached.replace("{max_arenas}", String.valueOf(maxArenas)));
+                if (plugin.getRegisteredRegions().size() >= plugin.maxArenas) {
+                    commandSender.sendMessage(maxArenasReached.replace("{max_arenas}", String.valueOf(plugin.maxArenas)));
                     return true;
                 }
 
@@ -141,9 +126,7 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                 int maxZ = Math.max(selection[0].getBlockZ(), selection[1].getBlockZ());
 
                 if (minY < world.getMinHeight() || maxY > world.getMaxHeight()) {
-                    invalidHeight = invalidHeight.replace("{minHeight}", String.valueOf(world.getMinHeight()));
-                    invalidHeight = invalidHeight.replace("{maxHeight}", String.valueOf(world.getMinHeight()));
-                    commandSender.sendMessage(invalidHeight);
+                    commandSender.sendMessage(invalidHeight.replace("{minHeight}", String.valueOf(world.getMinHeight())).replace("{maxHeight}", String.valueOf(world.getMaxHeight())));
                     return true;
                 }
 
@@ -151,27 +134,16 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                 int height = maxY - minY + 1;
                 int depth = maxZ - minZ + 1;
                 long volume = (long) width * height * depth;
-                int arenaSizeLimit = plugin.arenaSize;
-                if (volume > arenaSizeLimit) {
-                    commandSender.sendMessage(regionSizeLimit.replace("{arena_size_limit}", String.valueOf(arenaSizeLimit)));
+                if (volume > plugin.arenaSize) {
+                    commandSender.sendMessage(regionSizeLimit.replace("{arena_size_limit}", String.valueOf(plugin.arenaSize)));
                     return true;
                 }
 
                 RegionData regionData = new RegionData(plugin);
-                regionData.setMetadata(
-                        player.getName(),
-                        System.currentTimeMillis(),
-                        world.getName(),
-                        Bukkit.getVersion(),
-                        width,
-                        height,
-                        depth
-                );
-
+                regionData.setMetadata(player.getName(), System.currentTimeMillis(), world.getName(), Bukkit.getVersion(), minX, minY, minZ, width, height, depth);
                 plugin.getRegisteredRegions().put(regionName, regionData);
-                File arenasDir = new File(plugin.getDataFolder(), "arenas");
-                arenasDir.mkdirs();
-                File datcFile = new File(arenasDir, regionName + ".datc");
+
+                File datcFile = new File(new File(plugin.getDataFolder(), "arenas"), regionName + ".datc");
                 try {
                     regionData.saveToDatc(datcFile);
                 } catch (IOException e) {
@@ -180,30 +152,34 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
 
                 commandSender.sendMessage(ChatColor.YELLOW + "Analyzing and creating region '" + regionName + "', please wait...");
 
-
-                int blocksPerSecond = plugin.analyzeSpeed;
-                int blocksPerTick = blocksPerSecond / 20;
-                Map<Location, BlockData> allBlocks = new HashMap<>();
+                int blocksPerTick = plugin.analyzeSpeed / 20;
                 AtomicInteger blocksProcessed = new AtomicInteger(0);
 
-                Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, task -> {
-                    int startCount = blocksProcessed.get();
-                    int targetCount = Math.min(startCount + blocksPerTick, (int) volume);
+                if (plugin.trackEntities) {
+                    for (Entity entity : world.getEntities()) {
+                        Location loc = entity.getLocation();
+                        if (loc.getX() >= minX && loc.getX() <= maxX &&
+                                loc.getY() >= minY && loc.getY() <= maxY &&
+                                loc.getZ() >= minZ && loc.getZ() <= maxZ) {
+                            regionData.addEntity(loc, EntitySerializer.serializeEntity(entity));
+                        }
+                    }
+                }
 
-                    for (int i = startCount; i < targetCount; i++) {
+                Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, task -> {
+                    int start = blocksProcessed.get();
+                    int end = Math.min(start + blocksPerTick, (int) volume);
+
+                    for (int i = start; i < end; i++) {
                         int x = minX + (i % width);
                         int y = minY + ((i / width) % height);
                         int z = minZ + (i / (width * height));
-                        Location loc = new Location(world, x, y, z);
-                        BlockData blockData = loc.getBlock().getBlockData();
-                        allBlocks.put(loc, blockData);
+                        BlockData blockData = world.getBlockAt(x, y, z).getBlockData();
+                        regionData.addBlockToSection("temp", new Location(world, x, y, z), blockData);
                     }
 
-                    blocksProcessed.set(targetCount);
-
-                    if (blocksProcessed.get() >= volume) {
+                    if (end >= volume) {
                         task.cancel();
-
                         int chunkMinX = minX >> 4;
                         int chunkMinZ = minZ >> 4;
                         int chunkMaxX = maxX >> 4;
@@ -222,7 +198,7 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                                     for (int y = minY; y <= maxY; y++) {
                                         for (int z = zStart; z <= zEnd; z++) {
                                             Location loc = new Location(world, x, y, z);
-                                            sectionBlocks.put(loc, allBlocks.get(loc));
+                                            sectionBlocks.put(loc, regionData.getSectionedBlockData().get("temp").get(loc));
                                         }
                                     }
                                 }
@@ -234,16 +210,16 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                         Bukkit.getScheduler().runTask(plugin, () -> {
                             try {
                                 regionData.saveToDatc(datcFile);
+                                plugin.markRegionDirty(regionName);
+                                clearSelection(player);
+                                commandSender.sendMessage(regionCreated.replace("{arena_name}", regionName));
                             } catch (IOException e) {
                                 plugin.getLogger().severe("Failed to save " + regionName + ".datc: " + e.getMessage());
                             }
-                            plugin.markRegionDirty(regionName);
-                            clearSelection(player);
-                            commandSender.sendMessage(regionCreated.replace("{arena_name}", regionName));
                         });
                     }
+                    blocksProcessed.set(end);
                 }, 0L, 1L);
-
                 return true;
             }
 
@@ -360,6 +336,9 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                         oldRegionData.getCreationDate(),
                         world.getName(),
                         oldRegionData.getMinecraftVersion(),
+                        minX,
+                        minY,
+                        minZ,
                         maxX - minX + 1,
                         maxY - minY + 1,
                         maxZ - minZ + 1
@@ -485,6 +464,25 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                                 }
                             }
                         }
+                        int minX = regionData.getMinX();
+                        int minY = regionData.getMinY();
+                        int minZ = regionData.getMinZ();
+                        int maxX = regionData.getMaxX();
+                        int maxY = regionData.getMaxY();
+                        int maxZ = regionData.getMaxZ();
+
+                        if (plugin.trackEntities) {
+                            world.getEntities().stream()
+                                    .filter(e -> {
+                                        Location loc = e.getLocation();
+                                        return loc.getX() >= minX && loc.getX() <= maxX &&
+                                                loc.getY() >= minY && loc.getY() <= maxY &&
+                                                loc.getZ() >= minZ && loc.getZ() <= maxZ;
+                                    })
+                                    .forEach(e -> {
+                                        if (!(e instanceof Player)) e.remove();
+                                    });
+                        }
 
                         commandSender.sendMessage(ChatColor.YELLOW + "Regenerating region '" + arenaName + "', please wait...");
                         int blocksPerTick = plugin.regenType.equals("PRESET") ? switch (plugin.regenSpeed.toUpperCase()) {
@@ -504,15 +502,15 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                         Bukkit.getScheduler().runTaskTimer(plugin, task -> {
                             int currentSection = sectionIndex.get();
                             if (currentSection >= sectionNames.size()) {
-                                if (finalMin != null && finalMax != null && plugin.trackEntities) {
-                                    for (Entity entity : world.getEntities()) {
-                                        if (!(entity instanceof Player) && (entity instanceof Item || entity.getType() != EntityType.PLAYER)) {
-                                            Location loc = entity.getLocation();
-                                            if (loc.getX() >= finalMin.getX() && loc.getX() <= finalMax.getX() &&
-                                                    loc.getY() >= finalMin.getY() && loc.getY() <= finalMax.getY() &&
-                                                    loc.getZ() >= finalMin.getZ() && loc.getZ() <= finalMax.getZ()) {
-                                                entity.remove();
-                                            }
+                                if (plugin.trackEntities) {
+                                    Map<Location, Map<String, Object>> entityDataMap = regionData.getEntityDataMap();
+                                    for (Map.Entry<Location, Map<String, Object>> entry : entityDataMap.entrySet()) {
+                                        Location loc = entry.getKey();
+                                        Map<String, Object> serializedEntity = entry.getValue();
+                                        try {
+                                            EntitySerializer.deserializeEntity(serializedEntity, loc);
+                                        } catch (Exception e) {
+                                            plugin.getLogger().warning("Failed to restore entity at " + loc + ": " + e.getMessage());
                                         }
                                     }
                                 }
@@ -975,8 +973,7 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                     .append("\n  Sections: ").append(ChatColor.WHITE)
                     .append(regionData.getSectionedBlockData().size())
                     .append(ChatColor.GRAY)
-                    .append("\n  Block Types: ").append(ChatColor.WHITE)
-                    .append(regionData.getBlockTypes().size());
+                    .append("\n  Block Types: ").append(ChatColor.WHITE);
 
             sender.sendMessage(message.toString());
         }
@@ -1046,13 +1043,27 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
 
     // selection tool stuff
     public void giveSelectionTool(@NotNull Player player) {
+        updateWandMaterial();
+
         ItemStack wandTool = new ItemStack(wandMaterial);
+        ItemMeta meta = wandTool.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName(ChatColor.GOLD + "Arena Selection Tool");
+            wandTool.setItemMeta(meta);
+        }
+
         player.getInventory().addItem(wandTool);
-        player.sendMessage(ChatColor.GREEN + "You have been given the Arena Selection Tool (" + wandMaterial.name() + ")!");
+        player.sendMessage(ChatColor.GREEN + "You have been given the Arena Selection Tool (" +
+                ChatColor.YELLOW + wandMaterial.name() + ChatColor.GREEN + ")!");
     }
 
     @EventHandler
     public void onPlayerInteract(@NotNull PlayerInteractEvent event) {
+        if (System.currentTimeMillis() - lastConfigCheck > CONFIG_CHECK_INTERVAL) {
+            updateWandMaterial();
+            lastConfigCheck = System.currentTimeMillis();
+        }
+
         if (event.getHand() != EquipmentSlot.HAND) return;
 
         Player player = event.getPlayer();
@@ -1060,6 +1071,10 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
 
         if (item.getType() != wandMaterial || !player.hasPermission("arenaregen.select")) return;
         if (event.getClickedBlock() == null) return;
+
+        if (!item.hasItemMeta() || !item.getItemMeta().getDisplayName().equals(ChatColor.GOLD + "Arena Selection Tool")) {
+            return;
+        }
 
         UUID playerId = player.getUniqueId();
         Vector clickedPos = event.getClickedBlock().getLocation().toVector();
@@ -1076,7 +1091,20 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
             event.setCancelled(true);
             handleCornerSelection(playerId, clickedPos, 0, "First");
         } else if (event.getAction() == Action.RIGHT_CLICK_BLOCK) {
+            event.setCancelled(true);
             handleCornerSelection(playerId, clickedPos, 1, "Second");
+        }
+    }
+
+    private void updateWandMaterial() {
+        try {
+            Material newMaterial = Material.valueOf(plugin.selectionTool);
+            if (!newMaterial.isItem()) {
+                throw new IllegalArgumentException();
+            }
+            wandMaterial = newMaterial;
+        } catch (IllegalArgumentException e) {
+            wandMaterial = Material.GOLDEN_HOE;
         }
     }
 
