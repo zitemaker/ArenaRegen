@@ -79,16 +79,23 @@ public class ArenaRegen extends JavaPlugin {
         saveMessagesFile();
         loadRegions();
 
-
         ArenaRegenCommand commandExecutor = new ArenaRegenCommand(this);
         Objects.requireNonNull(getCommand("arenaregen")).setExecutor(commandExecutor);
         Objects.requireNonNull(getCommand("arenaregen")).setTabCompleter(commandExecutor);
         Bukkit.getPluginManager().registerEvents(commandExecutor, this);
 
+        File arenasDir = new File(getDataFolder(), "arenas");
+        if (!arenasDir.exists()) {
+            arenasDir.mkdirs();
+        }
+        if (!arenasDir.canRead() || !arenasDir.canWrite()) {
+            logger.info(ARChatColor.RED + "ERROR: The arenas directory (" + arenasDir.getPath() + ") is not readable or writable!");
+            logger.info(ARChatColor.RED + "Please check file permissions to ensure the server process has read/write access.");
+        }
+
         saveTaskId = Bukkit.getScheduler().runTaskTimerAsynchronously(this, () -> {
             if (!dirtyRegions.isEmpty()) {
                 saveRegions();
-                dirtyRegions.clear();
             }
         }, 0L, 6000L).getTaskId();
     }
@@ -102,7 +109,6 @@ public class ArenaRegen extends JavaPlugin {
         logger.info(ARChatColor.GOLD + "Saving all arenas before shutdown...");
         saveRegionsSynchronously();
         logger.info(ARChatColor.RED + "ArenaRegen v" + getDescription().getVersion() + " has been disabled.");
-
     }
 
     private void saveRegionsSynchronously() {
@@ -110,6 +116,12 @@ public class ArenaRegen extends JavaPlugin {
         if (!arenasDir.exists()) {
             arenasDir.mkdirs();
             console.sendMessage(" Created arenas directory: " + arenasDir.getPath());
+        }
+
+        if (!arenasDir.canWrite()) {
+            logger.info(ARChatColor.RED + "ERROR: Cannot write to arenas directory (" + arenasDir.getPath() + ")!");
+            logger.info(ARChatColor.RED + "Please check file permissions to ensure the server process has write access.");
+            return;
         }
 
         Map<String, RegionData> regionsToSave;
@@ -147,6 +159,11 @@ public class ArenaRegen extends JavaPlugin {
         if (savedRegions < regionsToSave.size()) {
             console.sendMessage(ARChatColor.RED + "Errors occurred while saving the following regions:");
             console.sendMessage(errorSummary.toString());
+            for (Player player : Bukkit.getOnlinePlayers()) {
+                if (player.isOp()) {
+                    player.sendMessage(prefix + " " + ARChatColor.RED + "Failed to save some arenas during shutdown! Check the server logs for details.");
+                }
+            }
         }
 
         if (savedRegions == regionsToSave.size()) {
@@ -154,6 +171,68 @@ public class ArenaRegen extends JavaPlugin {
             console.sendMessage("Cleared dirty regions list.");
         } else {
             console.sendMessage("Preserving dirty regions list due to save errors.");
+        }
+    }
+
+    public void saveRegions() {
+        File arenasDir = new File(getDataFolder(), "arenas");
+        arenasDir.mkdirs();
+
+        if (!arenasDir.canWrite()) {
+            logger.info(ARChatColor.RED + "ERROR: Cannot write to arenas directory (" + arenasDir.getPath() + ")!");
+            logger.info(ARChatColor.RED + "Please check file permissions to ensure the server process has write access.");
+            return;
+        }
+
+        Map<String, RegionData> regionsToSave;
+        Set<String> regionsToProcess;
+        synchronized (registeredRegions) {
+            regionsToSave = new HashMap<>(registeredRegions);
+            synchronized (dirtyRegions) {
+                regionsToProcess = new HashSet<>(dirtyRegions);
+            }
+        }
+
+        if (regionsToProcess.isEmpty()) {
+            return;
+        }
+
+        console.sendMessage("Saving " + regionsToProcess.size() + " dirty regions asynchronously...");
+
+        int savedRegions = 0;
+        StringBuilder errorSummary = new StringBuilder();
+
+        for (String regionName : regionsToProcess) {
+            if (!regionsToSave.containsKey(regionName)) {
+                continue;
+            }
+            File datcFile = new File(arenasDir, regionName + ".datc");
+            try {
+                regionsToSave.get(regionName).saveToDatc(datcFile);
+                savedRegions++;
+                getLogger().info("Saved region '" + regionName + "' to " + datcFile.getPath());
+            } catch (IOException e) {
+                getLogger().severe("Failed to save region '" + regionName + "' to " + datcFile.getPath() + ": " + e.getMessage());
+                errorSummary.append(ARChatColor.RED)
+                        .append(" - Region '").append(regionName).append("': ").append(e.getMessage()).append("\n");
+            }
+        }
+
+        console.sendMessage("Successfully saved " + savedRegions + " out of " + regionsToProcess.size() + " dirty regions.");
+
+        if (savedRegions < regionsToProcess.size()) {
+            console.sendMessage(ARChatColor.RED + "Errors occurred while saving the following regions:");
+            console.sendMessage(errorSummary.toString());
+            for (Player player : Bukkit.getOnlinePlayers()) {
+                if (player.isOp()) {
+                    player.sendMessage(prefix + " " + ARChatColor.RED + "Failed to save some arenas! Check the server logs for details.");
+                }
+            }
+        } else {
+            synchronized (dirtyRegions) {
+                dirtyRegions.removeAll(regionsToProcess);
+            }
+            console.sendMessage("Cleared saved regions from dirty regions list.");
         }
     }
 
@@ -248,8 +327,21 @@ public class ArenaRegen extends JavaPlugin {
             arenasDir.mkdirs();
             return;
         }
+
+        if (!arenasDir.canRead()) {
+            logger.info(ARChatColor.RED + "ERROR: Cannot read from arenas directory (" + arenasDir.getPath() + ")!");
+            logger.info(ARChatColor.RED + "Please check file permissions to ensure the server process has read access.");
+            return;
+        }
+
         File[] files = arenasDir.listFiles((dir, name) -> name.endsWith(".datc"));
-        if (files == null) return;
+        if (files == null || files.length == 0) {
+            logger.info(ARChatColor.YELLOW + "No arenas found in " + arenasDir.getPath() + ".");
+            return;
+        }
+
+        int loadedRegions = 0;
+        StringBuilder errorSummary = new StringBuilder();
 
         for (File file : files) {
             String regionName = file.getName().replace(".datc", "");
@@ -257,30 +349,32 @@ public class ArenaRegen extends JavaPlugin {
             try {
                 regionData.loadFromDatc(file);
                 registeredRegions.put(regionName, regionData);
+                loadedRegions++;
                 logger.info(ARChatColor.GREEN + "Loaded arena '" + regionName + "' successfully.");
             } catch (Exception e) {
                 logger.info(ARChatColor.RED + "Failed to load arena '" + regionName + "' from " + file.getName() + ": " + e.getMessage());
                 logger.info(ARChatColor.YELLOW + "Skipping '" + regionName + "'. You may need to delete or fix the file.");
+                errorSummary.append(ARChatColor.RED)
+                        .append(" - Arena '").append(regionName).append("': ").append(e.getMessage()).append("\n");
             }
         }
-    }
 
-    public void saveRegions() {
-        File arenasDir = new File(getDataFolder(), "arenas");
-        arenasDir.mkdirs();
-        for (String regionName : registeredRegions.keySet()) {
-            if (dirtyRegions.contains(regionName)) {
-                File datcFile = new File(arenasDir, regionName + ".datc");
-                try {
-                    registeredRegions.get(regionName).saveToDatc(datcFile);
-                } catch (IOException e) {
-                    getLogger().severe("Failed to save " + regionName + ".datc: " + e.getMessage());
+        logger.info("Successfully loaded " + loadedRegions + " out of " + files.length + " arenas.");
+
+        if (loadedRegions < files.length) {
+            logger.info(ARChatColor.RED + "Errors occurred while loading the following arenas:");
+            logger.info(errorSummary.toString());
+            for (Player player : Bukkit.getOnlinePlayers()) {
+                if (player.isOp()) {
+                    player.sendMessage(prefix + " " + ARChatColor.RED + "Failed to load some arenas on startup! Check the server logs for details.");
                 }
             }
         }
     }
 
     public void markRegionDirty(String regionName) {
-        dirtyRegions.add(regionName);
+        synchronized (dirtyRegions) {
+            dirtyRegions.add(regionName);
+        }
     }
 }

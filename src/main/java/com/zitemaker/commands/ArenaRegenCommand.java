@@ -972,8 +972,7 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                     .append(ChatColor.GRAY)
                     .append("\n  Sections: ").append(ChatColor.WHITE)
                     .append(regionData.getSectionedBlockData().size())
-                    .append(ChatColor.GRAY)
-                    .append("\n  Block Types: ").append(ChatColor.WHITE);
+                    .append(ChatColor.GRAY);
 
             sender.sendMessage(message.toString());
         }
