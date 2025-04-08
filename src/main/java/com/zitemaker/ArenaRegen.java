@@ -1,11 +1,13 @@
 package com.zitemaker;
 
 import com.zitemaker.commands.ArenaRegenCommand;
+import com.zitemaker.helpers.EntitySerializer;
 import com.zitemaker.helpers.RegionData;
 import com.zitemaker.utils.*;
-import org.bukkit.Bukkit;
-import org.bukkit.ChatColor;
-import org.bukkit.Material;
+import org.bukkit.*;
+import org.bukkit.block.Block;
+import org.bukkit.block.data.BlockData;
+import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
@@ -13,13 +15,9 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.HashMap;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
-import java.util.HashSet;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 
 public class ArenaRegen extends JavaPlugin {
@@ -53,6 +51,10 @@ public class ArenaRegen extends JavaPlugin {
     public String selectionTool;
 
     private int saveTaskId = -1;
+    private final Map<String, Integer> scheduledTasks = new ConcurrentHashMap<>();
+    private final Map<String, Long> scheduledIntervals = new ConcurrentHashMap<>();
+    private File schedulesFile;
+    private FileConfiguration schedulesConfig;
 
     @Override
     public void onLoad() {
@@ -78,6 +80,7 @@ public class ArenaRegen extends JavaPlugin {
         loadMessagesFile();
         saveMessagesFile();
         loadRegions();
+        loadSchedules();
 
         ArenaRegenCommand commandExecutor = new ArenaRegenCommand(this);
         Objects.requireNonNull(getCommand("arenaregen")).setExecutor(commandExecutor);
@@ -98,6 +101,7 @@ public class ArenaRegen extends JavaPlugin {
                 saveRegions();
             }
         }, 0L, 6000L).getTaskId();
+        rescheduleTasks();
     }
 
     @Override
@@ -106,6 +110,13 @@ public class ArenaRegen extends JavaPlugin {
             Bukkit.getScheduler().cancelTask(saveTaskId);
             saveTaskId = -1;
         }
+
+        for (Integer taskId : scheduledTasks.values()) {
+            Bukkit.getScheduler().cancelTask(taskId);
+        }
+        scheduledTasks.clear();
+        saveSchedules();
+
         logger.info(ARChatColor.GOLD + "Saving all arenas before shutdown...");
         saveRegionsSynchronously();
         logger.info(ARChatColor.RED + "ArenaRegen v" + getDescription().getVersion() + " has been disabled.");
@@ -376,5 +387,260 @@ public class ArenaRegen extends JavaPlugin {
         synchronized (dirtyRegions) {
             dirtyRegions.add(regionName);
         }
+    }
+
+    public void scheduleRegeneration(String arenaName, long intervalTicks, CommandSender sender) {
+        cancelScheduledRegeneration(arenaName);
+
+        Runnable regenerateTask = createRegenerateTask(arenaName, sender);
+        int taskId = Bukkit.getScheduler().runTaskTimer(this, regenerateTask, intervalTicks, intervalTicks).getTaskId();
+
+        scheduledTasks.put(arenaName, taskId);
+        scheduledIntervals.put(arenaName, intervalTicks);
+
+        saveSchedules();
+    }
+
+    public void cancelScheduledRegeneration(String arenaName) {
+        Integer taskId = scheduledTasks.remove(arenaName);
+        if (taskId != null) {
+            Bukkit.getScheduler().cancelTask(taskId);
+        }
+        scheduledIntervals.remove(arenaName);
+        saveSchedules();
+    }
+
+    public boolean isScheduled(String arenaName) {
+        return scheduledTasks.containsKey(arenaName);
+    }
+
+    public Long getScheduledInterval(String arenaName) {
+        return scheduledIntervals.get(arenaName);
+    }
+
+    private void loadSchedules() {
+        schedulesFile = new File(getDataFolder(), "schedules.yml");
+        if (!schedulesFile.exists()) {
+            saveResource("schedules.yml", false);
+        }
+        schedulesConfig = YamlConfiguration.loadConfiguration(schedulesFile);
+
+        if (schedulesConfig.contains("schedules")) {
+            for (String arenaName : schedulesConfig.getConfigurationSection("schedules").getKeys(false)) {
+                long intervalTicks = schedulesConfig.getLong("schedules." + arenaName);
+                if (intervalTicks >= 200) {
+                    scheduledIntervals.put(arenaName, intervalTicks);
+                }
+            }
+        }
+    }
+
+    private void saveSchedules() {
+        schedulesConfig.set("schedules", null);
+        for (Map.Entry<String, Long> entry : scheduledIntervals.entrySet()) {
+            schedulesConfig.set("schedules." + entry.getKey(), entry.getValue());
+        }
+        try {
+            schedulesConfig.save(schedulesFile);
+        } catch (IOException e) {
+            getLogger().log(Level.SEVERE, "Could not save schedules.yml!", e);
+        }
+    }
+
+    private void rescheduleTasks() {
+        for (Map.Entry<String, Long> entry : scheduledIntervals.entrySet()) {
+            String arenaName = entry.getKey();
+            long intervalTicks = entry.getValue();
+            if (registeredRegions.containsKey(arenaName)) {
+                Runnable regenerateTask = createRegenerateTask(arenaName, Bukkit.getConsoleSender());
+                int taskId = Bukkit.getScheduler().runTaskTimer(this, regenerateTask, intervalTicks, intervalTicks).getTaskId();
+                scheduledTasks.put(arenaName, taskId);
+            } else {
+
+                scheduledIntervals.remove(arenaName);
+            }
+        }
+        saveSchedules();
+    }
+
+    public void regenerateArena(String arenaName, CommandSender sender) {
+        RegionData regionData = registeredRegions.get(arenaName);
+        if (regionData == null) {
+            sender.sendMessage(ChatColor.RED + "Arena '" + arenaName + "' not found.");
+            return;
+        }
+
+        World world = Bukkit.getWorld(regionData.worldName);
+        if (world == null) {
+            sender.sendMessage(ChatColor.RED + "World '" + regionData.worldName + "' not found.");
+            return;
+        }
+
+        if (regionData.sectionedBlockData.isEmpty()) {
+            sender.sendMessage(ChatColor.RED + "No sections found for region '" + arenaName + "'.");
+            return;
+        }
+
+        Location min = null;
+        Location max = null;
+        for (Map<Location, BlockData> section : regionData.sectionedBlockData.values()) {
+            for (Location loc : section.keySet()) {
+                if (min == null) {
+                    min = new Location(world, loc.getX(), loc.getY(), loc.getZ());
+                    max = new Location(world, loc.getX(), loc.getY(), loc.getZ());
+                } else {
+                    min.setX(Math.min(min.getX(), loc.getX()));
+                    min.setY(Math.min(min.getY(), loc.getY()));
+                    min.setZ(Math.min(min.getZ(), loc.getZ()));
+                    max.setX(Math.max(max.getX(), loc.getX()));
+                    max.setY(Math.max(max.getY(), loc.getY()));
+                    max.setZ(Math.max(max.getZ(), loc.getZ()));
+                }
+            }
+        }
+
+        final Location finalMin = min;
+        final Location finalMax = max;
+
+        List<Player> playersInside = new ArrayList<>();
+        for (Player p : world.getPlayers()) {
+            Location loc = p.getLocation();
+            if (loc.getX() >= finalMin.getX() && loc.getX() <= finalMax.getX() &&
+                    loc.getY() >= finalMin.getY() && loc.getY() <= finalMax.getY() &&
+                    loc.getZ() >= finalMin.getZ() && loc.getZ() <= finalMax.getZ()) {
+                playersInside.add(p);
+            }
+        }
+
+        if (!playersInside.isEmpty()) {
+            if (cancelRegen) {
+                logger.info(ChatColor.RED + "Regeneration of '" + arenaName + "' canceled due to players inside the arena.");
+                return;
+            }
+
+            for (Player p : playersInside) {
+                if (killPlayers) {
+                    p.setHealth(0.0);
+                }
+                if (teleportToSpawn) {
+                    p.teleport(world.getSpawnLocation());
+                }
+                if (executeCommands && !commands.isEmpty()) {
+                    for (String cmd : commands) {
+                        Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd.replace("{player}", p.getName()));
+                    }
+                }
+            }
+        }
+
+        int minX = regionData.getMinX();
+        int minY = regionData.getMinY();
+        int minZ = regionData.getMinZ();
+        int maxX = regionData.getMaxX();
+        int maxY = regionData.getMaxY();
+        int maxZ = regionData.getMaxZ();
+
+        if (trackEntities) {
+            world.getEntities().stream()
+                    .filter(e -> {
+                        Location loc = e.getLocation();
+                        return loc.getX() >= minX && loc.getX() <= maxX &&
+                                loc.getY() >= minY && loc.getY() <= maxY &&
+                                loc.getZ() >= minZ && loc.getZ() <= maxZ;
+                    })
+                    .forEach(e -> {
+                        if (!(e instanceof Player)) e.remove();
+                    });
+        }
+
+        sender.sendMessage(ChatColor.YELLOW + "Regenerating region '" + arenaName + "', please wait...");
+        int blocksPerTick = regenType.equals("PRESET") ? switch (regenSpeed.toUpperCase()) {
+            case "SLOW" -> 1000;
+            case "NORMAL" -> 10000;
+            case "FAST" -> 40000;
+            case "VERYFAST" -> 100000;
+            case "EXTREME" -> 4000000;
+            default -> 10000;
+        } : customRegenSpeed;
+
+        AtomicInteger sectionIndex = new AtomicInteger(0);
+        List<String> sectionNames = new ArrayList<>(regionData.sectionedBlockData.keySet());
+        AtomicInteger totalBlocksReset = new AtomicInteger(0);
+        long startTime = System.currentTimeMillis();
+
+        Bukkit.getScheduler().runTaskTimer(this, task -> {
+            int currentSection = sectionIndex.get();
+            if (currentSection >= sectionNames.size()) {
+                if (trackEntities) {
+                    Map<Location, Map<String, Object>> entityDataMap = regionData.getEntityDataMap();
+                    for (Map.Entry<Location, Map<String, Object>> entry : entityDataMap.entrySet()) {
+                        Location loc = entry.getKey();
+                        Map<String, Object> serializedEntity = entry.getValue();
+                        try {
+                            EntitySerializer.deserializeEntity(serializedEntity, loc);
+                        } catch (Exception e) {
+                            getLogger().warning("Failed to restore entity at " + loc + ": " + e.getMessage());
+                        }
+                    }
+                }
+
+                long timeTaken = System.currentTimeMillis() - startTime;
+                sender.sendMessage(ChatColor.GREEN + "Regeneration of '" + arenaName + "' complete! " +
+                        ChatColor.GRAY + " (" + totalBlocksReset.get() + " blocks reset in " + (timeTaken / 1000.0) + "s)");
+                task.cancel();
+                return;
+            }
+
+            String sectionName = sectionNames.get(currentSection);
+            Map<Location, BlockData> section = regionData.sectionedBlockData.get(sectionName);
+            List<Map.Entry<Location, BlockData>> blockList = new ArrayList<>(section.entrySet());
+            int blockIndex = 0;
+
+            while (blockIndex < blockList.size() && totalBlocksReset.get() < blocksPerTick * (currentSection + 1)) {
+                Map.Entry<Location, BlockData> entry = blockList.get(blockIndex);
+                Location loc = entry.getKey();
+                loc.setWorld(world);
+                Block block = world.getBlockAt(loc);
+                BlockData originalData = entry.getValue();
+                BlockData currentData = block.getBlockData();
+
+                if (regenOnlyModified) {
+                    if (!currentData.equals(originalData)) {
+                        block.setBlockData(originalData, false);
+                        totalBlocksReset.incrementAndGet();
+                    }
+                } else {
+                    block.setBlockData(originalData, false);
+                    totalBlocksReset.incrementAndGet();
+                }
+                blockIndex++;
+            }
+
+            if (blockIndex >= blockList.size()) {
+                sectionIndex.incrementAndGet();
+            }
+        }, 0L, 1L);
+    }
+
+    private Runnable createRegenerateTask(String arenaName, CommandSender sender) {
+        return new Runnable() {
+            @Override
+            public void run() {
+                if (!registeredRegions.containsKey(arenaName)) {
+                    logger.info(ChatColor.RED + "Scheduled regeneration failed: Arena '" + arenaName + "' no longer exists.");
+                    cancelScheduledRegeneration(arenaName);
+                    return;
+                }
+                regenerateArena(arenaName, sender);
+            }
+        };
+    }
+
+    public Map<String, Integer> getScheduledTasks() {
+        return scheduledTasks;
+    }
+
+    public Map<String, Long> getScheduledIntervals() {
+        return scheduledIntervals;
     }
 }

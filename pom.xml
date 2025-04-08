@@ -5,7 +5,7 @@
 
     <groupId>com.zitemaker</groupId>
     <artifactId>ArenaRegen</artifactId>
-    <version>1.0.2</version>
+    <version>1.2</version>
     <packaging>jar</packaging>
 
     <name>ArenaRegen</name>
@@ -43,7 +43,7 @@
         </resources>
     </build>
     <repositories>
-        <!-- Spigot Repository -->
+
         <repository>
             <id>spigotmc-repo</id>
             <url>https://hub.spigotmc.org/nexus/content/repositories/snapshots/</url>
@@ -54,7 +54,7 @@
         </repository>
     </repositories>
     <dependencies>
-        <!-- Spigot API -->
+
         <dependency>
             <groupId>org.spigotmc</groupId>
             <artifactId>spigot-api</artifactId>

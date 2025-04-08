@@ -57,7 +57,7 @@ public class RegionData {
             Location location = entry.getKey();
             BlockData blockData = entry.getValue();
             if (blockData == null) {
-                plugin.console.sendMessage("Block data in section " + sectionName + " at " + location + " is null, replacing with air.");
+                plugin.getLogger().info("Block data in section " + sectionName + " at " + location + " is null, replacing with air.");
                 blockData = Bukkit.createBlockData(Material.AIR);
                 blocks.put(location, blockData);
             }
@@ -100,7 +100,7 @@ public class RegionData {
         try {
             ensureBlockDataLoaded();
         } catch (IOException e) {
-            plugin.console.sendMessage("[ArenaRegen] Failed to load block data for modified blocks: " + e.getMessage());
+            plugin.getLogger().info("[ArenaRegen] Failed to load block data for modified blocks: " + e.getMessage());
         }
         return new HashMap<>(modifiedBlocks);
     }
@@ -118,7 +118,7 @@ public class RegionData {
         try {
             ensureBlockDataLoaded();
         } catch (IOException e) {
-            plugin.console.sendMessage("[ArenaRegen] Failed to load block data for entity map: " + e.getMessage());
+            plugin.getLogger().info("[ArenaRegen] Failed to load block data for entity map: " + e.getMessage());
         }
         return new HashMap<>(entityDataMap);
     }
@@ -145,15 +145,15 @@ public class RegionData {
 
         if (datcFile != null && datcFile.exists()) {
             if (datcFile.delete()) {
-                plugin.console.sendMessage("[ArenaRegen] Successfully deleted arena file: " + datcFile.getPath());
+                plugin.getLogger().info("[ArenaRegen] Successfully deleted arena file: " + datcFile.getPath());
             } else {
-                plugin.console.sendMessage(ChatColor.RED + "[ArenaRegen] Failed to delete arena file: " + datcFile.getPath());
+                plugin.getLogger().info(ChatColor.RED + "[ArenaRegen] Failed to delete arena file: " + datcFile.getPath());
             }
         } else {
-            plugin.console.sendMessage(ChatColor.YELLOW + "[ArenaRegen] No .datc file found for arena '" + regionName + "' to delete.");
+            plugin.getLogger().info(ChatColor.YELLOW + "[ArenaRegen] No .datc file found for arena '" + regionName + "' to delete.");
         }
 
-        plugin.console.sendMessage("[ArenaRegen] Arena '" + regionName + "' has been fully removed from memory and disk.");
+        plugin.getLogger().info("[ArenaRegen] Arena '" + regionName + "' has been fully removed from memory and disk.");
     }
 
     public void saveToDatc(File datcFile) throws IOException {
@@ -241,7 +241,7 @@ public class RegionData {
             gzip.write(rawBytes);
         }
 
-        plugin.console.sendMessage("[ArenaRegen] Saved RegionData to " + datcFile.getName() + ": " +
+        plugin.getLogger().info("[ArenaRegen] Saved RegionData to " + datcFile.getName() + ": " +
                 sectionedBlockData.size() + " sections, " + getAllBlocks().size() + " total blocks, " +
                 entityDataMap.size() + " entities, " + modifiedBlocks.size() + " modified blocks.");
     }
@@ -280,7 +280,7 @@ public class RegionData {
 
         World world = Bukkit.getWorld(worldName);
         if (world == null) {
-            plugin.console.sendMessage("World '" + worldName + "' not found for region in " + datcFile.getName() + ". Deferring block data loading.");
+            plugin.getLogger().info("World '" + worldName + "' not found for region in " + datcFile.getName() + ". Deferring block data loading.");
             isBlockDataLoaded = false;
             spawnLocation = null;
             return;
@@ -317,7 +317,7 @@ public class RegionData {
                     BlockData blockData = Bukkit.createBlockData(blockDataStr);
                     blocks.put(loc, blockData);
                 } catch (IllegalArgumentException e) {
-                    plugin.console.sendMessage("Invalid block data '" + blockDataStr + "' at " + loc + " in section " + sectionName + ": " + e.getMessage() + ", replacing with air.");
+                    plugin.getLogger().info("Invalid block data '" + blockDataStr + "' at " + loc + " in section " + sectionName + ": " + e.getMessage() + ", replacing with air.");
                     blocks.put(loc, Bukkit.createBlockData(Material.AIR));
                 }
             }
@@ -341,7 +341,7 @@ public class RegionData {
                     entityDataMap.put(loc, serializedEntity);
                 }
             } catch (Exception e) {
-                plugin.console.sendMessage("Failed to deserialize entity data at " + loc + ": " + e.getMessage() + ", skipping.");
+                plugin.getLogger().info("Failed to deserialize entity data at " + loc + ": " + e.getMessage() + ", skipping.");
             }
         }
 
@@ -361,12 +361,12 @@ public class RegionData {
                 BlockData blockData = Bukkit.createBlockData(blockDataStr);
                 modifiedBlocks.put(loc, blockData);
             } catch (IllegalArgumentException e) {
-                plugin.console.sendMessage("Invalid block data '" + blockDataStr + "' for modified block at " + loc + ": " + e.getMessage() + ", skipping.");
+                plugin.getLogger().info("Invalid block data '" + blockDataStr + "' for modified block at " + loc + ": " + e.getMessage() + ", skipping.");
             }
         }
 
         isBlockDataLoaded = true;
-        plugin.console.sendMessage("[ArenaRegen] Loaded RegionData for file " + datcFile.getName() + ": " +
+        plugin.getLogger().info("[ArenaRegen] Loaded RegionData for file " + datcFile.getName() + ": " +
                 sectionedBlockData.size() + " sections, " + getAllBlocks().size() + " total blocks, " +
                 entityDataMap.size() + " entities, " + modifiedBlocks.size() + " modified blocks.");
     }
@@ -400,7 +400,7 @@ public class RegionData {
         try {
             ensureBlockDataLoaded();
         } catch (IOException e) {
-            plugin.console.sendMessage("[ArenaRegen] Failed to load block data for sectionedBlockData: " + e.getMessage());
+            plugin.getLogger().info("[ArenaRegen] Failed to load block data for sectionedBlockData: " + e.getMessage());
         }
         return sectionedBlockData;
     }
@@ -409,7 +409,7 @@ public class RegionData {
         try {
             ensureBlockDataLoaded();
         } catch (IOException e) {
-            plugin.console.sendMessage("[ArenaRegen] Failed to load block data for all blocks: " + e.getMessage());
+            plugin.getLogger().info("[ArenaRegen] Failed to load block data for all blocks: " + e.getMessage());
         }
         Map<Location, BlockData> allBlocks = new HashMap<>();
         for (Map.Entry<String, Map<Location, BlockData>> entry : sectionedBlockData.entrySet()) {
