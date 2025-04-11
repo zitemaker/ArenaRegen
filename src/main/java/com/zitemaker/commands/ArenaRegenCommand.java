@@ -787,7 +787,7 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                         || args[0].equalsIgnoreCase("delete") || args[0].equalsIgnoreCase("resize")
                         || args[0].equalsIgnoreCase("setspawn") || args[0].equalsIgnoreCase("delspawn")
                         || args[0].equalsIgnoreCase("teleport") || args[0].equalsIgnoreCase("tp")
-                        || args[0].equalsIgnoreCase("schedule")) { // Added schedule here
+                        || args[0].equalsIgnoreCase("schedule")) { 
                     yield listRegionsForTabComplete(args[1]);
                 } else if (args[0].equalsIgnoreCase("create")) {
                     yield filterSuggestions(List.of("ArenaName"), args[1]);
