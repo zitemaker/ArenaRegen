@@ -31,6 +31,7 @@ public class ArenaRegen extends JavaPlugin {
     public final Console console = new SpigotConsole();
     private final Logger logger = new Logger(new JavaPlatformLogger(console, getLogger()), true);
     public final Set<String> dirtyRegions = new HashSet<>();
+    private final Set<String> regeneratingArenas = new HashSet<>();
 
     // config stuff
     public String prefix;
@@ -284,7 +285,9 @@ public class ArenaRegen extends JavaPlugin {
         return pendingRegenerations;
     }
 
-    public Set<String> getDirtyRegions() { return dirtyRegions; }
+    public Set<String> getDirtyRegions() {
+        return dirtyRegions;
+    }
 
     private static final List<String> ARENAREGEN_PERMISSIONS = List.of(
             "arenaregen.create",
@@ -456,7 +459,6 @@ public class ArenaRegen extends JavaPlugin {
                 int taskId = Bukkit.getScheduler().runTaskTimer(this, regenerateTask, intervalTicks, intervalTicks).getTaskId();
                 scheduledTasks.put(arenaName, taskId);
             } else {
-
                 scheduledIntervals.remove(arenaName);
             }
         }
@@ -464,19 +466,36 @@ public class ArenaRegen extends JavaPlugin {
     }
 
     public void regenerateArena(String arenaName, CommandSender sender) {
+        synchronized (regeneratingArenas) {
+            if (regeneratingArenas.contains(arenaName)) {
+                sender.sendMessage(prefix + ChatColor.RED + " Arena '" + arenaName + "' is already being regenerated. Please wait until the current regeneration is complete.");
+                return;
+            }
+            regeneratingArenas.add(arenaName);
+        }
+
         RegionData regionData = registeredRegions.get(arenaName);
         if (regionData == null) {
+            synchronized (regeneratingArenas) {
+                regeneratingArenas.remove(arenaName);
+            }
             sender.sendMessage(ChatColor.RED + "Arena '" + arenaName + "' not found.");
             return;
         }
 
         World world = Bukkit.getWorld(regionData.worldName);
         if (world == null) {
+            synchronized (regeneratingArenas) {
+                regeneratingArenas.remove(arenaName);
+            }
             sender.sendMessage(ChatColor.RED + "World '" + regionData.worldName + "' not found.");
             return;
         }
 
         if (regionData.sectionedBlockData.isEmpty()) {
+            synchronized (regeneratingArenas) {
+                regeneratingArenas.remove(arenaName);
+            }
             sender.sendMessage(ChatColor.RED + "No sections found for region '" + arenaName + "'.");
             return;
         }
@@ -514,6 +533,9 @@ public class ArenaRegen extends JavaPlugin {
 
         if (!playersInside.isEmpty()) {
             if (cancelRegen) {
+                synchronized (regeneratingArenas) {
+                    regeneratingArenas.remove(arenaName);
+                }
                 logger.info(ChatColor.RED + "Regeneration of '" + arenaName + "' canceled due to players inside the arena.");
                 return;
             }
@@ -587,6 +609,9 @@ public class ArenaRegen extends JavaPlugin {
                 long timeTaken = System.currentTimeMillis() - startTime;
                 sender.sendMessage(ChatColor.GREEN + "Regeneration of '" + arenaName + "' complete! " +
                         ChatColor.GRAY + " (" + totalBlocksReset.get() + " blocks reset in " + (timeTaken / 1000.0) + "s)");
+                synchronized (regeneratingArenas) {
+                    regeneratingArenas.remove(arenaName);
+                }
                 task.cancel();
                 return;
             }
