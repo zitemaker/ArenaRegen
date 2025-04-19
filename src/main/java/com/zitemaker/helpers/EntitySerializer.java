@@ -7,11 +7,22 @@ import org.bukkit.entity.EntityType;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Villager;
 import org.bukkit.entity.Zombie;
+import org.bukkit.Bukkit;
 
 import java.util.HashMap;
 import java.util.Map;
 
 public class EntitySerializer {
+
+    private static Attribute getMaxHealthAttribute() {
+        try {
+
+            return Attribute.valueOf("MAX_HEALTH");
+        } catch (IllegalArgumentException e) {
+
+            return Attribute.valueOf("GENERIC_MAX_HEALTH");
+        }
+    }
 
     public static Map<String, Object> serializeEntity(Entity entity) {
         Map<String, Object> data = new HashMap<>();
@@ -23,14 +34,14 @@ public class EntitySerializer {
         data.put("yaw", entity.getLocation().getYaw());
         data.put("pitch", entity.getLocation().getPitch());
 
-
         if (entity.getCustomName() != null) {
             data.put("customName", entity.getCustomName());
             data.put("customNameVisible", entity.isCustomNameVisible());
         }
 
         if (entity instanceof LivingEntity livingEntity) {
-            Double health = livingEntity.getAttribute(Attribute.GENERIC_MAX_HEALTH) != null ?
+            Attribute maxHealthAttr = getMaxHealthAttribute();
+            Double health = livingEntity.getAttribute(maxHealthAttr) != null ?
                     livingEntity.getHealth() : null;
             if (health != null) {
                 data.put("health", health);
@@ -65,7 +76,8 @@ public class EntitySerializer {
             if (entity instanceof LivingEntity livingEntity) {
                 if (data.containsKey("health")) {
                     double health = (double) data.get("health");
-                    double maxHealth = livingEntity.getAttribute(Attribute.GENERIC_MAX_HEALTH).getValue();
+                    Attribute maxHealthAttr = getMaxHealthAttribute();
+                    double maxHealth = livingEntity.getAttribute(maxHealthAttr).getValue();
                     livingEntity.setHealth(Math.min(health, maxHealth));
                 }
             }

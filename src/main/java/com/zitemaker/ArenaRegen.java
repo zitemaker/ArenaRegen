@@ -3,6 +3,8 @@ package com.zitemaker;
 import com.zitemaker.commands.ArenaRegenCommand;
 import com.zitemaker.helpers.EntitySerializer;
 import com.zitemaker.helpers.RegionData;
+import com.zitemaker.nms.BlockUpdate;
+import com.zitemaker.nms.NMSHandlerFactoryProvider;
 import com.zitemaker.utils.*;
 import org.bukkit.*;
 import org.bukkit.block.Block;
@@ -12,7 +14,6 @@ import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
-
 import java.io.File;
 import java.io.IOException;
 import java.util.*;
@@ -76,6 +77,33 @@ public class ArenaRegen extends JavaPlugin {
         logger.info(ARChatColor.AQUA + "    Purchase ArenaRegen+ for more features!");
         logger.info(ARChatColor.GREEN + "    " + getPurchaseLink());
         logger.info("");
+
+        if (!Bukkit.getServer().getName().equalsIgnoreCase("Paper")) {
+            logger.info(ARChatColor.YELLOW + "    [Warning] ArenaRegen detected that this server is not running Paper.");
+            logger.info(ARChatColor.YELLOW + "    Paper is recommended for better performance and compatibility.");
+            logger.info(ARChatColor.YELLOW + "    Download Paper at https://papermc.io/downloads");
+        }
+
+        String serverVersion = Bukkit.getBukkitVersion().split("-")[0];
+        boolean isModernServer = serverVersion.startsWith("1.20.5") || serverVersion.startsWith("1.20.6") || serverVersion.startsWith("1.21");
+        boolean hasNMSHandler = false;
+
+        try {
+            Class.forName("com.zitemaker.nms.NMSHandler_1_21");
+            hasNMSHandler = true;
+        } catch (ClassNotFoundException e) {
+            hasNMSHandler = false;
+        }
+
+        if (isModernServer && !hasNMSHandler) {
+            logger.info(ARChatColor.RED + "    [Warning] This server (" + serverVersion + ") supports optimized NMS block updates.");
+            logger.info(ARChatColor.RED + "    However, this JAR does not include NMS support (likely the legacy build).");
+            logger.info(ARChatColor.YELLOW + "    For better performance, please use the modern JAR (built for 1.20.5–1.21.5).");
+        } else if (!isModernServer && hasNMSHandler) {
+            logger.info(ARChatColor.RED + "    [Warning] This server (" + serverVersion + ") is better suited for the legacy JAR.");
+            logger.info(ARChatColor.RED + "    This JAR includes NMS support (likely the modern build), which may cause compatibility issues.");
+            logger.info(ARChatColor.YELLOW + "    For better compatibility, please use the legacy JAR (built for 1.18–1.20.4).");
+        }
 
         reloadPluginConfig();
         loadMessagesFile();
@@ -589,6 +617,14 @@ public class ArenaRegen extends JavaPlugin {
         List<String> sectionNames = new ArrayList<>(regionData.sectionedBlockData.keySet());
         AtomicInteger totalBlocksReset = new AtomicInteger(0);
         long startTime = System.currentTimeMillis();
+        Set<Chunk> chunksToRefresh = new HashSet<>();
+        Map<String, Integer> sectionProgress = new HashMap<>();
+
+        Map<String, List<Map.Entry<Location, BlockData>>> sectionBlockLists = new HashMap<>();
+        for (String sectionName : sectionNames) {
+            Map<Location, BlockData> section = regionData.sectionedBlockData.get(sectionName);
+            sectionBlockLists.put(sectionName, new ArrayList<>(section.entrySet()));
+        }
 
         Bukkit.getScheduler().runTaskTimer(this, task -> {
             int currentSection = sectionIndex.get();
@@ -606,6 +642,14 @@ public class ArenaRegen extends JavaPlugin {
                     }
                 }
 
+                for (Chunk chunk : chunksToRefresh) {
+                    try {
+                        world.refreshChunk(chunk.getX(), chunk.getZ());
+                    } catch (Exception e) {
+                        logger.info(ChatColor.RED + "Failed to refresh chunk at " + chunk.getX() + "," + chunk.getZ() + ": " + e.getMessage());
+                    }
+                }
+
                 long timeTaken = System.currentTimeMillis() - startTime;
                 sender.sendMessage(ChatColor.GREEN + "Regeneration of '" + arenaName + "' complete! " +
                         ChatColor.GRAY + " (" + totalBlocksReset.get() + " blocks reset in " + (timeTaken / 1000.0) + "s)");
@@ -617,31 +661,55 @@ public class ArenaRegen extends JavaPlugin {
             }
 
             String sectionName = sectionNames.get(currentSection);
-            Map<Location, BlockData> section = regionData.sectionedBlockData.get(sectionName);
-            List<Map.Entry<Location, BlockData>> blockList = new ArrayList<>(section.entrySet());
-            int blockIndex = 0;
+            List<Map.Entry<Location, BlockData>> blockList = sectionBlockLists.get(sectionName);
 
-            while (blockIndex < blockList.size() && totalBlocksReset.get() < blocksPerTick * (currentSection + 1)) {
+            int blockIndex = sectionProgress.getOrDefault(sectionName, 0);
+            List<BlockUpdate> updates = new ArrayList<>();
+
+            if (blockIndex == 0) {
+                //logger.info("Starting regeneration of section " + sectionName + " in arena " + arenaName + " (" + blockList.size() + " total blocks)");
+            }
+
+            while (blockIndex < blockList.size() && updates.size() < blocksPerTick) {
                 Map.Entry<Location, BlockData> entry = blockList.get(blockIndex);
                 Location loc = entry.getKey();
                 loc.setWorld(world);
-                Block block = world.getBlockAt(loc);
                 BlockData originalData = entry.getValue();
-                BlockData currentData = block.getBlockData();
 
+                boolean shouldUpdate;
                 if (regenOnlyModified) {
-                    if (!currentData.equals(originalData)) {
-                        block.setBlockData(originalData, false);
+                    Block block = world.getBlockAt(loc);
+                    BlockData currentData = block.getBlockData();
+                    shouldUpdate = !currentData.equals(originalData);
+                    if (shouldUpdate) {
+                        updates.add(new BlockUpdate(block.getX(), block.getY(), block.getZ(), originalData));
+                        chunksToRefresh.add(block.getChunk());
                         totalBlocksReset.incrementAndGet();
                     }
                 } else {
-                    block.setBlockData(originalData, false);
+                    shouldUpdate = true;
+                    updates.add(new BlockUpdate((int) loc.getX(), (int) loc.getY(), (int) loc.getZ(), originalData));
+                    int chunkX = ((int) loc.getX()) >> 4;
+                    int chunkZ = ((int) loc.getZ()) >> 4;
+                    chunksToRefresh.add(world.getChunkAt(chunkX, chunkZ));
                     totalBlocksReset.incrementAndGet();
                 }
                 blockIndex++;
             }
 
-            if (blockIndex >= blockList.size()) {
+            if (!updates.isEmpty()) {
+                try {
+                    NMSHandlerFactoryProvider.getNMSHandler().setBlocks(world, updates);
+                } catch (Exception e) {
+                    logger.info(ChatColor.RED + "Failed to set blocks in section " + sectionName + ": " + e.getMessage());
+                }
+            }
+
+            if (blockIndex < blockList.size()) {
+                sectionProgress.put(sectionName, blockIndex);
+            } else {
+                //logger.info("Finished regeneration of section " + sectionName + " in arena " + arenaName);
+                sectionProgress.remove(sectionName);
                 sectionIndex.incrementAndGet();
             }
         }, 0L, 1L);
