@@ -507,30 +507,30 @@ public class ArenaRegen extends JavaPlugin {
             synchronized (regeneratingArenas) {
                 regeneratingArenas.remove(arenaName);
             }
-            sender.sendMessage(ChatColor.RED + "Arena '" + arenaName + "' not found.");
+            sender.sendMessage(prefix + ChatColor.RED + " Arena '" + arenaName + "' not found.");
             return;
         }
 
-        World world = Bukkit.getWorld(regionData.worldName);
+        World world = Bukkit.getWorld(regionData.getWorldName());
         if (world == null) {
             synchronized (regeneratingArenas) {
                 regeneratingArenas.remove(arenaName);
             }
-            sender.sendMessage(ChatColor.RED + "World '" + regionData.worldName + "' not found.");
+            sender.sendMessage(prefix + ChatColor.RED + " World '" + regionData.getWorldName() + "' not found.");
             return;
         }
 
-        if (regionData.sectionedBlockData.isEmpty()) {
+        if (regionData.getSectionedBlockData().isEmpty()) {
             synchronized (regeneratingArenas) {
                 regeneratingArenas.remove(arenaName);
             }
-            sender.sendMessage(ChatColor.RED + "No sections found for region '" + arenaName + "'.");
+            sender.sendMessage(prefix + ChatColor.RED + " No sections found for region '" + arenaName + "'.");
             return;
         }
 
         Location min = null;
         Location max = null;
-        for (Map<Location, BlockData> section : regionData.sectionedBlockData.values()) {
+        for (Map<Location, BlockData> section : regionData.getSectionedBlockData().values()) {
             for (Location loc : section.keySet()) {
                 if (min == null) {
                     min = new Location(world, loc.getX(), loc.getY(), loc.getZ());
@@ -603,7 +603,7 @@ public class ArenaRegen extends JavaPlugin {
                     });
         }
 
-        sender.sendMessage(ChatColor.YELLOW + "Regenerating region '" + arenaName + "', please wait...");
+        sender.sendMessage(prefix + ChatColor.YELLOW + " Regenerating region '" + arenaName + "', please wait...");
         int blocksPerTick = regenType.equals("PRESET") ? switch (regenSpeed.toUpperCase()) {
             case "SLOW" -> 1000;
             case "NORMAL" -> 10000;
@@ -614,7 +614,7 @@ public class ArenaRegen extends JavaPlugin {
         } : customRegenSpeed;
 
         AtomicInteger sectionIndex = new AtomicInteger(0);
-        List<String> sectionNames = new ArrayList<>(regionData.sectionedBlockData.keySet());
+        List<String> sectionNames = new ArrayList<>(regionData.getSectionedBlockData().keySet());
         AtomicInteger totalBlocksReset = new AtomicInteger(0);
         long startTime = System.currentTimeMillis();
         Set<Chunk> chunksToRefresh = new HashSet<>();
@@ -622,7 +622,7 @@ public class ArenaRegen extends JavaPlugin {
 
         Map<String, List<Map.Entry<Location, BlockData>>> sectionBlockLists = new HashMap<>();
         for (String sectionName : sectionNames) {
-            Map<Location, BlockData> section = regionData.sectionedBlockData.get(sectionName);
+            Map<Location, BlockData> section = regionData.getSectionedBlockData().get(sectionName);
             sectionBlockLists.put(sectionName, new ArrayList<>(section.entrySet()));
         }
 
@@ -651,7 +651,7 @@ public class ArenaRegen extends JavaPlugin {
                 }
 
                 long timeTaken = System.currentTimeMillis() - startTime;
-                sender.sendMessage(ChatColor.GREEN + "Regeneration of '" + arenaName + "' complete! " +
+                sender.sendMessage(prefix + ChatColor.GREEN + " Regeneration of '" + arenaName + "' complete! " +
                         ChatColor.GRAY + " (" + totalBlocksReset.get() + " blocks reset in " + (timeTaken / 1000.0) + "s)");
                 synchronized (regeneratingArenas) {
                     regeneratingArenas.remove(arenaName);

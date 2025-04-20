@@ -6,22 +6,28 @@ import org.bukkit.block.data.BlockData;
 import org.bukkit.configuration.file.FileConfiguration;
 
 import java.io.*;
-import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.logging.Logger;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
+
 public class RegionData {
+    private static final Logger LOGGER = Logger.getLogger(RegionData.class.getName());
+    private static final String FILE_FORMAT_VERSION = "2";
+    private static final int BUFFER_SIZE = 8192;
+    private static final int GZIP_COMPRESSION_LEVEL = 6;
+
     private final ArenaRegen plugin;
-    public final Map<String, Map<Location, BlockData>> sectionedBlockData = new HashMap<>();
-    private final Map<Location, Map<String, Object>> entityDataMap = new HashMap<>();
-    private final Map<Location, BlockData> modifiedBlocks = new HashMap<>();
+    private final Map<String, Map<Location, BlockData>> sectionedBlockData = new ConcurrentHashMap<>();
+    private final Map<Location, Map<String, Object>> entityDataMap = new ConcurrentHashMap<>();
+    private final Map<Location, BlockData> modifiedBlocks = new ConcurrentHashMap<>();
 
     private String creator;
     private long creationDate;
-    public String worldName;
+    private String worldName;
     private String minecraftVersion;
     private int minX, minY, minZ;
     private int width, height, depth;
@@ -30,6 +36,7 @@ public class RegionData {
     private File datcFile;
     private boolean loadFailed = false;
     private boolean isLoading = false;
+    private String fileFormatVersion = FILE_FORMAT_VERSION;
 
     public RegionData(ArenaRegen plugin) {
         this.plugin = plugin;
@@ -47,24 +54,34 @@ public class RegionData {
         return spawnLocation != null ? spawnLocation.clone() : null;
     }
 
+
     public void addBlockToSection(String section, Location location, BlockData blockData) {
-        sectionedBlockData.computeIfAbsent(section, k -> new HashMap<>()).put(location, blockData);
+        sectionedBlockData.computeIfAbsent(section, k -> new ConcurrentHashMap<>()).put(location, blockData);
     }
 
+
     public void addSection(String sectionName, Map<Location, BlockData> blocks) {
-        sectionedBlockData.put(sectionName, blocks);
+        Map<Location, BlockData> sectionBlocks = new ConcurrentHashMap<>();
         for (Map.Entry<Location, BlockData> entry : blocks.entrySet()) {
             Location location = entry.getKey();
             BlockData blockData = entry.getValue();
             if (blockData == null) {
-                plugin.getLogger().info("Block data in section " + sectionName + " at " + location + " is null, replacing with air.");
+                LOGGER.warning("[ArenaRegen] Block data in section " + sectionName + " at " + location + " is null, replacing with air.");
                 blockData = Bukkit.createBlockData(Material.AIR);
-                blocks.put(location, blockData);
             }
+            sectionBlocks.put(location, blockData);
         }
+        sectionedBlockData.put(sectionName, sectionBlocks);
     }
 
+
     public void setMetadata(String creator, long creationDate, String world, String version, int minX, int minY, int minZ, int width, int height, int depth) {
+        if (world == null || world.trim().isEmpty()) {
+            throw new IllegalArgumentException("World name cannot be null or empty");
+        }
+        if (width <= 0 || height <= 0 || depth <= 0) {
+            throw new IllegalArgumentException("Region dimensions must be positive: width=" + width + ", height=" + height + ", depth=" + depth);
+        }
         this.creator = creator;
         this.creationDate = creationDate;
         this.worldName = world;
@@ -100,7 +117,7 @@ public class RegionData {
         try {
             ensureBlockDataLoaded();
         } catch (IOException e) {
-            plugin.getLogger().info("[ArenaRegen] Failed to load block data for modified blocks: " + e.getMessage());
+            LOGGER.warning("[ArenaRegen] Failed to load block data for modified blocks: " + e.getMessage());
         }
         return new HashMap<>(modifiedBlocks);
     }
@@ -118,7 +135,7 @@ public class RegionData {
         try {
             ensureBlockDataLoaded();
         } catch (IOException e) {
-            plugin.getLogger().info("[ArenaRegen] Failed to load block data for entity map: " + e.getMessage());
+            LOGGER.warning("[ArenaRegen] Failed to load block data for entity map: " + e.getMessage());
         }
         return new HashMap<>(entityDataMap);
     }
@@ -127,11 +144,9 @@ public class RegionData {
         entityDataMap.clear();
     }
 
-
     private String coordsToString(Location loc) {
         return loc.getBlockX() + ":" + loc.getBlockY() + ":" + loc.getBlockZ();
     }
-
 
     public void clearRegion(String regionName) {
         sectionedBlockData.clear();
@@ -143,195 +158,263 @@ public class RegionData {
         plugin.getPendingRegenerations().remove(regionName);
         plugin.getDirtyRegions().remove(regionName);
 
-        if (datcFile != null && datcFile.exists()) {
-            if (datcFile.delete()) {
-                plugin.getLogger().info("[ArenaRegen] Successfully deleted arena file: " + datcFile.getPath());
+        if (datcFile != null) {
+
+            if (datcFile.exists()) {
+                if (datcFile.delete()) {
+                    LOGGER.info("[ArenaRegen] Successfully deleted arena file: " + datcFile.getPath());
+                } else {
+                    LOGGER.warning("[ArenaRegen] Failed to delete arena file: " + datcFile.getPath());
+                }
             } else {
-                plugin.getLogger().info(ChatColor.RED + "[ArenaRegen] Failed to delete arena file: " + datcFile.getPath());
+                LOGGER.warning("[ArenaRegen] No .datc file found for arena '" + regionName + "' to delete.");
+            }
+
+            File backupFile = new File(datcFile.getParent(), datcFile.getName() + ".bak");
+            if (backupFile.exists()) {
+                if (backupFile.delete()) {
+                    LOGGER.info("[ArenaRegen] Successfully deleted backup file: " + backupFile.getPath());
+                } else {
+                    LOGGER.warning("[ArenaRegen] Failed to delete backup file: " + backupFile.getPath());
+                }
             }
         } else {
-            plugin.getLogger().info(ChatColor.YELLOW + "[ArenaRegen] No .datc file found for arena '" + regionName + "' to delete.");
+            LOGGER.warning("[ArenaRegen] No .datc file found for arena '" + regionName + "' to delete.");
         }
 
-        plugin.getLogger().info("[ArenaRegen] Arena '" + regionName + "' has been fully removed from memory and disk.");
+        LOGGER.info("[ArenaRegen] Arena '" + regionName + "' has been fully removed from memory and disk.");
     }
 
     public void saveToDatc(File datcFile) throws IOException {
-        ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
+        long startTime = System.currentTimeMillis();
 
-        byteStream.write(("1," + creator + "," + creationDate + "," + worldName + "," +
-                minecraftVersion + "," + minX + "," + minY + "," + minZ + "," +
-                width + "," + height + "," + depth).getBytes(StandardCharsets.US_ASCII));
-        if (spawnLocation != null) {
-            byteStream.write(("," + spawnLocation.getX() + "," + spawnLocation.getY() + "," + spawnLocation.getZ() +
-                    "," + spawnLocation.getYaw() + "," + spawnLocation.getPitch()).getBytes(StandardCharsets.US_ASCII));
+        File backupFile = new File(datcFile.getParent(), datcFile.getName() + ".bak");
+        if (datcFile.exists()) {
+            if (!datcFile.renameTo(backupFile)) {
+                LOGGER.warning("[ArenaRegen] Failed to create backup of " + datcFile.getName());
+            }
         }
-        byteStream.write('\n');
 
-        ByteBuffer sectionBuffer = ByteBuffer.allocate(4);
-        sectionBuffer.putInt(sectionedBlockData.size());
-        byteStream.write(sectionBuffer.array());
+        try (FileOutputStream fos = new FileOutputStream(datcFile);
+             BufferedOutputStream bos = new BufferedOutputStream(fos, BUFFER_SIZE);
+             GZIPOutputStream gzip = new GZIPOutputStream(bos) {{ def.setLevel(GZIP_COMPRESSION_LEVEL); }};
+             DataOutputStream dos = new DataOutputStream(gzip)) {
 
+            String header = fileFormatVersion + "," + creator + "," + creationDate + "," + worldName + "," +
+                    minecraftVersion + "," + minX + "," + minY + "," + minZ + "," +
+                    width + "," + height + "," + depth;
+            if (spawnLocation != null) {
+                header += "," + spawnLocation.getX() + "," + spawnLocation.getY() + "," + spawnLocation.getZ() +
+                        "," + spawnLocation.getYaw() + "," + spawnLocation.getPitch();
+            }
+            dos.writeBytes(header);
+            dos.writeByte('\n');
+
+
+            writeSections(dos);
+            writeEntities(dos);
+            writeModifiedBlocks(dos);
+
+        } catch (IOException e) {
+
+            if (backupFile.exists()) {
+                if (datcFile.exists()) datcFile.delete();
+                backupFile.renameTo(datcFile);
+            }
+            throw e;
+        }
+
+        long timeTaken = System.currentTimeMillis() - startTime;
+        long fileSize = datcFile.length();
+        LOGGER.info("[ArenaRegen] Saved RegionData to " + datcFile.getName() + ": " +
+                sectionedBlockData.size() + " sections, " + getAllBlocks().size() + " total blocks, " +
+                entityDataMap.size() + " entities, " + modifiedBlocks.size() + " modified blocks. " +
+                "File size: " + (fileSize / 1024) + " KB, Time: " + timeTaken + "ms");
+    }
+
+    private void writeSections(DataOutputStream dos) throws IOException {
+        dos.writeInt(sectionedBlockData.size());
         for (Map.Entry<String, Map<Location, BlockData>> entry : sectionedBlockData.entrySet()) {
             String sectionName = entry.getKey();
             Map<Location, BlockData> blocks = entry.getValue();
 
-            byte[] sectionNameBytes = sectionName.getBytes(StandardCharsets.UTF_8);
-            byteStream.write(ByteBuffer.allocate(4).putInt(sectionNameBytes.length).array());
-            byteStream.write(sectionNameBytes);
-
-            byteStream.write(ByteBuffer.allocate(4).putInt(blocks.size()).array());
+            dos.writeUTF(sectionName);
+            dos.writeInt(blocks.size());
 
             for (Map.Entry<Location, BlockData> blockEntry : blocks.entrySet()) {
                 Location loc = blockEntry.getKey();
                 BlockData blockData = blockEntry.getValue();
                 String blockDataStr = blockData != null ? blockData.getAsString() : "minecraft:air";
 
-                byteStream.write(ByteBuffer.allocate(12)
-                        .putInt(loc.getBlockX())
-                        .putInt(loc.getBlockY())
-                        .putInt(loc.getBlockZ())
-                        .array());
-
-                byte[] blockDataBytes = blockDataStr.getBytes(StandardCharsets.UTF_8);
-                byteStream.write(ByteBuffer.allocate(4).putInt(blockDataBytes.length).array());
-                byteStream.write(blockDataBytes);
+                dos.writeInt(loc.getBlockX());
+                dos.writeInt(loc.getBlockY());
+                dos.writeInt(loc.getBlockZ());
+                dos.writeUTF(blockDataStr);
             }
         }
+    }
 
-        byteStream.write(ByteBuffer.allocate(4).putInt(entityDataMap.size()).array());
+    private void writeEntities(DataOutputStream dos) throws IOException {
+        dos.writeInt(entityDataMap.size());
         for (Map.Entry<Location, Map<String, Object>> entry : entityDataMap.entrySet()) {
             Location loc = entry.getKey();
             Map<String, Object> serializedEntity = entry.getValue();
 
-            byteStream.write(ByteBuffer.allocate(24)
-                    .putDouble(loc.getX())
-                    .putDouble(loc.getY())
-                    .putDouble(loc.getZ())
-                    .array());
+            dos.writeDouble(loc.getX());
+            dos.writeDouble(loc.getY());
+            dos.writeDouble(loc.getZ());
+
             ByteArrayOutputStream entityStream = new ByteArrayOutputStream();
             try (ObjectOutputStream oos = new ObjectOutputStream(entityStream)) {
                 oos.writeObject(serializedEntity);
             }
             byte[] entityDataBytes = entityStream.toByteArray();
-            byteStream.write(ByteBuffer.allocate(4).putInt(entityDataBytes.length).array());
-            byteStream.write(entityDataBytes);
+            dos.writeInt(entityDataBytes.length);
+            dos.write(entityDataBytes);
         }
+    }
 
-        byteStream.write(ByteBuffer.allocate(4).putInt(modifiedBlocks.size()).array());
+    private void writeModifiedBlocks(DataOutputStream dos) throws IOException {
+        dos.writeInt(modifiedBlocks.size());
         for (Map.Entry<Location, BlockData> entry : modifiedBlocks.entrySet()) {
             Location loc = entry.getKey();
             BlockData blockData = entry.getValue();
             String blockDataStr = blockData != null ? blockData.getAsString() : "minecraft:air";
 
-            byteStream.write(ByteBuffer.allocate(12)
-                    .putInt(loc.getBlockX())
-                    .putInt(loc.getBlockY())
-                    .putInt(loc.getBlockZ())
-                    .array());
-
-            byte[] blockDataBytes = blockDataStr.getBytes(StandardCharsets.UTF_8);
-            byteStream.write(ByteBuffer.allocate(4).putInt(blockDataBytes.length).array());
-            byteStream.write(blockDataBytes);
+            dos.writeInt(loc.getBlockX());
+            dos.writeInt(loc.getBlockY());
+            dos.writeInt(loc.getBlockZ());
+            dos.writeUTF(blockDataStr);
         }
-
-        byte[] rawBytes = byteStream.toByteArray();
-        try (FileOutputStream fos = new FileOutputStream(datcFile);
-             GZIPOutputStream gzip = new GZIPOutputStream(fos)) {
-            gzip.write(rawBytes);
-        }
-
-        plugin.getLogger().info("[ArenaRegen] Saved RegionData to " + datcFile.getName() + ": " +
-                sectionedBlockData.size() + " sections, " + getAllBlocks().size() + " total blocks, " +
-                entityDataMap.size() + " entities, " + modifiedBlocks.size() + " modified blocks.");
     }
 
     public void loadFromDatc(File datcFile) throws IOException {
         this.datcFile = datcFile;
+        long startTime = System.currentTimeMillis();
 
-        byte[] rawBytes;
         try (FileInputStream fis = new FileInputStream(datcFile);
-             GZIPInputStream gzip = new GZIPInputStream(fis)) {
-            rawBytes = gzip.readAllBytes();
+             BufferedInputStream bis = new BufferedInputStream(fis, BUFFER_SIZE);
+             GZIPInputStream gzip = new GZIPInputStream(bis);
+             DataInputStream dis = new DataInputStream(gzip)) {
+
+            String header = readHeader(dis);
+            String[] headerParts = header.split(",");
+            if (headerParts.length < 11) {
+                throw new IOException("Invalid .datc file: Incomplete header");
+            }
+
+            String fileVersion = headerParts[0];
+            this.fileFormatVersion = fileVersion;
+            if (!fileVersion.equals(FILE_FORMAT_VERSION)) {
+                headerParts = migrateHeader(fileVersion, headerParts);
+            }
+
+            creator = headerParts[1];
+            creationDate = Long.parseLong(headerParts[2]);
+            worldName = headerParts[3];
+            minecraftVersion = headerParts[4];
+            minX = Integer.parseInt(headerParts[5]);
+            minY = Integer.parseInt(headerParts[6]);
+            minZ = Integer.parseInt(headerParts[7]);
+            width = Integer.parseInt(headerParts[8]);
+            height = Integer.parseInt(headerParts[9]);
+            depth = Integer.parseInt(headerParts[10]);
+
+            World world = Bukkit.getWorld(worldName);
+            if (world == null) {
+                LOGGER.warning("[ArenaRegen] World '" + worldName + "' not found for region in " + datcFile.getName() + ". Deferring block data loading.");
+                isBlockDataLoaded = false;
+                spawnLocation = null;
+                return;
+            }
+
+            if (headerParts.length > 11) {
+                spawnLocation = new Location(world, Double.parseDouble(headerParts[11]), Double.parseDouble(headerParts[12]),
+                        Double.parseDouble(headerParts[13]), Float.parseFloat(headerParts[14]), Float.parseFloat(headerParts[15]));
+            }
+
+            readSections(dis, world);
+
+            readEntities(dis, world);
+
+            readModifiedBlocks(dis, world);
+
+            isBlockDataLoaded = true;
         }
 
-        ByteArrayInputStream byteStream = new ByteArrayInputStream(rawBytes);
-        DataInputStream dataStream = new DataInputStream(byteStream);
+        long timeTaken = System.currentTimeMillis() - startTime;
+        long fileSize = datcFile.length();
+        LOGGER.info("[ArenaRegen] Loaded RegionData for file " + datcFile.getName() + ": " +
+                sectionedBlockData.size() + " sections, " + getAllBlocks().size() + " total blocks, " +
+                entityDataMap.size() + " entities, " + modifiedBlocks.size() + " modified blocks. " +
+                "File size: " + (fileSize / 1024) + " KB, Time: " + timeTaken + "ms");
+    }
 
+    private String readHeader(DataInputStream dis) throws IOException {
         StringBuilder headerBuilder = new StringBuilder();
         int b;
-        while ((b = dataStream.read()) != -1 && b != '\n') {
+        while ((b = dis.read()) != -1 && b != '\n') {
             headerBuilder.append((char) b);
         }
         if (b == -1) throw new IOException("Invalid .datc file: No header section found");
-        String header = headerBuilder.toString();
-        String[] headerParts = header.split(",");
-        if (headerParts.length < 11) throw new IOException("Invalid .datc file: Incomplete header");
-        creator = headerParts[1];
-        creationDate = Long.parseLong(headerParts[2]);
-        worldName = headerParts[3];
-        minecraftVersion = headerParts[4];
-        minX = Integer.parseInt(headerParts[5]);
-        minY = Integer.parseInt(headerParts[6]);
-        minZ = Integer.parseInt(headerParts[7]);
-        width = Integer.parseInt(headerParts[8]);
-        height = Integer.parseInt(headerParts[9]);
-        depth = Integer.parseInt(headerParts[10]);
+        return headerBuilder.toString();
+    }
 
-        World world = Bukkit.getWorld(worldName);
-        if (world == null) {
-            plugin.getLogger().info("World '" + worldName + "' not found for region in " + datcFile.getName() + ". Deferring block data loading.");
-            isBlockDataLoaded = false;
-            spawnLocation = null;
-            return;
+    private String[] migrateHeader(String fileVersion, String[] headerParts) throws IOException {
+        if (fileVersion.equals("1")) {
+
+            if (headerParts.length < 16) {
+                String[] newHeader = new String[16];
+                System.arraycopy(headerParts, 0, newHeader, 0, headerParts.length);
+
+                for (int i = headerParts.length; i < 16; i++) {
+                    newHeader[i] = "0";
+                }
+                newHeader[0] = FILE_FORMAT_VERSION;
+                return newHeader;
+            }
         }
+        throw new IOException("Unsupported .datc file version: " + fileVersion);
+    }
 
-        if (headerParts.length > 11) {
-            spawnLocation = new Location(world, Double.parseDouble(headerParts[11]), Double.parseDouble(headerParts[12]),
-                    Double.parseDouble(headerParts[13]), Float.parseFloat(headerParts[14]), Float.parseFloat(headerParts[15]));
-        }
-
-        int sectionCount = dataStream.readInt();
+    private void readSections(DataInputStream dis, World world) throws IOException {
+        int sectionCount = dis.readInt();
         sectionedBlockData.clear();
 
         for (int i = 0; i < sectionCount; i++) {
-            int sectionNameLength = dataStream.readInt();
-            byte[] sectionNameBytes = new byte[sectionNameLength];
-            dataStream.readFully(sectionNameBytes);
-            String sectionName = new String(sectionNameBytes, StandardCharsets.UTF_8);
-
-            int blockCount = dataStream.readInt();
-            Map<Location, BlockData> blocks = new HashMap<>();
+            String sectionName = dis.readUTF();
+            int blockCount = dis.readInt();
+            Map<Location, BlockData> blocks = new ConcurrentHashMap<>();
 
             for (int j = 0; j < blockCount; j++) {
-                int x = dataStream.readInt();
-                int y = dataStream.readInt();
-                int z = dataStream.readInt();
-                int blockDataLength = dataStream.readInt();
-                byte[] blockDataBytes = new byte[blockDataLength];
-                dataStream.readFully(blockDataBytes);
-                String blockDataStr = new String(blockDataBytes, StandardCharsets.UTF_8);
+                int x = dis.readInt();
+                int y = dis.readInt();
+                int z = dis.readInt();
+                String blockDataStr = dis.readUTF();
 
                 Location loc = new Location(world, x, y, z);
                 try {
                     BlockData blockData = Bukkit.createBlockData(blockDataStr);
                     blocks.put(loc, blockData);
                 } catch (IllegalArgumentException e) {
-                    plugin.getLogger().info("Invalid block data '" + blockDataStr + "' at " + loc + " in section " + sectionName + ": " + e.getMessage() + ", replacing with air.");
+                    LOGGER.warning("[ArenaRegen] Invalid block data '" + blockDataStr + "' at " + loc + " in section " + sectionName + ": " + e.getMessage() + ", replacing with air.");
                     blocks.put(loc, Bukkit.createBlockData(Material.AIR));
                 }
             }
             sectionedBlockData.put(sectionName, blocks);
         }
-        int entityCount = dataStream.readInt();
+    }
+
+    private void readEntities(DataInputStream dis, World world) throws IOException {
+        int entityCount = dis.readInt();
         entityDataMap.clear();
         for (int i = 0; i < entityCount; i++) {
-            double x = dataStream.readDouble();
-            double y = dataStream.readDouble();
-            double z = dataStream.readDouble();
-            int entityDataLength = dataStream.readInt();
+            double x = dis.readDouble();
+            double y = dis.readDouble();
+            double z = dis.readDouble();
+            int entityDataLength = dis.readInt();
             byte[] entityDataBytes = new byte[entityDataLength];
-            dataStream.readFully(entityDataBytes);
+            dis.readFully(entityDataBytes);
 
             Location loc = new Location(world, x, y, z);
             try {
@@ -341,34 +424,28 @@ public class RegionData {
                     entityDataMap.put(loc, serializedEntity);
                 }
             } catch (Exception e) {
-                plugin.getLogger().info("Failed to deserialize entity data at " + loc + ": " + e.getMessage() + ", skipping.");
+                LOGGER.warning("[ArenaRegen] Failed to deserialize entity data at " + loc + ": " + e.getMessage() + ", skipping.");
             }
         }
+    }
 
-        int modifiedCount = dataStream.readInt();
+    private void readModifiedBlocks(DataInputStream dis, World world) throws IOException {
+        int modifiedCount = dis.readInt();
         modifiedBlocks.clear();
         for (int i = 0; i < modifiedCount; i++) {
-            int x = dataStream.readInt();
-            int y = dataStream.readInt();
-            int z = dataStream.readInt();
-            int blockDataLength = dataStream.readInt();
-            byte[] blockDataBytes = new byte[blockDataLength];
-            dataStream.readFully(blockDataBytes);
-            String blockDataStr = new String(blockDataBytes, StandardCharsets.UTF_8);
+            int x = dis.readInt();
+            int y = dis.readInt();
+            int z = dis.readInt();
+            String blockDataStr = dis.readUTF();
 
             Location loc = new Location(world, x, y, z);
             try {
                 BlockData blockData = Bukkit.createBlockData(blockDataStr);
                 modifiedBlocks.put(loc, blockData);
             } catch (IllegalArgumentException e) {
-                plugin.getLogger().info("Invalid block data '" + blockDataStr + "' for modified block at " + loc + ": " + e.getMessage() + ", skipping.");
+                LOGGER.warning("[ArenaRegen] Invalid block data '" + blockDataStr + "' for modified block at " + loc + ": " + e.getMessage() + ", skipping.");
             }
         }
-
-        isBlockDataLoaded = true;
-        plugin.getLogger().info("[ArenaRegen] Loaded RegionData for file " + datcFile.getName() + ": " +
-                sectionedBlockData.size() + " sections, " + getAllBlocks().size() + " total blocks, " +
-                entityDataMap.size() + " entities, " + modifiedBlocks.size() + " modified blocks.");
     }
 
     public void ensureBlockDataLoaded() throws IOException {
@@ -400,7 +477,7 @@ public class RegionData {
         try {
             ensureBlockDataLoaded();
         } catch (IOException e) {
-            plugin.getLogger().info("[ArenaRegen] Failed to load block data for sectionedBlockData: " + e.getMessage());
+            LOGGER.warning("[ArenaRegen] Failed to load block data for sectionedBlockData: " + e.getMessage());
         }
         return sectionedBlockData;
     }
@@ -409,9 +486,9 @@ public class RegionData {
         try {
             ensureBlockDataLoaded();
         } catch (IOException e) {
-            plugin.getLogger().info("[ArenaRegen] Failed to load block data for all blocks: " + e.getMessage());
+            LOGGER.warning("[ArenaRegen] Failed to load block data for all blocks: " + e.getMessage());
         }
-        Map<Location, BlockData> allBlocks = new HashMap<>();
+        Map<Location, BlockData> allBlocks = new ConcurrentHashMap<>();
         for (Map.Entry<String, Map<Location, BlockData>> entry : sectionedBlockData.entrySet()) {
             allBlocks.putAll(entry.getValue());
         }
@@ -470,7 +547,12 @@ public class RegionData {
     public int getDepth() {
         return depth;
     }
+
     public File getDatcFile() {
         return datcFile;
+    }
+
+    public String getFileFormatVersion() {
+        return fileFormatVersion;
     }
 }
