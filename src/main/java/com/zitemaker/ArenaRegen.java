@@ -53,6 +53,8 @@ public class ArenaRegen extends JavaPlugin {
     public List<String> commands;
     public boolean teleportToSpawn;
     public String selectionTool;
+    public String previewParticleString;
+    public Particle previewParticle;
 
     private int saveTaskId = -1;
     private final Map<String, Integer> scheduledTasks = new ConcurrentHashMap<>();
@@ -295,6 +297,7 @@ public class ArenaRegen extends JavaPlugin {
         this.commands = getConfig().getStringList("regen.players-inside-arena.commands");
         this.teleportToSpawn = getConfig().getBoolean("regen.players-inside-arena.teleport-to-spawn", true);
         this.selectionTool = getConfig().getString("general.selection-tool", "GOLDEN_HOE").toUpperCase();
+        this.previewParticleString = getConfig().getString("general.preview-particle", "FLAME").toUpperCase();
     }
 
     public void reloadPluginConfig() {
@@ -740,6 +743,7 @@ public class ArenaRegen extends JavaPlugin {
     }
 
     public void previewArena(String arenaName, CommandSender sender) {
+        updateParticle();
         RegionData regionData = registeredRegions.get(arenaName);
         if (regionData == null) {
             sender.sendMessage(prefix + ChatColor.RED + " Arena '" + arenaName + "' not found.");
@@ -767,6 +771,7 @@ public class ArenaRegen extends JavaPlugin {
             sender.sendMessage(prefix + ChatColor.YELLOW + " No spawn location set for '" + arenaName + "'. Showing boundaries only.");
         }
 
+
         sender.sendMessage(prefix + ChatColor.YELLOW + " Previewing arena '" + arenaName + "' for 15 seconds...");
         sender.sendMessage(prefix + ChatColor.GRAY + " Tip: Ensure your particle settings are set to 'All' or 'Decreased' in video settings to see particles.");
 
@@ -781,23 +786,32 @@ public class ArenaRegen extends JavaPlugin {
                     return;
                 }
 
+                Object particleData = null;
+                if (previewParticle == Particle.DUST) {
+                    particleData = new Particle.DustOptions(Color.RED, 1.5f);
+                } else if (previewParticle == Particle.DUST_COLOR_TRANSITION) {
+
+                    logger.info(ChatColor.YELLOW + "[ArenaRegen] Particle DUST_COLOR_TRANSITION is not supported in this version. Falling back to FLAME.");
+                    previewParticle = Particle.FLAME;
+                }
+
                 for (int x = minX - 1; x <= maxX + 1; x += 1) {
-                    world.spawnParticle(Particle.FLAME, x + 0.5, (minY - 1) + 0.5, (minZ - 1) + 0.5, 3, 0, 0, 0, 0, null);
-                    world.spawnParticle(Particle.FLAME, x + 0.5, (minY - 1) + 0.5, (maxZ + 1) + 0.5, 3, 0, 0, 0, 0, null);
-                    world.spawnParticle(Particle.FLAME, x + 0.5, (maxY + 1) + 0.5, (minZ - 1) + 0.5, 3, 0, 0, 0, 0, null);
-                    world.spawnParticle(Particle.FLAME, x + 0.5, (maxY + 1) + 0.5, (maxZ + 1) + 0.5, 3, 0, 0, 0, 0, null);
+                    world.spawnParticle(previewParticle, x + 0.5, (minY - 1) + 0.5, (minZ - 1) + 0.5, 3, 0, 0, 0, 0, particleData);
+                    world.spawnParticle(previewParticle, x + 0.5, (minY - 1) + 0.5, (maxZ + 1) + 0.5, 3, 0, 0, 0, 0, particleData);
+                    world.spawnParticle(previewParticle, x + 0.5, (maxY + 1) + 0.5, (minZ - 1) + 0.5, 3, 0, 0, 0, 0, particleData);
+                    world.spawnParticle(previewParticle, x + 0.5, (maxY + 1) + 0.5, (maxZ + 1) + 0.5, 3, 0, 0, 0, 0, particleData);
                 }
                 for (int z = minZ - 1; z <= maxZ + 1; z += 1) {
-                    world.spawnParticle(Particle.FLAME, (minX - 1) + 0.5, (minY - 1) + 0.5, z + 0.5, 3, 0, 0, 0, 0, null);
-                    world.spawnParticle(Particle.FLAME, (maxX + 1) + 0.5, (minY - 1) + 0.5, z + 0.5, 3, 0, 0, 0, 0, null);
-                    world.spawnParticle(Particle.FLAME, (minX - 1) + 0.5, (maxY + 1) + 0.5, z + 0.5, 3, 0, 0, 0, 0, null);
-                    world.spawnParticle(Particle.FLAME, (maxX + 1) + 0.5, (maxY + 1) + 0.5, z + 0.5, 3, 0, 0, 0, 0, null);
+                    world.spawnParticle(previewParticle, (minX - 1) + 0.5, (minY - 1) + 0.5, z + 0.5, 3, 0, 0, 0, 0, particleData);
+                    world.spawnParticle(previewParticle, (maxX + 1) + 0.5, (minY - 1) + 0.5, z + 0.5, 3, 0, 0, 0, 0, particleData);
+                    world.spawnParticle(previewParticle, (minX - 1) + 0.5, (maxY + 1) + 0.5, z + 0.5, 3, 0, 0, 0, 0, particleData);
+                    world.spawnParticle(previewParticle, (maxX + 1) + 0.5, (maxY + 1) + 0.5, z + 0.5, 3, 0, 0, 0, 0, particleData);
                 }
                 for (int y = minY - 1; y <= maxY + 1; y += 1) {
-                    world.spawnParticle(Particle.FLAME, (minX - 1) + 0.5, y + 0.5, (minZ - 1) + 0.5, 3, 0, 0, 0, 0, null);
-                    world.spawnParticle(Particle.FLAME, (maxX + 1) + 0.5, y + 0.5, (minZ - 1) + 0.5, 3, 0, 0, 0, 0, null);
-                    world.spawnParticle(Particle.FLAME, (minX - 1) + 0.5, y + 0.5, (maxZ + 1) + 0.5, 3, 0, 0, 0, 0, null);
-                    world.spawnParticle(Particle.FLAME, (maxX + 1) + 0.5, y + 0.5, (maxZ + 1) + 0.5, 3, 0, 0, 0, 0, null);
+                    world.spawnParticle(previewParticle, (minX - 1) + 0.5, y + 0.5, (minZ - 1) + 0.5, 3, 0, 0, 0, 0, particleData);
+                    world.spawnParticle(previewParticle, (maxX + 1) + 0.5, y + 0.5, (minZ - 1) + 0.5, 3, 0, 0, 0, 0, particleData);
+                    world.spawnParticle(previewParticle, (minX - 1) + 0.5, y + 0.5, (maxZ + 1) + 0.5, 3, 0, 0, 0, 0, particleData);
+                    world.spawnParticle(previewParticle, (maxX + 1) + 0.5, y + 0.5, (maxZ + 1) + 0.5, 3, 0, 0, 0, 0, particleData);
                 }
 
                 if (spawn != null) {
@@ -807,5 +821,19 @@ public class ArenaRegen extends JavaPlugin {
                 ticks += 2;
             }
         }.runTaskTimer(this, 0L, 2L);
+    }
+
+    private void updateParticle() {
+        try {
+            if (previewParticleString != null) {
+                Particle newParticle = Particle.valueOf(previewParticleString.toUpperCase());
+                previewParticle = newParticle;
+            } else {
+                previewParticle = Particle.FLAME;
+            }
+        } catch (IllegalArgumentException e) {
+            logger.info(ARChatColor.YELLOW + "Invalid particle type '" + previewParticleString + "' in config. Falling back to FLAME.");
+            previewParticle = Particle.FLAME;
+        }
     }
 }
