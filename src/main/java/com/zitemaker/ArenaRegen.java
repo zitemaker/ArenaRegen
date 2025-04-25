@@ -14,6 +14,8 @@ import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.scheduler.BukkitRunnable;
+
 import java.io.File;
 import java.io.IOException;
 import java.util.*;
@@ -735,5 +737,75 @@ public class ArenaRegen extends JavaPlugin {
 
     public Map<String, Long> getScheduledIntervals() {
         return scheduledIntervals;
+    }
+
+    public void previewArena(String arenaName, CommandSender sender) {
+        RegionData regionData = registeredRegions.get(arenaName);
+        if (regionData == null) {
+            sender.sendMessage(prefix + ChatColor.RED + " Arena '" + arenaName + "' not found.");
+            return;
+        }
+
+        World world = Bukkit.getWorld(regionData.getWorldName());
+        if (world == null) {
+            sender.sendMessage(prefix + ChatColor.RED + " World '" + regionData.getWorldName() + "' not found.");
+            return;
+        }
+
+        int minX = regionData.getMinX();
+        int minY = regionData.getMinY();
+        int minZ = regionData.getMinZ();
+        int maxX = regionData.getMaxX();
+        int maxY = regionData.getMaxY();
+        int maxZ = regionData.getMaxZ();
+
+        logger.info("[ArenaRegen] Previewing arena '" + arenaName + "' with boundaries: (" +
+                minX + ", " + minY + ", " + minZ + ") to (" + maxX + ", " + maxY + ", " + maxZ + ")");
+
+        Location spawn = regionData.getSpawnLocation();
+        if (spawn == null) {
+            sender.sendMessage(prefix + ChatColor.YELLOW + " No spawn location set for '" + arenaName + "'. Showing boundaries only.");
+        }
+
+        sender.sendMessage(prefix + ChatColor.YELLOW + " Previewing arena '" + arenaName + "' for 15 seconds...");
+        sender.sendMessage(prefix + ChatColor.GRAY + " Tip: Ensure your particle settings are set to 'All' or 'Decreased' in video settings to see particles.");
+
+        new BukkitRunnable() {
+            int ticks = 0;
+
+            @Override
+            public void run() {
+                if (ticks >= 300) {
+                    sender.sendMessage(prefix + ChatColor.GREEN + " Preview of '" + arenaName + "' ended.");
+                    cancel();
+                    return;
+                }
+
+                for (int x = minX - 1; x <= maxX + 1; x += 1) {
+                    world.spawnParticle(Particle.FLAME, x + 0.5, (minY - 1) + 0.5, (minZ - 1) + 0.5, 3, 0, 0, 0, 0, null);
+                    world.spawnParticle(Particle.FLAME, x + 0.5, (minY - 1) + 0.5, (maxZ + 1) + 0.5, 3, 0, 0, 0, 0, null);
+                    world.spawnParticle(Particle.FLAME, x + 0.5, (maxY + 1) + 0.5, (minZ - 1) + 0.5, 3, 0, 0, 0, 0, null);
+                    world.spawnParticle(Particle.FLAME, x + 0.5, (maxY + 1) + 0.5, (maxZ + 1) + 0.5, 3, 0, 0, 0, 0, null);
+                }
+                for (int z = minZ - 1; z <= maxZ + 1; z += 1) {
+                    world.spawnParticle(Particle.FLAME, (minX - 1) + 0.5, (minY - 1) + 0.5, z + 0.5, 3, 0, 0, 0, 0, null);
+                    world.spawnParticle(Particle.FLAME, (maxX + 1) + 0.5, (minY - 1) + 0.5, z + 0.5, 3, 0, 0, 0, 0, null);
+                    world.spawnParticle(Particle.FLAME, (minX - 1) + 0.5, (maxY + 1) + 0.5, z + 0.5, 3, 0, 0, 0, 0, null);
+                    world.spawnParticle(Particle.FLAME, (maxX + 1) + 0.5, (maxY + 1) + 0.5, z + 0.5, 3, 0, 0, 0, 0, null);
+                }
+                for (int y = minY - 1; y <= maxY + 1; y += 1) {
+                    world.spawnParticle(Particle.FLAME, (minX - 1) + 0.5, y + 0.5, (minZ - 1) + 0.5, 3, 0, 0, 0, 0, null);
+                    world.spawnParticle(Particle.FLAME, (maxX + 1) + 0.5, y + 0.5, (minZ - 1) + 0.5, 3, 0, 0, 0, 0, null);
+                    world.spawnParticle(Particle.FLAME, (minX - 1) + 0.5, y + 0.5, (maxZ + 1) + 0.5, 3, 0, 0, 0, 0, null);
+                    world.spawnParticle(Particle.FLAME, (maxX + 1) + 0.5, y + 0.5, (maxZ + 1) + 0.5, 3, 0, 0, 0, 0, null);
+                }
+
+                if (spawn != null) {
+                    world.spawnParticle(Particle.HAPPY_VILLAGER, spawn.getX(), spawn.getY() + 1, spawn.getZ(), 10, 0.5, 0.5, 0.5, 0, null);
+                }
+
+                ticks += 2;
+            }
+        }.runTaskTimer(this, 0L, 2L);
     }
 }

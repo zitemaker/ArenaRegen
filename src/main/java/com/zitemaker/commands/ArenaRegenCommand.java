@@ -629,6 +629,18 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                 return true;
             }
 
+            case "preview" -> {
+                if (!commandSender.hasPermission("arenaregen.preview")) {
+                    commandSender.sendMessage(pluginPrefix + " " + noPermission);
+                    return true;
+                }
+
+                String targetArenaName = strings[1];
+
+                plugin.previewArena(targetArenaName, commandSender);
+                return true;
+            }
+
             case "help" -> {
                 if (!commandSender.hasPermission("arenaregen.help")) {
                     commandSender.sendMessage(noPermission);
@@ -781,13 +793,14 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
     private List<String> handleTabComplete(String @NotNull [] args) {
         return switch (args.length) {
             case 1 -> filterSuggestions(List.of("create", "regenerate", "regen", "setspawn", "delspawn", "teleport", "tp",
-                    "list", "delete", "resize", "reload", "help", "wand", "selection", "schedule"), args[0]);
+                    "list", "delete", "resize", "reload", "help", "wand", "selection", "schedule", "preview"), args[0]);
 
             case 2 -> {
                 if (args[0].equalsIgnoreCase("regenerate") || args[0].equalsIgnoreCase("regen")
                         || args[0].equalsIgnoreCase("delete") || args[0].equalsIgnoreCase("resize")
                         || args[0].equalsIgnoreCase("setspawn") || args[0].equalsIgnoreCase("delspawn")
                         || args[0].equalsIgnoreCase("teleport") || args[0].equalsIgnoreCase("tp")
+                        || args[0].equalsIgnoreCase("preview")
                         || args[0].equalsIgnoreCase("schedule")) { 
                     yield listRegionsForTabComplete(args[1]);
                 } else if (args[0].equalsIgnoreCase("create")) {
