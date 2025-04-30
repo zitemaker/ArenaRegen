@@ -20,6 +20,7 @@ general:
   preview-particle: FLAME # The particles to be used for arena previews (Valid options: https://hub.spigotmc.org/javadocs/spigot/org/bukkit/Particle.html)
 
 regen:
+  lock-arenas: true # When set to true, players cannot enter arenas while they are being regenerated.
   regen-speed-type: PRESET # PRESET or CUSTOM
   regen-speed: FAST # SLOW, NORMAL, FAST, VERYFAST, EXTREME (used if regen-speed-type is PRESET)
   custom-regen-speed: 10000 # Integer value used if regen-speed-type is CUSTOM

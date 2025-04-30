@@ -14,10 +14,9 @@ import java.util.logging.Logger;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
-
 public class RegionData {
     private static final Logger LOGGER = Logger.getLogger(RegionData.class.getName());
-    private static final String FILE_FORMAT_VERSION = "2";
+    private static final String FILE_FORMAT_VERSION = "3";
     private static final int BUFFER_SIZE = 8192;
     private static final int GZIP_COMPRESSION_LEVEL = 6;
     private static final byte[] GZIP_MAGIC = new byte[] { (byte) 0x1F, (byte) 0x8B };
@@ -35,6 +34,7 @@ public class RegionData {
     private int minX, minY, minZ;
     private int width, height, depth;
     private Location spawnLocation;
+    private boolean locked = false;
     private boolean isBlockDataLoaded = false;
     private File datcFile;
     private boolean loadFailed = false;
@@ -73,7 +73,6 @@ public class RegionData {
         }
         sectionedBlockData.put(sectionName, sectionBlocks);
     }
-
 
     public void setMetadata(String creator, long creationDate, String world, String version, int minX, int minY, int minZ, int width, int height, int depth) {
         if (world == null || world.trim().isEmpty()) {
@@ -144,12 +143,9 @@ public class RegionData {
         entityDataMap.clear();
     }
 
-
-
     private String coordsToString(Location loc) {
         return loc.getBlockX() + ":" + loc.getBlockY() + ":" + loc.getBlockZ();
     }
-
 
     public void clearRegion(String regionName) {
         sectionedBlockData.clear();
@@ -159,7 +155,7 @@ public class RegionData {
         plugin.getRegisteredRegions().remove(regionName);
         plugin.getPendingDeletions().remove(regionName);
         plugin.getPendingRegenerations().remove(regionName);
-        plugin.dirtyRegions.remove(regionName);
+        plugin.getDirtyRegions().remove(regionName);
 
         if (datcFile != null) {
             if (datcFile.exists()) {
@@ -198,7 +194,6 @@ public class RegionData {
         LOGGER.info("[ArenaRegen] Arena '" + regionName + "' has been fully removed from memory and disk.");
     }
 
-
     public void saveToDatc(File datcFile) throws IOException {
         long startTime = System.currentTimeMillis();
 
@@ -220,17 +215,18 @@ public class RegionData {
             if (spawnLocation != null) {
                 header += "," + spawnLocation.getX() + "," + spawnLocation.getY() + "," + spawnLocation.getZ() +
                         "," + spawnLocation.getYaw() + "," + spawnLocation.getPitch();
+            } else {
+                header += ",0,0,0,0,0";
             }
+            header += "," + locked;
             dos.writeBytes(header);
             dos.writeByte('\n');
-
 
             writeSections(dos);
             writeEntities(dos);
             writeModifiedBlocks(dos);
 
         } catch (IOException e) {
-
             if (backupFile.exists()) {
                 if (datcFile.exists()) datcFile.delete();
                 backupFile.renameTo(datcFile);
@@ -339,12 +335,40 @@ public class RegionData {
                 LOGGER.warning("[ArenaRegen] World '" + worldName + "' not found for region in " + datCities.getName() + ". Deferring block data loading.");
                 isBlockDataLoaded = false;
                 spawnLocation = null;
+                locked = false;
                 return;
             }
 
-            if (headerParts.length > 11) {
-                spawnLocation = new Location(world, Double.parseDouble(headerParts[11]), Double.parseDouble(headerParts[12]),
-                        Double.parseDouble(headerParts[13]), Float.parseFloat(headerParts[14]), Float.parseFloat(headerParts[15]));
+            if (headerParts.length >= 16) {
+
+                double spawnX = Double.parseDouble(headerParts[11]);
+                double spawnY = Double.parseDouble(headerParts[12]);
+                double spawnZ = Double.parseDouble(headerParts[13]);
+                float spawnYaw = Float.parseFloat(headerParts[14]);
+                float spawnPitch = Float.parseFloat(headerParts[15]);
+
+                if (spawnX == 0 && spawnY == 0 && spawnZ == 0 && spawnYaw == 0 && spawnPitch == 0) {
+                    spawnLocation = null;
+                } else {
+                    spawnLocation = new Location(world, spawnX, spawnY, spawnZ, spawnYaw, spawnPitch);
+                }
+                locked = Boolean.parseBoolean(headerParts[16]);
+            } else if (headerParts.length >= 11) {
+
+                double spawnX = headerParts.length > 11 ? Double.parseDouble(headerParts[11]) : 0;
+                double spawnY = headerParts.length > 12 ? Double.parseDouble(headerParts[12]) : 0;
+                double spawnZ = headerParts.length > 13 ? Double.parseDouble(headerParts[13]) : 0;
+                float spawnYaw = headerParts.length > 14 ? Float.parseFloat(headerParts[14]) : 0;
+                float spawnPitch = headerParts.length > 15 ? Float.parseFloat(headerParts[15]) : 0;
+                if (spawnX == 0 && spawnY == 0 && spawnZ == 0 && spawnYaw == 0 && spawnPitch == 0) {
+                    spawnLocation = null;
+                } else {
+                    spawnLocation = new Location(world, spawnX, spawnY, spawnZ, spawnYaw, spawnPitch);
+                }
+                locked = false;
+            } else {
+                spawnLocation = null;
+                locked = false;
             }
 
             readSections(dis, world);
@@ -352,8 +376,7 @@ public class RegionData {
             readModifiedBlocks(dis, world);
 
             isBlockDataLoaded = true;
-        }
-        catch (Exception e){
+        } catch (Exception e) {
             byte[] rawBytes;
             try (FileInputStream fis = new FileInputStream(datcFile);
                  GZIPInputStream gzip = new GZIPInputStream(fis)) {
@@ -388,12 +411,38 @@ public class RegionData {
                 plugin.getLogger().info("World '" + worldName + "' not found for region in " + datcFile.getName() + ". Deferring block data loading.");
                 isBlockDataLoaded = false;
                 spawnLocation = null;
+                locked = false;
                 return;
             }
 
-            if (headerParts.length > 11) {
-                spawnLocation = new Location(world, Double.parseDouble(headerParts[11]), Double.parseDouble(headerParts[12]),
-                        Double.parseDouble(headerParts[13]), Float.parseFloat(headerParts[14]), Float.parseFloat(headerParts[15]));
+            if (headerParts.length >= 16) {
+                double spawnX = Double.parseDouble(headerParts[11]);
+                double spawnY = Double.parseDouble(headerParts[12]);
+                double spawnZ = Double.parseDouble(headerParts[13]);
+                float spawnYaw = Float.parseFloat(headerParts[14]);
+                float spawnPitch = Float.parseFloat(headerParts[15]);
+                if (spawnX == 0 && spawnY == 0 && spawnZ == 0 && spawnYaw == 0 && spawnPitch == 0) {
+                    spawnLocation = null;
+                } else {
+                    spawnLocation = new Location(world, spawnX, spawnY, spawnZ, spawnYaw, spawnPitch);
+                }
+                locked = Boolean.parseBoolean(headerParts[16]);
+            } else if (headerParts.length >= 11) {
+
+                double spawnX = headerParts.length > 11 ? Double.parseDouble(headerParts[11]) : 0;
+                double spawnY = headerParts.length > 12 ? Double.parseDouble(headerParts[12]) : 0;
+                double spawnZ = headerParts.length > 13 ? Double.parseDouble(headerParts[13]) : 0;
+                float spawnYaw = headerParts.length > 14 ? Float.parseFloat(headerParts[14]) : 0;
+                float spawnPitch = headerParts.length > 15 ? Float.parseFloat(headerParts[15]) : 0;
+                if (spawnX == 0 && spawnY == 0 && spawnZ == 0 && spawnYaw == 0 && spawnPitch == 0) {
+                    spawnLocation = null;
+                } else {
+                    spawnLocation = new Location(world, spawnX, spawnY, spawnZ, spawnYaw, spawnPitch);
+                }
+                locked = false;
+            } else {
+                spawnLocation = null;
+                locked = false;
             }
 
             int sectionCount = dataStream.readInt();
@@ -473,14 +522,12 @@ public class RegionData {
             isBlockDataLoaded = true;
         }
 
-
-
         long timeTaken = System.currentTimeMillis() - startTime;
         long fileSize = datCities.length();
         LOGGER.info("[ArenaRegen] Loaded RegionData for file " + datCities.getName() + ": " +
                 sectionedBlockData.size() + " sections, " + getAllBlocks().size() + " total blocks, " +
                 entityDataMap.size() + " entities, " + modifiedBlocks.size() + " modified blocks. " +
-                "File size: " + (fileSize / 1024) + " KB, Time: " + timeTaken + "ms");
+                "Locked: " + locked + ", File size: " + (fileSize / 1024) + " KB, Time: " + timeTaken + "ms");
     }
 
     private String readHeader(DataInputStream dis) throws IOException {
@@ -494,18 +541,29 @@ public class RegionData {
     }
 
     private String[] migrateHeader(String fileVersion, String[] headerParts) throws IOException {
-        if (fileVersion.equals("1")) {
+        if (fileVersion.equals("1") || fileVersion.equals("2")) {
+
+            String[] newHeader = new String[17];
+            System.arraycopy(headerParts, 0, newHeader, 0, Math.min(headerParts.length, 11));
+
+            for (int i = headerParts.length; i < 11; i++) {
+                newHeader[i] = "0";
+            }
 
             if (headerParts.length < 16) {
-                String[] newHeader = new String[16];
-                System.arraycopy(headerParts, 0, newHeader, 0, headerParts.length);
-
-                for (int i = headerParts.length; i < 16; i++) {
-                    newHeader[i] = "0";
-                }
-                newHeader[0] = FILE_FORMAT_VERSION;
-                return newHeader;
+                newHeader[11] = "0";
+                newHeader[12] = "0";
+                newHeader[13] = "0";
+                newHeader[14] = "0";
+                newHeader[15] = "0";
+            } else {
+                System.arraycopy(headerParts, 11, newHeader, 11, 5);
             }
+
+            newHeader[16] = "false";
+
+            newHeader[0] = FILE_FORMAT_VERSION;
+            return newHeader;
         }
         throw new IOException("Unsupported .datc file version: " + fileVersion);
     }
@@ -626,6 +684,19 @@ public class RegionData {
             allBlocks.putAll(entry.getValue());
         }
         return allBlocks;
+    }
+
+    public boolean isLocked() {
+        return locked;
+    }
+
+    public void setLocked(boolean locked) {
+        this.locked = locked;
+
+        if (datcFile != null) {
+            String regionName = datcFile.getName().replace(".datc", "");
+            plugin.markRegionDirty(regionName);
+        }
     }
 
     // metadata getters

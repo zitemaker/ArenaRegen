@@ -3,6 +3,7 @@ package com.zitemaker;
 import com.zitemaker.commands.ArenaRegenCommand;
 import com.zitemaker.helpers.EntitySerializer;
 import com.zitemaker.helpers.RegionData;
+import com.zitemaker.listeners.PlayerMoveListener;
 import com.zitemaker.nms.BlockUpdate;
 import com.zitemaker.nms.NMSHandlerFactoryProvider;
 import com.zitemaker.utils.*;
@@ -32,7 +33,7 @@ public class ArenaRegen extends JavaPlugin {
     private final Map<String, String> pendingDeletions = new ConcurrentHashMap<>();
     private final Map<String, String> pendingRegenerations = new ConcurrentHashMap<>();
     public final Console console = new SpigotConsole();
-    private final Logger logger = new Logger(new JavaPlatformLogger(console, getLogger()), true);
+    public final Logger logger = new Logger(new JavaPlatformLogger(console, getLogger()), true);
     public final Set<String> dirtyRegions = new HashSet<>();
     private final Set<String> regeneratingArenas = new HashSet<>();
 
@@ -55,6 +56,7 @@ public class ArenaRegen extends JavaPlugin {
     public String selectionTool;
     public String previewParticleString;
     public Particle previewParticle;
+    private boolean lockDuringRegeneration;
 
     private int saveTaskId = -1;
     private final Map<String, Integer> scheduledTasks = new ConcurrentHashMap<>();
@@ -119,6 +121,7 @@ public class ArenaRegen extends JavaPlugin {
         Objects.requireNonNull(getCommand("arenaregen")).setExecutor(commandExecutor);
         Objects.requireNonNull(getCommand("arenaregen")).setTabCompleter(commandExecutor);
         Bukkit.getPluginManager().registerEvents(commandExecutor, this);
+        Bukkit.getPluginManager().registerEvents(new PlayerMoveListener(this), this);
 
         File arenasDir = new File(getDataFolder(), "arenas");
         if (!arenasDir.exists()) {
@@ -298,6 +301,7 @@ public class ArenaRegen extends JavaPlugin {
         this.teleportToSpawn = getConfig().getBoolean("regen.players-inside-arena.teleport-to-spawn", true);
         this.selectionTool = getConfig().getString("general.selection-tool", "GOLDEN_HOE").toUpperCase();
         this.previewParticleString = getConfig().getString("general.preview-particle", "FLAME").toUpperCase();
+        this.lockDuringRegeneration = getConfig().getBoolean("regen.lock-arenas", true);
     }
 
     public void reloadPluginConfig() {
@@ -532,6 +536,11 @@ public class ArenaRegen extends JavaPlugin {
             return;
         }
 
+        boolean wasLocked = regionData.isLocked();
+        if (lockDuringRegeneration && !wasLocked) {
+            regionData.setLocked(true);
+        }
+
         Location min = null;
         Location max = null;
         for (Map<Location, BlockData> section : regionData.getSectionedBlockData().values()) {
@@ -661,6 +670,9 @@ public class ArenaRegen extends JavaPlugin {
                     regeneratingArenas.remove(arenaName);
                 }
                 task.cancel();
+                if (regionData.isLocked()) {
+                    regionData.setLocked(false);
+                }
                 return;
             }
 
@@ -753,6 +765,11 @@ public class ArenaRegen extends JavaPlugin {
             }
             sender.sendMessage(prefix + ChatColor.RED + " No sections found for region '" + arenaName + "'.");
             return;
+        }
+
+        boolean wasLocked = regionData.isLocked();
+        if (lockDuringRegeneration && !wasLocked) {
+            regionData.setLocked(true);
         }
 
         Location min = null;
@@ -884,6 +901,10 @@ public class ArenaRegen extends JavaPlugin {
                     regeneratingArenas.remove(arenaName);
                 }
                 task.cancel();
+
+                if (regionData.isLocked()) {
+                    regionData.setLocked(false);
+                }
                 return;
             }
 
