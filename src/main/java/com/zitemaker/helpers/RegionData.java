@@ -15,7 +15,7 @@ import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
 public class RegionData {
-    private static final Logger LOGGER = Logger.getLogger(RegionData.class.getName());
+    private static final Logger LOGGER = Bukkit.getLogger();
     private static final String FILE_FORMAT_VERSION = "3";
     private static final int BUFFER_SIZE = 8192;
     private static final int GZIP_COMPRESSION_LEVEL = 6;

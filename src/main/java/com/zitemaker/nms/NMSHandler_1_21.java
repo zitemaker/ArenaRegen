@@ -5,6 +5,7 @@ import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
+import org.bukkit.Bukkit;
 import org.bukkit.World;
 import org.bukkit.craftbukkit.CraftWorld;
 import org.bukkit.craftbukkit.block.data.CraftBlockData;
@@ -12,7 +13,7 @@ import java.util.List;
 import java.util.logging.Logger;
 
 public class NMSHandler_1_21 implements NMSHandler {
-    private static final Logger LOGGER = Logger.getLogger(NMSHandler_1_21.class.getName());
+    private static final Logger LOGGER = Bukkit.getLogger();
 
     @Override
     public void setBlocks(World world, List<BlockUpdate> blockUpdates) {

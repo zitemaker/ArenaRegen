@@ -23,7 +23,7 @@ import java.util.logging.Logger;
 
 public class EntitySerializer {
 
-    private static final Logger LOGGER = Logger.getLogger(EntitySerializer.class.getName());
+    private static final Logger LOGGER = Bukkit.getLogger();
     private static final Attribute MAX_HEALTH_ATTRIBUTE = initializeMaxHealthAttribute();
     private static final Map<EntityType, EntitySerializerHandler> SERIALIZER_REGISTRY = new HashMap<>();
 
