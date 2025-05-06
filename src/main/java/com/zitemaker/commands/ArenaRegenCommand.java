@@ -144,11 +144,7 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                 plugin.getRegisteredRegions().put(regionName, regionData);
 
                 File datcFile = new File(new File(plugin.getDataFolder(), "arenas"), regionName + ".datc");
-                try {
-                    regionData.saveToDatc(datcFile);
-                } catch (IOException e) {
-                    plugin.getLogger().severe("Failed to save " + regionName + ".datc: " + e.getMessage());
-                }
+                regionData.saveToDatc(datcFile);
 
                 commandSender.sendMessage(pluginPrefix + ChatColor.YELLOW + " Analyzing and creating region '" + regionName + "', please wait...");
 
@@ -208,14 +204,10 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                         }
 
                         Bukkit.getScheduler().runTask(plugin, () -> {
-                            try {
-                                regionData.saveToDatc(datcFile);
-                                plugin.markRegionDirty(regionName);
-                                clearSelection(player);
-                                commandSender.sendMessage(regionCreated.replace("{arena_name}", regionName));
-                            } catch (IOException e) {
-                                plugin.getLogger().severe("Failed to save " + regionName + ".datc: " + e.getMessage());
-                            }
+                            regionData.saveToDatc(datcFile);
+                            plugin.markRegionDirty(regionName);
+                            clearSelection(player);
+                            commandSender.sendMessage(regionCreated.replace("{arena_name}", regionName));
                         });
                     }
                     blocksProcessed.set(end);
@@ -279,7 +271,7 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                 plugin.getRegisteredRegions().remove(confirmedRegion);
 
 
-                Bukkit.getScheduler().runTaskAsynchronously(plugin, plugin::saveRegions);
+                Bukkit.getScheduler().runTaskAsynchronously(plugin, plugin::saveRegionsAsync);
 
 
                 regionDeleted = regionDeleted.replace("{arena_name}", confirmedRegion);
@@ -365,7 +357,7 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                     Bukkit.getScheduler().runTask(plugin, () -> {
                         plugin.getRegisteredRegions().put(regionName, regionData);
                         plugin.markRegionDirty(regionName);
-                        Bukkit.getScheduler().runTaskAsynchronously(plugin, plugin::saveRegions);
+                        Bukkit.getScheduler().runTaskAsynchronously(plugin, plugin::saveRegionsAsync);
                         clearSelection(player);
                         commandSender.sendMessage(pluginPrefix + " " + regionResized.replace("{arena_name}", regionName));
                     });
@@ -538,7 +530,7 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
 
                 regionData.setSpawnLocation(location);
                 plugin.markRegionDirty(targetArenaName);
-                Bukkit.getScheduler().runTaskAsynchronously(plugin, plugin::saveRegions);
+                Bukkit.getScheduler().runTaskAsynchronously(plugin, plugin::saveRegionsAsync);
                 commandSender.sendMessage(spawnSet);
                 return true;
             }
@@ -566,7 +558,7 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
 
                 regionData.setSpawnLocation(null);
                 plugin.markRegionDirty(targetArenaName);
-                Bukkit.getScheduler().runTaskAsynchronously(plugin, plugin::saveRegions);
+                Bukkit.getScheduler().runTaskAsynchronously(plugin, plugin::saveRegionsAsync);
                 commandSender.sendMessage(spawnDeleted);
                 return true;
             }
