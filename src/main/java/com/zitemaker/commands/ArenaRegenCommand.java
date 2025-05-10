@@ -502,8 +502,6 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
 
             case "setspawn" -> {
                 String showUsage = ChatColor.translateAlternateColorCodes('&', "&cUsage: /arenaregen setspawn <arena>");
-                String targetArenaName = strings[1];
-                spawnSet = spawnSet.replace("{arena_name}", targetArenaName);
 
                 if (!(commandSender instanceof Player player)) {
                     commandSender.sendMessage(onlyForPlayers);
@@ -519,6 +517,8 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                     commandSender.sendMessage(pluginPrefix + " " + showUsage);
                     return true;
                 }
+                String targetArenaName = strings[1];
+                spawnSet = spawnSet.replace("{arena_name}", targetArenaName);
 
                 Location location = player.getLocation();
 
@@ -537,8 +537,6 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
 
             case "delspawn" -> {
                 String showUsage = ChatColor.translateAlternateColorCodes('&', "&cUsage: /arenaregen delspawn <arena>");
-                String targetArenaName = strings[1];
-                spawnDeleted = spawnDeleted.replace("{arena_name}", targetArenaName);
 
                 if (!commandSender.hasPermission("arenaregen.delspawn")) {
                     commandSender.sendMessage(noPermission);
@@ -549,6 +547,9 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                     commandSender.sendMessage(pluginPrefix + " " + showUsage);
                     return true;
                 }
+
+                String targetArenaName = strings[1];
+                spawnDeleted = spawnDeleted.replace("{arena_name}", targetArenaName);
 
                 RegionData regionData = plugin.getRegisteredRegions().get(targetArenaName);
                 if (regionData == null) {
@@ -565,8 +566,6 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
 
             case "teleport", "tp" -> {
                 String showUsage = ChatColor.translateAlternateColorCodes('&', "&cUsage: /arenaregen teleport <arena>");
-                String targetArenaName = strings[1];
-                teleportSuccess = teleportSuccess.replace("{arena_name}", targetArenaName);
 
                 if (!(commandSender instanceof Player player)) {
                     commandSender.sendMessage(onlyForPlayers);
@@ -582,6 +581,9 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                     commandSender.sendMessage(pluginPrefix + " " + showUsage);
                     return true;
                 }
+
+                String targetArenaName = strings[1];
+                teleportSuccess = teleportSuccess.replace("{arena_name}", targetArenaName);
 
                 RegionData regionData = plugin.getRegisteredRegions().get(targetArenaName);
                 if (regionData == null) {
@@ -606,6 +608,24 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                     return true;
                 }
                 listRegions(commandSender);
+                return true;
+            }
+
+            case "info", "information" -> {
+                String showUsage = ChatColor.translateAlternateColorCodes('&', "&cUsage: /arenaregen info <arena>");
+
+                if (!commandSender.hasPermission("arenaregen.info")) {
+                    commandSender.sendMessage(pluginPrefix + " " + noPermission);
+                    return true;
+                }
+
+                if (strings.length != 2) {
+                    commandSender.sendMessage(pluginPrefix + " " + showUsage);
+                    return true;
+                }
+
+                String targetArenaName = strings[1];
+                showRegionDetails(commandSender, targetArenaName);
                 return true;
             }
 
@@ -649,9 +669,10 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                 commandSender.sendMessage(ChatColor.GREEN + "/arenaregen teleport <arena> - Teleport to an arena");
                 commandSender.sendMessage(ChatColor.GREEN + "/arenaregen list - List all arenas");
                 commandSender.sendMessage(ChatColor.GREEN + "/arenaregen reload - Reload configuration");
-                commandSender.sendMessage(ChatColor.GREEN + "/arenaregen help - Show this help");
+                commandSender.sendMessage(ChatColor.GREEN + "/arenaregen help - Show this command.");
                 commandSender.sendMessage(ChatColor.GREEN + "/arenaregen wand - Get the selection tool");
                 commandSender.sendMessage(ChatColor.GREEN + "/arenaregen schedule - Schedule a regeneration timer");
+                commandSender.sendMessage(ChatColor.GREEN + "/arenaregen preview - Preview the borders of an arena using particles");
                 return true;
             }
 
@@ -745,36 +766,86 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                 message.append(": No block data");
             }
 
-            message.append(ChatColor.GRAY)
-                    .append("\n  Creator: ").append(ChatColor.WHITE).append(regionData.getCreator())
-                    .append(ChatColor.GRAY)
-                    .append("\n  Created: ").append(ChatColor.WHITE)
-                    .append(new Date(regionData.getCreationDate()))
-                    .append(ChatColor.GRAY)
-                    .append("\n  World: ").append(ChatColor.WHITE).append(regionData.getWorldName())
-                    .append(ChatColor.GRAY)
-                    .append("\n  Minecraft Version: ").append(ChatColor.WHITE).append(regionData.getMinecraftVersion())
-                    .append(ChatColor.GRAY)
-                    .append("\n  File Format Version: ").append(ChatColor.WHITE).append(regionData.getFileFormatVersion())
-                    .append(ChatColor.GRAY)
-                    .append("\n  Dimensions: ").append(ChatColor.WHITE)
-                    .append(regionData.getWidth()).append("x")
-                    .append(regionData.getHeight()).append("x")
-                    .append(regionData.getDepth())
-                    .append(ChatColor.GRAY)
-                    .append("\n  Sections: ").append(ChatColor.WHITE)
-                    .append(regionData.getSectionedBlockData().size());
-
-            if (plugin.isScheduled(name)) {
-                long intervalTicks = plugin.getScheduledInterval(name);
-                String intervalString = formatTicksToTime(intervalTicks);
-                message.append(ChatColor.GRAY)
-                        .append("\n  Regeneration Schedule: ").append(ChatColor.WHITE)
-                        .append("Every ").append(intervalString);
-            }
-
             sender.sendMessage(message.toString());
         }
+    }
+
+    private void showRegionDetails(CommandSender sender, String regionName) {
+        Map<String, RegionData> regions = plugin.getRegisteredRegions();
+        RegionData regionData = regions.get(regionName);
+
+        if (regionData == null) {
+            sender.sendMessage(ChatColor.RED + "Arena '" + regionName + "' not found.");
+            return;
+        }
+
+        Location min = null;
+        Location max = null;
+        World world = Bukkit.getWorld(regionData.getWorldName());
+
+        if (world == null) {
+            sender.sendMessage(ChatColor.RED + "World '" + regionData.getWorldName() + "' not found");
+            return;
+        }
+
+        for (Map<Location, BlockData> section : regionData.getSectionedBlockData().values()) {
+            for (Location loc : section.keySet()) {
+                if (min == null) {
+                    min = new Location(world, loc.getX(), loc.getY(), loc.getZ());
+                    max = new Location(world, loc.getX(), loc.getY(), loc.getZ());
+                } else {
+                    min.setX(Math.min(min.getX(), loc.getX()));
+                    min.setY(Math.min(min.getY(), loc.getY()));
+                    min.setZ(Math.min(min.getZ(), loc.getZ()));
+                    max.setX(Math.max(max.getX(), loc.getX()));
+                    max.setY(Math.max(max.getY(), loc.getY()));
+                    max.setZ(Math.max(max.getZ(), loc.getZ()));
+                }
+            }
+        }
+
+        StringBuilder message = new StringBuilder();
+        message.append(ChatColor.GREEN).append("Arena Details for ").append(regionName).append(":");
+
+        if (min != null && max != null) {
+            message.append(String.format("\n" + ChatColor.GREEN + "  Coordinates: (%d, %d, %d) to (%d, %d, %d)",
+                    (int) min.getX(), (int) min.getY(), (int) min.getZ(),
+                    (int) max.getX(), (int) max.getY(), (int) max.getZ()));
+        } else {
+            message.append("\n" + ChatColor.GREEN + "  Coordinates: No block data");
+        }
+
+        message.append(ChatColor.GRAY)
+                .append("\n  Area: ").append(ChatColor.WHITE).append(regionData.getArea()).append(" blocks");
+        message.append(ChatColor.GRAY)
+                .append("\n  Creator: ").append(ChatColor.WHITE).append(regionData.getCreator())
+                .append(ChatColor.GRAY)
+                .append("\n  Created: ").append(ChatColor.WHITE)
+                .append(new Date(regionData.getCreationDate()))
+                .append(ChatColor.GRAY)
+                .append("\n  World: ").append(ChatColor.WHITE).append(regionData.getWorldName())
+                .append(ChatColor.GRAY)
+                .append("\n  Minecraft Version: ").append(ChatColor.WHITE).append(regionData.getMinecraftVersion())
+                .append(ChatColor.GRAY)
+                .append("\n  File Format Version: ").append(ChatColor.WHITE).append(regionData.getFileFormatVersion())
+                .append(ChatColor.GRAY)
+                .append("\n  Dimensions: ").append(ChatColor.WHITE)
+                .append(regionData.getWidth()).append("x")
+                .append(regionData.getHeight()).append("x")
+                .append(regionData.getDepth())
+                .append(ChatColor.GRAY)
+                .append("\n  Sections: ").append(ChatColor.WHITE)
+                .append(regionData.getSectionedBlockData().size());
+
+        if (plugin.isScheduled(regionName)) {
+            long intervalTicks = plugin.getScheduledInterval(regionName);
+            String intervalString = formatTicksToTime(intervalTicks);
+            message.append(ChatColor.GRAY)
+                    .append("\n  Regeneration Schedule: ").append(ChatColor.WHITE)
+                    .append("Every ").append(intervalString);
+        }
+
+        sender.sendMessage(message.toString());
     }
 
     @Override
@@ -785,7 +856,7 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
     private List<String> handleTabComplete(String @NotNull [] args) {
         return switch (args.length) {
             case 1 -> filterSuggestions(List.of("create", "regenerate", "regen", "setspawn", "delspawn", "teleport", "tp",
-                    "list", "delete", "resize", "reload", "help", "wand", "selection", "schedule", "preview"), args[0]);
+                    "list", "delete", "resize", "reload", "help", "wand", "selection", "schedule", "preview", "info"), args[0]);
 
             case 2 -> {
                 if (args[0].equalsIgnoreCase("regenerate") || args[0].equalsIgnoreCase("regen")
@@ -793,7 +864,8 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                         || args[0].equalsIgnoreCase("setspawn") || args[0].equalsIgnoreCase("delspawn")
                         || args[0].equalsIgnoreCase("teleport") || args[0].equalsIgnoreCase("tp")
                         || args[0].equalsIgnoreCase("preview")
-                        || args[0].equalsIgnoreCase("schedule")) { 
+                        || args[0].equalsIgnoreCase("schedule")
+                        || args[0].equalsIgnoreCase("info") || args[0].equalsIgnoreCase("information")){
                     yield listRegionsForTabComplete(args[1]);
                 } else if (args[0].equalsIgnoreCase("create")) {
                     yield filterSuggestions(List.of("ArenaName"), args[1]);

@@ -27,6 +27,9 @@ permissions:
   arenaregen.list:
     description: Allows the player to list all regions.
     default: op
+  arenaregen.info:
+    description: Allows the player to view information related to an arena.
+    default: op
   arenaregen.setspawn:
     description: Allows the player to set a spawn for regions.
     default: op

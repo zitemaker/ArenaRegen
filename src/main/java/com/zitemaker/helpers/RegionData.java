@@ -784,4 +784,7 @@ public class RegionData {
     public int getHeight() { return height; }
     public int getDepth() { return depth; }
     public File getDatcFile() { return datcFile; }
+    public long getArea() {
+        return (long) width * height * depth;
+    }
 }
