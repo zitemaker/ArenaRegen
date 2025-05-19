@@ -1106,23 +1106,4 @@ public class ArenaRegen extends JavaPlugin {
         }
     }
 
-    public boolean isArenaGuardEnabled() {
-        return arenaGuardEnabled;
-    }
-
-    public boolean isPreventItemDrops() {
-        return preventItemDrops;
-    }
-
-    public boolean isPreventBlockBreaking() {
-        return preventBlockBreaking;
-    }
-
-    public boolean isPreventBlockPlacing() {
-        return preventBlockPlacing;
-    }
-
-    public boolean isPreventBlockDamage() {
-        return preventBlockDamage;
-    }
 }
