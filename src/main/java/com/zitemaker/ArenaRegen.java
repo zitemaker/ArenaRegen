@@ -6,6 +6,7 @@ import com.zitemaker.helpers.RegionData;
 import com.zitemaker.listeners.PlayerMoveListener;
 import com.zitemaker.nms.BlockUpdate;
 import com.zitemaker.nms.NMSHandlerFactoryProvider;
+import com.zitemaker.placeholders.ArenaRegenExpansion;
 import com.zitemaker.utils.*;
 import org.bukkit.*;
 import org.bukkit.block.Block;
@@ -58,17 +59,14 @@ public class ArenaRegen extends JavaPlugin {
     public String previewParticleString;
     public Particle previewParticle;
     private boolean lockDuringRegeneration;
-    private boolean arenaGuardEnabled;
-    private boolean preventItemDrops;
-    private boolean preventBlockBreaking;
-    private boolean preventBlockPlacing;
-    private boolean preventBlockDamage;
 
     private int saveTaskId = -1;
     private final Map<String, Integer> scheduledTasks = new ConcurrentHashMap<>();
     private final Map<String, Long> scheduledIntervals = new ConcurrentHashMap<>();
+    private final Map<String, Long> taskStartTimes = new ConcurrentHashMap<>();
     private File schedulesFile;
     private FileConfiguration schedulesConfig;
+    private ArenaRegenExpansion placeholderExpansion;
 
     @Override
     public void onLoad() {
@@ -144,6 +142,13 @@ public class ArenaRegen extends JavaPlugin {
             logger.info("Failed to load regions during enable: " + e.getMessage());
             return null;
         });
+        if (Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null) {
+            placeholderExpansion = new ArenaRegenExpansion(this);
+            placeholderExpansion.register();
+            logger.info(ARChatColor.GREEN + "PlaceholderAPI integration enabled!");
+        } else {
+            logger.info(ARChatColor.YELLOW + "PlaceholderAPI not found. Placeholder support disabled.");
+        }
     }
 
     @Override
@@ -328,7 +333,7 @@ public class ArenaRegen extends JavaPlugin {
             File datcFile = new File(arenasDir, regionName + ".datc");
             try {
                 RegionData regionData = regionsToSave.get(regionName);
-                regionData.saveToDatc(datcFile).join(); // Block until save completes
+                regionData.saveToDatc(datcFile).join();
                 savedRegions++;
                 getLogger().info("Saved region '" + regionName + "' to " + datcFile.getPath());
             } catch (Exception e) {
@@ -377,11 +382,6 @@ public class ArenaRegen extends JavaPlugin {
         this.selectionTool = getConfig().getString("general.selection-tool", "GOLDEN_HOE").toUpperCase();
         this.previewParticleString = getConfig().getString("general.preview-particle", "FLAME").toUpperCase();
         this.lockDuringRegeneration = getConfig().getBoolean("regen.lock-arenas", true);
-        this.arenaGuardEnabled = getConfig().getBoolean("arena-guard.enabled", true);
-        this.preventItemDrops = getConfig().getBoolean("arena-guard.item-drops", true);
-        this.preventBlockBreaking = getConfig().getBoolean("arena-guard.block-breaking", true);
-        this.preventBlockPlacing = getConfig().getBoolean("arena-guard.block-placing", true);
-        this.preventBlockDamage = getConfig().getBoolean("arena-guard.block-damage", true);
     }
 
     public void reloadPluginConfig() {
@@ -466,17 +466,29 @@ public class ArenaRegen extends JavaPlugin {
 
         scheduledTasks.put(arenaName, taskId);
         scheduledIntervals.put(arenaName, intervalTicks);
+        taskStartTimes.put(arenaName, System.currentTimeMillis());
+        //getLogger().info("Scheduled regeneration for " + arenaName + " with interval " + intervalTicks + " ticks at " + taskStartTimes.get(arenaName));
 
         saveSchedules();
+
+        if (placeholderExpansion != null) {
+            placeholderExpansion.onScheduleUpdate();
+        }
     }
 
     public void cancelScheduledRegeneration(String arenaName) {
         Integer taskId = scheduledTasks.remove(arenaName);
         if (taskId != null) {
             Bukkit.getScheduler().cancelTask(taskId);
+            getLogger().info("Canceled scheduled regeneration for " + arenaName);
         }
         scheduledIntervals.remove(arenaName);
+        taskStartTimes.remove(arenaName);
         saveSchedules();
+
+        if (placeholderExpansion != null) {
+            placeholderExpansion.onScheduleUpdate();
+        }
     }
 
     public boolean isScheduled(String arenaName) {
@@ -485,6 +497,10 @@ public class ArenaRegen extends JavaPlugin {
 
     public Long getScheduledInterval(String arenaName) {
         return scheduledIntervals.get(arenaName);
+    }
+
+    public Map<String, Long> getTaskStartTimes() {
+        return taskStartTimes;
     }
 
     private void loadSchedules() {
@@ -496,9 +512,12 @@ public class ArenaRegen extends JavaPlugin {
 
         if (schedulesConfig.contains("schedules")) {
             for (String arenaName : schedulesConfig.getConfigurationSection("schedules").getKeys(false)) {
-                long intervalTicks = schedulesConfig.getLong("schedules." + arenaName);
+                long intervalTicks = schedulesConfig.getLong("schedules." + arenaName + ".interval");
                 if (intervalTicks >= 200) {
                     scheduledIntervals.put(arenaName, intervalTicks);
+                    long startTime = schedulesConfig.getLong("schedules." + arenaName + ".startTime", System.currentTimeMillis());
+                    taskStartTimes.put(arenaName, startTime);
+                    getLogger().info("Loaded schedule for " + arenaName + ": interval=" + intervalTicks + ", startTime=" + startTime);
                 }
             }
         }
@@ -507,7 +526,9 @@ public class ArenaRegen extends JavaPlugin {
     private void saveSchedules() {
         schedulesConfig.set("schedules", null);
         for (Map.Entry<String, Long> entry : scheduledIntervals.entrySet()) {
-            schedulesConfig.set("schedules." + entry.getKey(), entry.getValue());
+            String arenaName = entry.getKey();
+            schedulesConfig.set("schedules." + arenaName + ".interval", entry.getValue());
+            schedulesConfig.set("schedules." + arenaName + ".startTime", taskStartTimes.get(arenaName));
         }
         try {
             schedulesConfig.save(schedulesFile);
@@ -524,8 +545,13 @@ public class ArenaRegen extends JavaPlugin {
                 Runnable regenerateTask = createRegenerateTask(arenaName);
                 int taskId = Bukkit.getScheduler().runTaskTimer(this, regenerateTask, intervalTicks, intervalTicks).getTaskId();
                 scheduledTasks.put(arenaName, taskId);
+                if (!taskStartTimes.containsKey(arenaName)) {
+                    taskStartTimes.put(arenaName, System.currentTimeMillis());
+                    getLogger().info("Set start time for " + arenaName + " to " + taskStartTimes.get(arenaName) + " during reschedule");
+                }
             } else {
                 scheduledIntervals.remove(arenaName);
+                taskStartTimes.remove(arenaName);
             }
         }
         saveSchedules();
@@ -645,7 +671,7 @@ public class ArenaRegen extends JavaPlugin {
                     });
         }
 
-        logger.info(ChatColor.YELLOW + " Regenerating region '" + arenaName + "', please wait...");
+        //logger.info(ChatColor.YELLOW + " Regenerating region '" + arenaName + "', please wait...");
         int blocksPerTick = regenType.equals("PRESET") ? switch (regenSpeed.toUpperCase()) {
             case "SLOW" -> 1000;
             case "NORMAL" -> 10000;
@@ -693,8 +719,8 @@ public class ArenaRegen extends JavaPlugin {
                 }
 
                 long timeTaken = System.currentTimeMillis() - startTime;
-                logger.info(ChatColor.GREEN + " Regeneration of '" + arenaName + "' complete! " +
-                        ChatColor.GRAY + " (" + totalBlocksReset.get() + " blocks reset in " + (timeTaken / 1000.0) + "s)");
+                //logger.info(ChatColor.GREEN + " Regeneration of '" + arenaName + "' complete! " +
+                        //ChatColor.GRAY + " (" + totalBlocksReset.get() + " blocks reset in " + (timeTaken / 1000.0) + "s)");
                 synchronized (regeneratingArenas) {
                     regeneratingArenas.remove(arenaName);
                 }
@@ -1104,6 +1130,10 @@ public class ArenaRegen extends JavaPlugin {
             logger.info(ARChatColor.YELLOW + "Invalid particle type '" + previewParticleString + "' in config. Falling back to FLAME.");
             previewParticle = Particle.FLAME;
         }
+    }
+
+    public boolean isArenaRegenerating(String arenaName) {
+        return regeneratingArenas.contains(arenaName);
     }
 
 }

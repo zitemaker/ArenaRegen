@@ -5,7 +5,7 @@ plugins {
 }
 
 group = 'com.zitemaker'
-version = '1.1.5-MODERN'
+version = '1.2-MODERN'
 description = 'ArenaRegen'
 
 java {
@@ -20,6 +20,8 @@ repositories {
     maven { url = 'https://hub.spigotmc.org/nexus/content/repositories/snapshots/' }
     maven { url = 'https://oss.sonatype.org/content/groups/public/' }
     maven { url = 'https://repo.maven.apache.org/maven2/' }
+    maven { url = 'https://repo.extendedclip.com/releases/'
+    }
 }
 
 dependencies {
@@ -27,6 +29,7 @@ dependencies {
 
     compileOnly 'org.spigotmc:spigot-api:1.21.4-R0.1-SNAPSHOT'
     compileOnly 'io.papermc.paper:paper-api:1.21.4-R0.1-SNAPSHOT'
+    compileOnly 'me.clip:placeholderapi:2.11.6'
 
 
     implementation 'org.jetbrains:annotations:26.0.1'
