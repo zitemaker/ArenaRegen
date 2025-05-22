@@ -28,7 +28,7 @@ Fight. Destroy. Regenerate. Repeat!
 ## :link: Links
 
 - [BuiltByBit](https://builtbybit.com/resources/arenaregen.63058/)
-- [ArenaRegen+](https://zitemaker.tebex.io/package/6766971)
+- [ArenaRegen+](https://www.spigotmc.org/resources/arenaregen-instantly-reset-pvp-arenas-with-1-command.124624/)
 - [SpigotMC](https://www.spigotmc.org/resources/123731)
 - [Discord](https://discord.gg/HkTQz3xWJc)
 - [Website](https://zitemaker.tebex.io)
