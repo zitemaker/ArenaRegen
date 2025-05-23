@@ -429,7 +429,7 @@ public class ArenaRegen extends JavaPlugin {
     }
 
     public String getPurchaseLink() {
-        return "https://zitemaker.tebex.io";
+        return "https://www.spigotmc.org/resources/124624/";
     }
 
     public void loadMessagesFile() {

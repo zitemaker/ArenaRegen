@@ -3,18 +3,26 @@ package com.zitemaker.placeholders;
 import com.zitemaker.ArenaRegen;
 import com.zitemaker.helpers.RegionData;
 import me.clip.placeholderapi.expansion.PlaceholderExpansion;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class ArenaRegenExpansion extends PlaceholderExpansion {
 
     private final ArenaRegen plugin;
+    private final Map<String, Integer> playerCounts = new ConcurrentHashMap<>();
+    private final Map<String, World> worldCache = new ConcurrentHashMap<>();
+    private volatile boolean forceRefresh = false;
 
     public ArenaRegenExpansion(ArenaRegen plugin) {
         this.plugin = plugin;
+        startPlayerCountUpdateTask();
     }
 
     @Override
@@ -34,6 +42,55 @@ public class ArenaRegenExpansion extends PlaceholderExpansion {
 
     public void onScheduleUpdate() {
         //plugin.getLogger().info("Placeholder expansion received schedule update");
+    }
+
+    private void startPlayerCountUpdateTask() {
+        Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, () -> {
+            if (forceRefresh) {
+                playerCounts.clear();
+                worldCache.clear();
+                forceRefresh = false;
+            }
+
+            Map<String, RegionData> regions = plugin.getRegisteredRegions();
+            for (Map.Entry<String, RegionData> entry : regions.entrySet()) {
+                String arenaName = entry.getKey();
+                RegionData region = entry.getValue();
+                World world = Bukkit.getWorld(region.getWorldName());
+                if (world != null) {
+                    worldCache.put(arenaName, world);
+                }
+            }
+
+            for (Map.Entry<String, RegionData> entry : regions.entrySet()) {
+                String arenaName = entry.getKey();
+                RegionData region = entry.getValue();
+                World world = worldCache.get(arenaName);
+                if (world == null) {
+                    playerCounts.put(arenaName, 0);
+                    continue;
+                }
+
+                int minX = region.getMinX(), minY = region.getMinY(), minZ = region.getMinZ();
+                int maxX = region.getMaxX(), maxY = region.getMaxY(), maxZ = region.getMaxZ();
+
+                long count = world.getPlayers().parallelStream()
+                        .filter(p -> {
+                            Location loc = p.getLocation();
+                            double x = loc.getX(), y = loc.getY(), z = loc.getZ();
+                            return x >= minX && x <= maxX &&
+                                    y >= minY && y <= maxY &&
+                                    z >= minZ && z <= maxZ;
+                        })
+                        .count();
+
+                playerCounts.put(arenaName, (int) count);
+            }
+        }, 0L, 30L);
+    }
+
+    public void refreshPlayerCounts() {
+        forceRefresh = true;
     }
 
     @Override
@@ -68,6 +125,13 @@ public class ArenaRegenExpansion extends PlaceholderExpansion {
                 }
             }
         } else if (arenaName != null) {
+            if (arenaName.startsWith("refresh")) {
+                String[] refreshParts = arenaName.split("refresh", 2);
+                if (refreshParts.length > 1 && !refreshParts[1].isEmpty()) {
+                    arenaName = refreshParts[1];
+                    refreshPlayerCounts();
+                }
+            }
             currentRegionName = arenaName;
             currentRegion = plugin.getRegisteredRegions().get(arenaName);
             //plugin.getLogger().info("Using specified arena: " + arenaName + " (exists: " + (currentRegion != null) + ")");
@@ -83,6 +147,7 @@ public class ArenaRegenExpansion extends PlaceholderExpansion {
                 case "size":
                 case "creator":
                 case "world":
+                case "players":
                     return "Arena or Player Required";
                 default:
                     return null;
@@ -127,6 +192,10 @@ public class ArenaRegenExpansion extends PlaceholderExpansion {
 
             case "world":
                 return currentRegion != null ? currentRegion.getWorldName() : (arenaName != null ? "Invalid Arena" : "None");
+
+            case "players":
+                if (currentRegion == null) return arenaName != null ? "Invalid Arena" : "0";
+                return String.valueOf(playerCounts.getOrDefault(currentRegionName, 0));
 
             default:
                 return null;
