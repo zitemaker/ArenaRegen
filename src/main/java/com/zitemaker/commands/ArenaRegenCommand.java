@@ -157,7 +157,11 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                         if (loc.getX() >= minX && loc.getX() <= maxX &&
                                 loc.getY() >= minY && loc.getY() <= maxY &&
                                 loc.getZ() >= minZ && loc.getZ() <= maxZ) {
-                            regionData.addEntity(loc, EntitySerializer.serializeEntity(entity));
+
+                            Map<String, Object> serialized = EntitySerializer.serializeEntity(entity);
+                            if (serialized != null) {
+                                regionData.addEntity(loc, serialized);
+                            }
                         }
                     }
                 }
