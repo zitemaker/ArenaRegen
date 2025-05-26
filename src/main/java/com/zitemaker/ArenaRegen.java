@@ -511,7 +511,7 @@ public class ArenaRegen extends JavaPlugin {
         schedulesConfig = YamlConfiguration.loadConfiguration(schedulesFile);
 
         if (schedulesConfig.contains("schedules")) {
-            for (String arenaName : schedulesConfig.getConfigurationSection("schedules").getKeys(false)) {
+            for (String arenaName : Objects.requireNonNull(schedulesConfig.getConfigurationSection("schedules")).getKeys(false)) {
                 long intervalTicks = schedulesConfig.getLong("schedules." + arenaName + ".interval");
                 if (intervalTicks >= 200) {
                     scheduledIntervals.put(arenaName, intervalTicks);
