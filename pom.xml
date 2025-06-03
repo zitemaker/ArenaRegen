@@ -5,7 +5,7 @@
 
     <groupId>com.zitemaker</groupId>
     <artifactId>ArenaRegen</artifactId>
-    <version>1.2.1-LEGACY</version>
+    <version>1.2.2-LEGACY</version>
     <packaging>jar</packaging>
 
     <name>ArenaRegen</name>

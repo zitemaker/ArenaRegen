@@ -149,6 +149,8 @@ public class ArenaRegenExpansion extends PlaceholderExpansion {
                 case "world":
                 case "players":
                     return "Arena or Player Required";
+                case "totalarenas":
+                    return String.valueOf(plugin.getRegisteredRegions().size());
                 default:
                     return null;
             }
@@ -196,6 +198,9 @@ public class ArenaRegenExpansion extends PlaceholderExpansion {
             case "players":
                 if (currentRegion == null) return arenaName != null ? "Invalid Arena" : "0";
                 return String.valueOf(playerCounts.getOrDefault(currentRegionName, 0));
+
+            case "totalarenas":
+                return String.valueOf(plugin.getRegisteredRegions().size());
 
             default:
                 return null;
