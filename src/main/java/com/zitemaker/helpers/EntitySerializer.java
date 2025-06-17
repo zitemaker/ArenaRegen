@@ -2,6 +2,9 @@ package com.zitemaker.helpers;
 
 import org.bukkit.*;
 import org.bukkit.attribute.Attribute;
+import org.bukkit.block.data.BlockData;
+import org.bukkit.boss.BossBar;
+import org.bukkit.boss.DragonBattle;
 import org.bukkit.entity.*;
 import org.bukkit.inventory.EntityEquipment;
 import org.bukkit.inventory.ItemStack;
@@ -13,17 +16,25 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 import java.util.logging.Logger;
+import java.util.stream.Stream;
 
 public final class EntitySerializer {
-
     private static final Logger LOGGER = Bukkit.getLogger();
     private static final Attribute MAX_HEALTH_ATTRIBUTE = initializeMaxHealthAttribute();
-    private static final Map<EntityType, EntitySerializerHandler> SERIALIZER_REGISTRY =
-            new ConcurrentHashMap<>();
+    private static final Map<EntityType, EntitySerializerHandler> SERIALIZER_REGISTRY = new ConcurrentHashMap<>();
 
     static {
+        for (EntityType type : EntityType.values()) {
+            registerDefaultSerializer(type);
+        }
         registerSerializer(EntityType.VILLAGER, EntitySerializer::serializeVillager, EntitySerializer::deserializeVillager);
         registerSerializer(EntityType.ZOMBIE, EntitySerializer::serializeZombie, EntitySerializer::deserializeZombie);
+        registerSerializer(EntityType.ENDERMAN, EntitySerializer::serializeEnderman, EntitySerializer::deserializeEnderman);
+        registerSerializer(EntityType.ENDER_DRAGON, EntitySerializer::serializeEnderDragon, EntitySerializer::deserializeEnderDragon);
+        registerSerializer(EntityType.MINECART, EntitySerializer::serializeMinecart, EntitySerializer::deserializeMinecart);
+        registerSerializer(EntityType.ARROW, EntitySerializer::serializeArrow, EntitySerializer::deserializeArrow);
+        registerSerializer(EntityType.ITEM, EntitySerializer::serializeItem, EntitySerializer::deserializeItem);
+        registerSerializer(EntityType.FIREBALL, EntitySerializer::serializeFireball, EntitySerializer::deserializeFireball);
     }
 
     @FunctionalInterface
@@ -37,9 +48,15 @@ public final class EntitySerializer {
                 (isSerialize ? serializer : deserializer).accept(entity, data));
     }
 
+    private static void registerDefaultSerializer(EntityType type) {
+        registerSerializer(type,
+                (entity, data) -> LOGGER.fine("Using default serialization for " + type.name()),
+                (entity, data) -> LOGGER.fine("Using default deserialization for " + type.name()));
+    }
+
     private static Attribute initializeMaxHealthAttribute() {
-        return Arrays.stream(Attribute.values())
-                .filter(attr -> attr.name().contains("MAX_HEALTH"))
+        return Stream.of(Attribute.values())
+                .filter(attr -> "generic.max_health".equals(attr.getKey().getKey()))
                 .findFirst()
                 .orElseGet(() -> {
                     LOGGER.severe("Could not determine max health attribute. Entity health may not be preserved.");
@@ -52,11 +69,12 @@ public final class EntitySerializer {
             return null;
         }
 
-        Map<String, Object> data = new HashMap<>(16);
+        Map<String, Object> data = new HashMap<>(32);
         Location loc = entity.getLocation();
         data.put("type", entity.getType().name());
         data.putAll(serializeLocation(loc));
         data.put("velocity", serializeVector(entity.getVelocity()));
+        data.put("isDead", entity.isDead());
 
         if (entity.getCustomName() != null) {
             data.put("customName", entity.getCustomName());
@@ -70,7 +88,7 @@ public final class EntitySerializer {
         SERIALIZER_REGISTRY.getOrDefault(entity.getType(), (e, d, s) -> {})
                 .process(entity, data, true);
 
-        return data.isEmpty() ? null : Collections.unmodifiableMap(data);
+        return data.isEmpty() ? null : Collections.unmodifiableMap(new HashMap<>(data));
     }
 
     public static Entity deserializeEntity(Map<String, Object> data, Location location) {
@@ -83,7 +101,10 @@ public final class EntitySerializer {
         try {
             EntityType type = EntityType.valueOf(typeStr);
             World world = location.getWorld();
-            if (world == null) return null;
+            if (world == null) {
+                LOGGER.warning("World null for entity spawn at " + location);
+                return null;
+            }
 
             Entity entity = world.spawnEntity(location, type);
             location.setYaw(getFloat(data, "yaw", 0.0f));
@@ -92,6 +113,10 @@ public final class EntitySerializer {
 
             if (data.containsKey("velocity")) {
                 entity.setVelocity(deserializeVector(data.get("velocity")));
+            }
+            if (data.containsKey("isDead") && getBoolean(data, "isDead", false)) {
+                entity.remove();
+                return null;
             }
 
             if (data.containsKey("customName") && data.get("customName") instanceof String customName) {
@@ -114,13 +139,14 @@ public final class EntitySerializer {
     }
 
     private static Map<String, Object> serializeLocation(Location loc) {
-        return Map.of(
-                "x", loc.getX(),
-                "y", loc.getY(),
-                "z", loc.getZ(),
-                "yaw", loc.getYaw(),
-                "pitch", loc.getPitch()
-        );
+        return new HashMap<>() {{
+            put("x", loc.getX());
+            put("y", loc.getY());
+            put("z", loc.getZ());
+            put("yaw", loc.getYaw());
+            put("pitch", loc.getPitch());
+            put("world", loc.getWorld().getName());
+        }};
     }
 
     private static double getDouble(Map<String, Object> data, String key, double defaultValue) {
@@ -140,11 +166,11 @@ public final class EntitySerializer {
     }
 
     private static Map<String, Object> serializeVector(Vector vector) {
-        return vector == null ? Map.of() : Map.of(
-                "x", vector.getX(),
-                "y", vector.getY(),
-                "z", vector.getZ()
-        );
+        return vector == null ? new HashMap<>() : new HashMap<>() {{
+            put("x", vector.getX());
+            put("y", vector.getY());
+            put("z", vector.getZ());
+        }};
     }
 
     @SuppressWarnings("unchecked")
@@ -165,10 +191,11 @@ public final class EntitySerializer {
 
     @SuppressWarnings("unchecked")
     private static Map<String, Object> serializeItemStack(ItemStack item) {
-        return item != null && item.getType() != Material.AIR ? Map.of(
-                "type", item.getType().name(),
-                "amount", item.getAmount()
-        ) : null;
+        return item != null && item.getType() != Material.AIR ? new HashMap<>() {{
+            put("type", item.getType().name());
+            put("amount", item.getAmount());
+            put("meta", item.hasItemMeta() ? item.getItemMeta().toString() : null);
+        }} : null;
     }
 
     @SuppressWarnings("unchecked")
@@ -181,8 +208,13 @@ public final class EntitySerializer {
             }
         }
         String typeStr = (String) map.get("type");
-        Material material = Material.getMaterial(typeStr);
-        return material != null ? new ItemStack(material, getInt(map, "amount", 1)) : null;
+        Material material = Material.matchMaterial(typeStr);
+        if (material == null) return null;
+        ItemStack item = new ItemStack(material, getInt(map, "amount", 1));
+        if (map.containsKey("meta") && map.get("meta") instanceof String metaStr) {
+            LOGGER.warning("Complex item meta not fully supported: " + metaStr);
+        }
+        return item;
     }
 
     private static List<Map<String, Object>> serializePotionEffects(Collection<PotionEffect> effects) {
@@ -190,7 +222,7 @@ public final class EntitySerializer {
                 .filter(Objects::nonNull)
                 .map(effect -> {
                     Map<String, Object> effectData = new HashMap<>();
-                    effectData.put("type", effect.getType().getName());
+                    effectData.put("type", effect.getType().getKey().getKey());
                     effectData.put("duration", effect.getDuration());
                     effectData.put("amplifier", effect.getAmplifier());
                     effectData.put("ambient", effect.isAmbient());
@@ -215,8 +247,8 @@ public final class EntitySerializer {
                 })
                 .forEach(map -> {
                     try {
-                        String typeStr = (String) map.get("type");
-                        PotionEffectType type = PotionEffectType.getByName(typeStr);
+                        String typeKey = (String) map.get("type");
+                        PotionEffectType type = PotionEffectType.getByKey(NamespacedKey.fromString("minecraft:" + typeKey));
                         if (type == null) return;
                         entity.addPotionEffect(new PotionEffect(
                                 type,
@@ -242,14 +274,14 @@ public final class EntitySerializer {
 
         EntityEquipment equipment = livingEntity.getEquipment();
         if (equipment != null) {
-            data.put("equipment", Map.of(
-                    "helmet", serializeItemStack(equipment.getHelmet()),
-                    "chestplate", serializeItemStack(equipment.getChestplate()),
-                    "leggings", serializeItemStack(equipment.getLeggings()),
-                    "boots", serializeItemStack(equipment.getBoots()),
-                    "mainHand", serializeItemStack(equipment.getItemInMainHand()),
-                    "offHand", serializeItemStack(equipment.getItemInOffHand())
-            ));
+            Map<String, Object> equipData = new HashMap<>();
+            equipData.put("helmet", serializeItemStack(equipment.getHelmet()));
+            equipData.put("chestplate", serializeItemStack(equipment.getChestplate()));
+            equipData.put("leggings", serializeItemStack(equipment.getLeggings()));
+            equipData.put("boots", serializeItemStack(equipment.getBoots()));
+            equipData.put("mainHand", serializeItemStack(equipment.getItemInMainHand()));
+            equipData.put("offHand", serializeItemStack(equipment.getItemInOffHand()));
+            data.put("equipment", equipData);
         }
     }
 
@@ -283,10 +315,140 @@ public final class EntitySerializer {
         }
     }
 
+    private static void serializeEnderman(Entity entity, Map<String, Object> data) {
+        Enderman enderman = (Enderman) entity;
+        BlockData carriedBlock = enderman.getCarriedBlock();
+        if (carriedBlock != null) {
+            data.put("carriedBlock", carriedBlock.getAsString());
+        }
+    }
+
+    private static void deserializeEnderman(Entity entity, Map<String, Object> data) {
+        Enderman enderman = (Enderman) entity;
+        if (data.containsKey("carriedBlock") && data.get("carriedBlock") instanceof String blockStr) {
+            BlockData blockData = Bukkit.createBlockData(blockStr);
+            enderman.setCarriedBlock(blockData);
+        }
+    }
+
+    private static void serializeEnderDragon(Entity entity, Map<String, Object> data) {
+        EnderDragon dragon = (EnderDragon) entity;
+        data.put("phase", dragon.getPhase().name());
+        DragonBattle battle = dragon.getDragonBattle();
+        if (battle != null) {
+            BossBar bossBar = battle.getBossBar();
+            data.put("healthProgress", bossBar.getProgress());
+            data.put("previouslyKilled", battle.hasBeenPreviouslyKilled());
+        }
+        data.put("deathAnimationTicks", dragon.getDeathAnimationTicks());
+    }
+
+    private static void deserializeEnderDragon(Entity entity, Map<String, Object> data) {
+        EnderDragon dragon = (EnderDragon) entity;
+        DragonBattle battle = dragon.getDragonBattle();
+        if (battle != null) {
+            if (data.containsKey("phase") && data.get("phase") instanceof String phaseStr) {
+                try {
+                    dragon.setPhase(EnderDragon.Phase.valueOf(phaseStr));
+                } catch (IllegalArgumentException e) {
+                    LOGGER.warning("Invalid dragon phase: " + phaseStr);
+                }
+            }
+            if (data.containsKey("previouslyKilled")) {
+                battle.setPreviouslyKilled(getBoolean(data, "previouslyKilled", false));
+            }
+            if (data.containsKey("healthProgress") && battle.getBossBar() != null) {
+
+                LOGGER.warning("Health progress deserialization not fully supported; consider NMS for precision.");
+            }
+            if (data.containsKey("deathAnimationTicks") && getInt(data, "deathAnimationTicks", 0) > 0) {
+                if (getInt(data, "deathAnimationTicks", 0) >= 200) {
+                    dragon.remove();
+                }
+            }
+        }
+    }
+
+    private static void serializeMinecart(Entity entity, Map<String, Object> data) {
+        Minecart minecart = (Minecart) entity;
+        data.put("customName", minecart.getCustomName());
+        data.put("customNameVisible", minecart.isCustomNameVisible());
+        data.put("maxSpeed", minecart.getMaxSpeed());
+        data.put("slowWhenEmpty", minecart.isSlowWhenEmpty());
+    }
+
+    private static void deserializeMinecart(Entity entity, Map<String, Object> data) {
+        Minecart minecart = (Minecart) entity;
+        if (data.containsKey("customName") && data.get("customName") instanceof String name) {
+            minecart.setCustomName(name);
+        }
+        if (data.containsKey("customNameVisible")) {
+            minecart.setCustomNameVisible(getBoolean(data, "customNameVisible", false));
+        }
+        if (data.containsKey("maxSpeed")) {
+            minecart.setMaxSpeed(getDouble(data, "maxSpeed", 0.4));
+        }
+        if (data.containsKey("slowWhenEmpty")) {
+            minecart.setSlowWhenEmpty(getBoolean(data, "slowWhenEmpty", true));
+        }
+    }
+
+    private static void serializeArrow(Entity entity, Map<String, Object> data) {
+        AbstractArrow arrow = (AbstractArrow) entity;
+        data.put("damage", arrow.getDamage());
+        data.put("isCritical", arrow.isCritical());
+        data.put("knockbackStrength", arrow.getKnockbackStrength());
+    }
+
+    private static void deserializeArrow(Entity entity, Map<String, Object> data) {
+        AbstractArrow arrow = (AbstractArrow) entity;
+        if (data.containsKey("damage")) {
+            arrow.setDamage(getDouble(data, "damage", 2.0));
+        }
+        if (data.containsKey("isCritical")) {
+            arrow.setCritical(getBoolean(data, "isCritical", false));
+        }
+        if (data.containsKey("knockbackStrength")) {
+            arrow.setKnockbackStrength(getInt(data, "knockbackStrength", 0));
+        }
+    }
+
+    private static void serializeItem(Entity entity, Map<String, Object> data) {
+        Item item = (Item) entity;
+        data.put("itemStack", serializeItemStack(item.getItemStack()));
+        data.put("pickupDelay", item.getPickupDelay());
+    }
+
+    private static void deserializeItem(Entity entity, Map<String, Object> data) {
+        Item item = (Item) entity;
+        if (data.containsKey("itemStack")) {
+            item.setItemStack(deserializeItemStack(data.get("itemStack")));
+        }
+        if (data.containsKey("pickupDelay")) {
+            item.setPickupDelay(getInt(data, "pickupDelay", 10));
+        }
+    }
+
+    private static void serializeFireball(Entity entity, Map<String, Object> data) {
+        Fireball fireball = (Fireball) entity;
+        data.put("direction", serializeVector(fireball.getDirection()));
+        data.put("yield", fireball.getYield());
+    }
+
+    private static void deserializeFireball(Entity entity, Map<String, Object> data) {
+        Fireball fireball = (Fireball) entity;
+        if (data.containsKey("direction")) {
+            fireball.setDirection(deserializeVector(data.get("direction")));
+        }
+        if (data.containsKey("yield")) {
+            fireball.setYield((float) getDouble(data, "yield", 1.0));
+        }
+    }
+
     private static void serializeVillager(Entity entity, Map<String, Object> data) {
         Villager villager = (Villager) entity;
-        data.put("profession", villager.getProfession().name());
-        data.put("villagerType", villager.getVillagerType().name());
+        data.put("profession", villager.getProfession().getKey().getKey());
+        data.put("villagerType", villager.getVillagerType().getKey().getKey());
         data.put("level", villager.getVillagerLevel());
     }
 
