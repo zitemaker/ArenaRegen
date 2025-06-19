@@ -3,6 +3,8 @@ package com.zitemaker.commands;
 import com.zitemaker.ArenaRegen;
 import com.zitemaker.helpers.EntitySerializer;
 import com.zitemaker.helpers.RegionData;
+import net.md_5.bungee.api.chat.ClickEvent;
+import net.md_5.bungee.api.chat.TextComponent;
 import org.bukkit.*;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.command.Command;
@@ -23,8 +25,10 @@ import org.bukkit.util.Vector;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.awt.*;
 import java.io.File;
 import java.util.*;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class ArenaRegenCommand implements TabExecutor, Listener {
@@ -69,7 +73,8 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
         String spawnDeleted = ChatColor.translateAlternateColorCodes('&', msg.getString("messages.spawn-deleted", "&aSpawn point for arena '{arena_name}' has been removed!"));
         String teleportSuccess = ChatColor.translateAlternateColorCodes('&', msg.getString("messages.teleport-success", "&aTeleported to arena '{arena_name}'."));
         String reloadSuccess = ChatColor.translateAlternateColorCodes('&', msg.getString("messages.reload-success", "&aConfiguration reloaded successfully!"));
-        String maxArenasReached = ChatColor.translateAlternateColorCodes('&', msg.getString("messages.max-arenas-reached", "&cMaximum number of arenas ({max_arenas}) reached!"));
+        String maxArenasReached = ChatColor.GOLD + "You have reached the maximum number of arenas that can be created in " + ChatColor.YELLOW + "ArenaRegen.";
+        String purchaseMessage = "Click here to purchase ArenaRegen+!";
 
         if (commandSender instanceof Player && !ArenaRegen.hasAnyPermissions((Player) commandSender)) {
             commandSender.sendMessage(noPermission);
@@ -103,7 +108,12 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                     return true;
                 }
                 if (plugin.getRegisteredRegions().size() >= plugin.maxArenas) {
-                    commandSender.sendMessage(pluginPrefix + " " + maxArenasReached.replace("{max_arenas}", String.valueOf(plugin.maxArenas)));
+                    commandSender.sendMessage(ChatColor.BOLD + maxArenasReached);
+                    TextComponent message = new TextComponent(purchaseMessage);
+                    message.setColor(net.md_5.bungee.api.ChatColor.GREEN);
+                    message.setBold(true);
+                    message.setClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, "https://www.spigotmc.org/resources/arenaregen-automatically-regenerate-your-pvp-arenas.124624/"));
+                    commandSender.spigot().sendMessage(message);
                     return true;
                 }
 
