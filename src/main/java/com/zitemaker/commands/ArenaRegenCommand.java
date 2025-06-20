@@ -430,6 +430,7 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                         if (plugin.getConfig().getBoolean("confirm-after-regen")) {
                             commandSender.sendMessage(regenComplete);
                         }
+
                         return true;
                     } else {
                         if (!plugin.getRegisteredRegions().containsKey(input)) {
