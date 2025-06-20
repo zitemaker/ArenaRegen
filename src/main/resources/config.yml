@@ -23,6 +23,7 @@ general:
   preview-particle: FLAME # The particles to be used for arena previews (Valid options: https://hub.spigotmc.org/javadocs/spigot/org/bukkit/Particle.html)
 
 regen:
+  confirm-after-regen: false # When set to true, after every successful regeneration, a confirmation message will be sent to the command sender.
   lock-arenas: true # When set to true, players cannot enter arenas while they are being regenerated.
   regen-speed-type: PRESET # PRESET or CUSTOM
   regen-speed: FAST # SLOW, NORMAL, FAST, VERYFAST, EXTREME (used if regen-speed-type is PRESET)
