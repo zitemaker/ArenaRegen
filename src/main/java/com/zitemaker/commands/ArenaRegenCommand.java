@@ -426,6 +426,7 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                             commandSender.sendMessage(noPending);
                             return true;
                         }
+
                         plugin.regenerateArena(targetArenaName, commandSender);
 
                         return true;
