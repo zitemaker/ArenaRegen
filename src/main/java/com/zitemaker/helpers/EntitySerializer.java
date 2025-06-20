@@ -112,7 +112,9 @@ public final class EntitySerializer {
             entity.teleport(location);
 
             if (data.containsKey("velocity")) {
-                entity.setVelocity(deserializeVector(data.get("velocity")));
+                @SuppressWarnings("unchecked")
+                Map<String, Object> velocityData = (Map<String, Object>) data.get("velocity");
+                entity.setVelocity(deserializeVector(velocityData));
             }
             if (data.containsKey("isDead") && getBoolean(data, "isDead", false)) {
                 entity.remove();
@@ -166,7 +168,8 @@ public final class EntitySerializer {
     }
 
     private static Map<String, Object> serializeVector(Vector vector) {
-        return vector == null ? new HashMap<>() : new HashMap<>() {{
+        if (vector == null) return new HashMap<>();
+        return new HashMap<>() {{
             put("x", vector.getX());
             put("y", vector.getY());
             put("z", vector.getZ());
@@ -174,18 +177,12 @@ public final class EntitySerializer {
     }
 
     @SuppressWarnings("unchecked")
-    private static Vector deserializeVector(Object data) {
-        if (!(data instanceof Map<?, ?> rawMap)) return new Vector();
-        Map<String, Object> map = new HashMap<>();
-        for (Map.Entry<?, ?> entry : rawMap.entrySet()) {
-            if (entry.getKey() instanceof String key) {
-                map.put(key, entry.getValue());
-            }
-        }
+    private static Vector deserializeVector(Map<String, Object> data) {
+        if (data == null) return new Vector();
         return new Vector(
-                getDouble(map, "x", 0.0),
-                getDouble(map, "y", 0.0),
-                getDouble(map, "z", 0.0)
+                getDouble(data, "x", 0.0),
+                getDouble(data, "y", 0.0),
+                getDouble(data, "z", 0.0)
         );
     }
 
@@ -358,7 +355,6 @@ public final class EntitySerializer {
                 battle.setPreviouslyKilled(getBoolean(data, "previouslyKilled", false));
             }
             if (data.containsKey("healthProgress") && battle.getBossBar() != null) {
-
                 LOGGER.warning("Health progress deserialization not fully supported; consider NMS for precision.");
             }
             if (data.containsKey("deathAnimationTicks") && getInt(data, "deathAnimationTicks", 0) > 0) {
@@ -438,7 +434,7 @@ public final class EntitySerializer {
     private static void deserializeFireball(Entity entity, Map<String, Object> data) {
         Fireball fireball = (Fireball) entity;
         if (data.containsKey("direction")) {
-            fireball.setDirection(deserializeVector(data.get("direction")));
+            fireball.setDirection(deserializeVector((Map<String, Object>) data.get("direction")));
         }
         if (data.containsKey("yield")) {
             fireball.setYield((float) getDouble(data, "yield", 1.0));

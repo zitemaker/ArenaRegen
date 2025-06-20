@@ -53,7 +53,7 @@ public class ArenaRegen extends JavaPlugin {
     public int customRegenSpeed;
     public int analyzeSpeed;
     public int arenaSize;
-    public int maxArenas;
+    public int maxArenas = 8;
     public boolean confirmationPrompt;
     public boolean trackEntities;
     public boolean regenOnlyModified;
@@ -377,7 +377,6 @@ public class ArenaRegen extends JavaPlugin {
         this.customRegenSpeed = getConfig().getInt("regen.custom-regen-speed", 10000);
         this.analyzeSpeed = getConfig().getInt("general.analyze-speed", 40000);
         this.arenaSize = getConfig().getInt("general.arena-size-limit", 40000);
-        this.maxArenas = getConfig().getInt("general.max-arenas", 100);
         this.confirmationPrompt = getConfig().getBoolean("regen.confirmation-prompt", false);
         this.trackEntities = getConfig().getBoolean("regen.track-entities", true);
         this.regenOnlyModified = getConfig().getBoolean("regen.regen-only-modified", false);
