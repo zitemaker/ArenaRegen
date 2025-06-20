@@ -108,8 +108,7 @@ public class ArenaRegen extends JavaPlugin {
         try {
             Class.forName("com.zitemaker.nms.NMSHandler_1_21");
             hasNMSHandler = true;
-        } catch (ClassNotFoundException e) {
-            hasNMSHandler = false;
+        } catch (ClassNotFoundException ignored) {
         }
 
         if (isModernServer && !hasNMSHandler) {
@@ -135,7 +134,7 @@ public class ArenaRegen extends JavaPlugin {
 
             File arenasDir = new File(getDataFolder(), "arenas");
             if (!arenasDir.exists()) {
-                arenasDir.mkdirs();
+                boolean mkdirs = arenasDir.mkdirs();
             }
             if (!arenasDir.canRead() || !arenasDir.canWrite()) {
                 logger.info(ARChatColor.RED + "ERROR: The arenas directory (" + arenasDir.getPath() + ") is not readable or writable!");
@@ -179,7 +178,7 @@ public class ArenaRegen extends JavaPlugin {
     private CompletableFuture<Void> loadRegionsAsync() {
         File arenasDir = new File(getDataFolder(), "arenas");
         if (!arenasDir.exists()) {
-            arenasDir.mkdirs();
+            boolean mkdirs = arenasDir.mkdirs();
             return CompletableFuture.completedFuture(null);
         }
 
@@ -240,7 +239,7 @@ public class ArenaRegen extends JavaPlugin {
 
     public void saveRegionsAsync() {
         File arenasDir = new File(getDataFolder(), "arenas");
-        arenasDir.mkdirs();
+        boolean mkdirs = arenasDir.mkdirs();
 
         if (!arenasDir.canWrite()) {
             logger.info(ARChatColor.RED + "ERROR: Cannot write to arenas directory (" + arenasDir.getPath() + ")!");
@@ -310,7 +309,7 @@ public class ArenaRegen extends JavaPlugin {
     private void saveRegionsSynchronously() {
         File arenasDir = new File(getDataFolder(), "arenas");
         if (!arenasDir.exists()) {
-            arenasDir.mkdirs();
+            boolean mkdirs = arenasDir.mkdirs();
             console.sendMessage(" Created arenas directory: " + arenasDir.getPath());
         }
 
@@ -764,7 +763,6 @@ public class ArenaRegen extends JavaPlugin {
                         totalBlocksReset.incrementAndGet();
                     }
                 } else {
-                    shouldUpdate = true;
                     updates.add(new BlockUpdate((int) loc.getX(), (int) loc.getY(), (int) loc.getZ(), originalData));
                     int chunkX = ((int) loc.getX()) >> 4;
                     int chunkZ = ((int) loc.getZ()) >> 4;
@@ -956,7 +954,7 @@ public class ArenaRegen extends JavaPlugin {
                         if (state instanceof Banner banner) {
                             String baseColorStr = (String) bannerData.get("baseColor");
                             DyeColor baseColor = baseColorStr.equals("NONE") ? null : DyeColor.valueOf(baseColorStr);
-                            banner.setBaseColor(baseColor);
+                            banner.setBaseColor(Objects.requireNonNull(baseColor));
 
                             List<Map<String, String>> patternDataList = (List<Map<String, String>>) bannerData.get("patterns");
                             if (patternDataList != null && !patternDataList.isEmpty()) {
@@ -985,18 +983,14 @@ public class ArenaRegen extends JavaPlugin {
                                         continue;
                                     }
                                     Object value = pdcEntry.getValue();
-                                    if (value instanceof String) {
-                                        pdc.set(key, PersistentDataType.STRING, (String) value);
-                                    } else if (value instanceof Integer) {
-                                        pdc.set(key, PersistentDataType.INTEGER, (Integer) value);
-                                    } else if (value instanceof Double) {
-                                        pdc.set(key, PersistentDataType.DOUBLE, (Double) value);
-                                    } else if (value instanceof Byte) {
-                                        pdc.set(key, PersistentDataType.BYTE, (Byte) value);
-                                    } else if (value instanceof Long) {
-                                        pdc.set(key, PersistentDataType.LONG, (Long) value);
-                                    } else {
-                                        getLogger().warning("Unsupported PDC value type for key " + key + " at " + loc + ", skipping.");
+                                    switch (value) {
+                                        case String s -> pdc.set(key, PersistentDataType.STRING, s);
+                                        case Integer i -> pdc.set(key, PersistentDataType.INTEGER, i);
+                                        case Double v -> pdc.set(key, PersistentDataType.DOUBLE, v);
+                                        case Byte b -> pdc.set(key, PersistentDataType.BYTE, b);
+                                        case Long l -> pdc.set(key, PersistentDataType.LONG, l);
+                                        case null, default ->
+                                                getLogger().warning("Unsupported PDC value type for key " + key + " at " + loc + ", skipping.");
                                     }
                                 }
                             }
@@ -1047,18 +1041,14 @@ public class ArenaRegen extends JavaPlugin {
                                         continue;
                                     }
                                     Object value = pdcEntry.getValue();
-                                    if (value instanceof String) {
-                                        pdc.set(key, PersistentDataType.STRING, (String) value);
-                                    } else if (value instanceof Integer) {
-                                        pdc.set(key, PersistentDataType.INTEGER, (Integer) value);
-                                    } else if (value instanceof Double) {
-                                        pdc.set(key, PersistentDataType.DOUBLE, (Double) value);
-                                    } else if (value instanceof Byte) {
-                                        pdc.set(key, PersistentDataType.BYTE, (Byte) value);
-                                    } else if (value instanceof Long) {
-                                        pdc.set(key, PersistentDataType.LONG, (Long) value);
-                                    } else {
-                                        getLogger().warning("Unsupported PDC value type for key " + key + " at " + loc + ", skipping.");
+                                    switch (value) {
+                                        case String s -> pdc.set(key, PersistentDataType.STRING, s);
+                                        case Integer i -> pdc.set(key, PersistentDataType.INTEGER, i);
+                                        case Double v -> pdc.set(key, PersistentDataType.DOUBLE, v);
+                                        case Byte b -> pdc.set(key, PersistentDataType.BYTE, b);
+                                        case Long l -> pdc.set(key, PersistentDataType.LONG, l);
+                                        case null, default ->
+                                                getLogger().warning("Unsupported PDC value type for key " + key + " at " + loc + ", skipping.");
                                     }
                                 }
                             }
@@ -1121,7 +1111,6 @@ public class ArenaRegen extends JavaPlugin {
                         totalBlocksReset.incrementAndGet();
                     }
                 } else {
-                    shouldUpdate = true;
                     updates.add(new BlockUpdate((int) loc.getX(), (int) loc.getY(), (int) loc.getZ(), originalData));
                     int chunkX = ((int) loc.getX()) >> 4;
                     int chunkZ = ((int) loc.getZ()) >> 4;
@@ -1150,16 +1139,13 @@ public class ArenaRegen extends JavaPlugin {
     }
 
     private Runnable createRegenerateTask(String arenaName) {
-        return new Runnable() {
-            @Override
-            public void run() {
-                if (!registeredRegions.containsKey(arenaName)) {
-                    logger.info(ChatColor.RED + "Scheduled regeneration failed: Arena '" + arenaName + "' no longer exists.");
-                    cancelScheduledRegeneration(arenaName);
-                    return;
-                }
-                regenerateArenaSchedule(arenaName);
+        return () -> {
+            if (!registeredRegions.containsKey(arenaName)) {
+                logger.info(ChatColor.RED + "Scheduled regeneration failed: Arena '" + arenaName + "' no longer exists.");
+                cancelScheduledRegeneration(arenaName);
+                return;
             }
+            regenerateArenaSchedule(arenaName);
         };
     }
 
@@ -1253,8 +1239,7 @@ public class ArenaRegen extends JavaPlugin {
     private void updateParticle() {
         try {
             if (previewParticleString != null) {
-                Particle newParticle = Particle.valueOf(previewParticleString.toUpperCase());
-                previewParticle = newParticle;
+                previewParticle = Particle.valueOf(previewParticleString.toUpperCase());
             } else {
                 previewParticle = Particle.FLAME;
             }
