@@ -1268,4 +1268,25 @@ public class ArenaRegen extends JavaPlugin {
         return regeneratingArenas.contains(arenaName);
     }
 
+    public boolean isOverlapping(String excludeRegionName, String worldName, int minX, int minY, int minZ, int maxX, int maxY, int maxZ) {
+        for (Map.Entry<String, RegionData> entry : registeredRegions.entrySet()) {
+            String regionName = entry.getKey();
+            if (regionName.equals(excludeRegionName)) {
+                continue;
+            }
+
+            RegionData region = entry.getValue();
+            if (!region.getWorldName().equals(worldName)) {
+                continue;
+            }
+
+            if (minX <= region.getMaxX() && maxX >= region.getMinX() &&
+                minY <= region.getMaxY() && maxY >= region.getMinY() &&
+                minZ <= region.getMaxZ() && maxZ >= region.getMinZ()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
 }

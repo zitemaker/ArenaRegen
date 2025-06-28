@@ -10,6 +10,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerMoveEvent;
+import org.bukkit.util.BoundingBox;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -21,7 +22,7 @@ public class PlayerMoveListener implements Listener {
     private final Map<UUID, Long> messageCooldowns = new HashMap<>();
     private static final long MESSAGE_COOLDOWN_MS = 3000;
 
-    private final Map<String, int[]> regionBounds = new HashMap<>();
+    private final Map<String, BoundingBox> regionBounds = new HashMap<>();
 
     public PlayerMoveListener(ArenaRegen plugin) {
         this.plugin = plugin;
@@ -32,14 +33,11 @@ public class PlayerMoveListener implements Listener {
         regionBounds.clear();
         for (Map.Entry<String, RegionData> entry : plugin.getRegisteredRegions().entrySet()) {
             RegionData region = entry.getValue();
-            int[] bounds = new int[6];
-            bounds[0] = region.getMinX();
-            bounds[1] = region.getMinY();
-            bounds[2] = region.getMinZ();
-            bounds[3] = region.getMaxX();
-            bounds[4] = region.getMaxY();
-            bounds[5] = region.getMaxZ();
-            regionBounds.put(entry.getKey(), bounds);
+            BoundingBox box = new BoundingBox(
+                    region.getMinX(), region.getMinY(), region.getMinZ(),
+                    region.getMaxX(), region.getMaxY(), region.getMaxZ()
+            );
+            regionBounds.put(entry.getKey(), box);
         }
     }
 
@@ -47,7 +45,7 @@ public class PlayerMoveListener implements Listener {
     public void onPlayerMove(PlayerMoveEvent event) {
         Location from = event.getFrom();
         Location to = event.getTo();
-        if (to == null || from.getBlockX() == to.getBlockX() && from.getBlockY() == to.getBlockY() && from.getBlockZ() == to.getBlockZ()) {
+        if (to == null || (from.getBlockX() == to.getBlockX() && from.getBlockY() == to.getBlockY() && from.getBlockZ() == to.getBlockZ())) {
             return;
         }
 
@@ -63,10 +61,10 @@ public class PlayerMoveListener implements Listener {
             RegionData region = entry.getValue();
             if (!region.isLocked()) continue;
 
-            int[] bounds = regionBounds.get(regionName);
-            if (bounds == null || !region.getWorldName().equals(world.getName())) continue;
+            BoundingBox box = regionBounds.get(regionName);
+            if (box == null || !region.getWorldName().equals(world.getName())) continue;
 
-            if (x >= bounds[0] && x <= bounds[3] && y >= bounds[1] && y <= bounds[4] && z >= bounds[2] && z <= bounds[5]) {
+            if (box.contains(x + 0.5, y + 0.5, z + 0.5)) {
                 long currentTime = System.currentTimeMillis();
                 UUID playerId = player.getUniqueId();
                 Long lastMessageTime = messageCooldowns.get(playerId);
@@ -88,24 +86,24 @@ public class PlayerMoveListener implements Listener {
     }
 
     private Location findSafeLocationOutsideArena(Player player, RegionData region, Location from) {
-        int[] bounds = regionBounds.get(plugin.getRegisteredRegions().entrySet().stream()
+        BoundingBox box = regionBounds.get(plugin.getRegisteredRegions().entrySet().stream()
                 .filter(e -> e.getValue() == region)
                 .findFirst().get().getKey());
         double x = from.getX(), y = from.getY(), z = from.getZ();
         float yaw = from.getYaw(), pitch = from.getPitch();
 
-        double distToMinX = Math.abs(x - bounds[0]);
-        double distToMaxX = Math.abs(x - bounds[3]);
-        double distToMinZ = Math.abs(z - bounds[2]);
-        double distToMaxZ = Math.abs(z - bounds[5]);
+        double distToMinX = Math.abs(x - box.getMinX());
+        double distToMaxX = Math.abs(x - box.getMaxX());
+        double distToMinZ = Math.abs(z - box.getMinZ());
+        double distToMaxZ = Math.abs(z - box.getMaxZ());
         double minDist = Math.min(Math.min(distToMinX, distToMaxX), Math.min(distToMinZ, distToMaxZ));
 
-        if (minDist == distToMinX) x = bounds[0] - 1.5;
-        else if (minDist == distToMaxX) x = bounds[3] + 1.5;
-        else if (minDist == distToMinZ) z = bounds[2] - 1.5;
-        else z = bounds[5] + 1.5;
+        if (minDist == distToMinX) x = box.getMinX() - 1.5;
+        else if (minDist == distToMaxX) x = box.getMaxX() + 1.5;
+        else if (minDist == distToMinZ) z = box.getMinZ() - 1.5;
+        else z = box.getMaxZ() + 1.5;
 
-        y = Math.max(bounds[1], Math.min(y, bounds[4] + 1));
+        y = Math.max(box.getMinY(), Math.min(y, box.getMaxY() + 1));
 
         Location safeLocation = new Location(player.getWorld(), x, y, z, yaw, pitch);
 

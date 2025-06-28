@@ -145,6 +145,11 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                     return true;
                 }
 
+                if (plugin.isOverlapping(null, world.getName(), minX, minY, minZ, maxX, maxY, maxZ)) {
+                    commandSender.sendMessage(pluginPrefix + ChatColor.RED + " This arena would overlap with an existing arena. Please choose a different location.");
+                    return true;
+                }
+
                 RegionData regionData = new RegionData(plugin);
                 regionData.setMetadata(player.getName(), System.currentTimeMillis(), world.getName(), Bukkit.getVersion(), minX, minY, minZ, width, height, depth);
                 plugin.getRegisteredRegions().put(regionName, regionData);
