@@ -431,16 +431,17 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                             commandSender.sendMessage(noPending);
                             return true;
                         }
+
                         plugin.regenerateArena(targetArenaName, commandSender);
+
                         return true;
                     } else {
-                        String regionName = input;
-                        if (!plugin.getRegisteredRegions().containsKey(regionName)) {
-                            commandSender.sendMessage(arenaNotFound.replace("{arena_name}", regionName));
+                        if (!plugin.getRegisteredRegions().containsKey(input)) {
+                            commandSender.sendMessage(arenaNotFound.replace("{arena_name}", input));
                             return true;
                         }
-                        plugin.getPendingRegenerations().put(commandSender.getName(), regionName);
-                        commandSender.sendMessage(confirmPrompt.replace("{arena_name}", regionName));
+                        plugin.getPendingRegenerations().put(commandSender.getName(), input);
+                        commandSender.sendMessage(confirmPrompt.replace("{arena_name}", input));
                         Bukkit.getScheduler().runTaskLater(plugin, () -> plugin.getPendingRegenerations().remove(commandSender.getName()), 1200L);
                         return true;
                     }
@@ -773,7 +774,7 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
             StringBuilder message = new StringBuilder();
             message.append(ChatColor.GREEN).append("- ").append(name);
 
-            if (min != null && max != null) {
+            if (min != null) {
                 message.append(String.format(": (%d, %d, %d) to (%d, %d, %d)",
                         (int) min.getX(), (int) min.getY(), (int) min.getZ(),
                         (int) max.getX(), (int) max.getY(), (int) max.getZ()));
@@ -822,7 +823,7 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
         StringBuilder message = new StringBuilder();
         message.append(ChatColor.GREEN).append("Arena Details for ").append(regionName).append(":");
 
-        if (min != null && max != null) {
+        if (min != null) {
             message.append(String.format("\n" + ChatColor.GREEN + "  Coordinates: (%d, %d, %d) to (%d, %d, %d)",
                     (int) min.getX(), (int) min.getY(), (int) min.getZ(),
                     (int) max.getX(), (int) max.getY(), (int) max.getZ()));
@@ -1084,25 +1085,13 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
             throw new IllegalArgumentException("Time must be a positive number");
         }
 
-        long ticks;
-        switch (unitPart) {
-            case "s":
-                ticks = number * 20;
-                break;
-            case "m":
-                ticks = number * 20 * 60;
-                break;
-            case "d":
-                ticks = number * 20 * 60 * 60 * 24;
-                break;
-            case "w":
-                ticks = number * 20 * 60 * 60 * 24 * 7;
-                break;
-            default:
-                throw new IllegalArgumentException("Invalid time unit");
-        }
-
-        return ticks;
+        return switch (unitPart) {
+            case "s" -> number * 20;
+            case "m" -> number * 20 * 60;
+            case "d" -> number * 20 * 60 * 60 * 24;
+            case "w" -> number * 20 * 60 * 60 * 24 * 7;
+            default -> throw new IllegalArgumentException("Invalid time unit");
+        };
     }
 
     private String formatTicksToTime(long ticks) {
