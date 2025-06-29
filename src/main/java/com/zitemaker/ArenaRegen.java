@@ -33,7 +33,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 
-public class ArenaRegen extends JavaPlugin {
+public class ArenaRegen extends JavaPlugin{
 
     private File messagesFile;
     private FileConfiguration messagesConfig;
@@ -141,7 +141,7 @@ public class ArenaRegen extends JavaPlugin {
                 logger.info(ARChatColor.RED + "Please check file permissions to ensure the server process has read/write access.");
             }
 
-            saveTaskId = Bukkit.getScheduler().runTaskTimerAsynchronously(this, this::saveRegionsAsync, 0L, 6000L).getTaskId();
+            saveTaskId = Bukkit.getScheduler().runTaskTimerAsynchronously(this, this::saveRegionsAsync, 0L, 4000L).getTaskId();
             rescheduleTasks();
             logger.info("Plugin fully enabled.");
         }).exceptionally(e -> {
@@ -169,11 +169,9 @@ public class ArenaRegen extends JavaPlugin {
         }
         scheduledTasks.clear();
         saveSchedules();
-
-        logger.info(ARChatColor.GOLD + "Saving all arenas before shutdown...");
-        saveRegionsSynchronously();
         logger.info(ARChatColor.RED + "ArenaRegen v" + getDescription().getVersion() + " has been disabled.");
     }
+
 
     private CompletableFuture<Void> loadRegionsAsync() {
         File arenasDir = new File(getDataFolder(), "arenas");
@@ -304,69 +302,6 @@ public class ArenaRegen extends JavaPlugin {
                         console.sendMessage("Cleared saved regions from dirty regions list.");
                     }
                 });
-    }
-
-    private void saveRegionsSynchronously() {
-        File arenasDir = new File(getDataFolder(), "arenas");
-        if (!arenasDir.exists()) {
-            boolean mkdirs = arenasDir.mkdirs();
-            console.sendMessage(" Created arenas directory: " + arenasDir.getPath());
-        }
-
-        if (!arenasDir.canWrite()) {
-            logger.info(ARChatColor.RED + "ERROR: Cannot write to arenas directory (" + arenasDir.getPath() + ")!");
-            logger.info(ARChatColor.RED + "Please check file permissions to ensure the server process has write access.");
-            return;
-        }
-
-        Map<String, RegionData> regionsToSave;
-        synchronized (registeredRegions) {
-            regionsToSave = new HashMap<>(registeredRegions);
-        }
-
-        if (regionsToSave.isEmpty()) {
-            console.sendMessage("No regions to save.");
-            dirtyRegions.clear();
-            return;
-        }
-
-        console.sendMessage("Saving " + regionsToSave.size() + " regions synchronously...");
-
-        int savedRegions = 0;
-        StringBuilder errorSummary = new StringBuilder();
-
-        for (String regionName : regionsToSave.keySet()) {
-            File datcFile = new File(arenasDir, regionName + ".datc");
-            try {
-                RegionData regionData = regionsToSave.get(regionName);
-                regionData.saveToDatc(datcFile).join();
-                savedRegions++;
-                getLogger().info("Saved region '" + regionName + "' to " + datcFile.getPath());
-            } catch (Exception e) {
-                getLogger().severe("Failed to save region '" + regionName + "' to " + datcFile.getPath() + ": " + e.getMessage());
-                errorSummary.append(ARChatColor.RED)
-                        .append(" - Region '").append(regionName).append("': ").append(e.getMessage()).append("\n");
-            }
-        }
-
-        console.sendMessage("Successfully saved " + savedRegions + " out of " + regionsToSave.size() + " regions.");
-
-        if (savedRegions < regionsToSave.size()) {
-            console.sendMessage(ARChatColor.RED + "Errors occurred while saving the following regions:");
-            console.sendMessage(errorSummary.toString());
-            for (Player player : Bukkit.getOnlinePlayers()) {
-                if (player.isOp()) {
-                    player.sendMessage(prefix + " " + ARChatColor.RED + "Failed to save some arenas during shutdown! Check the server logs for details.");
-                }
-            }
-        }
-
-        if (savedRegions == regionsToSave.size()) {
-            dirtyRegions.clear();
-            console.sendMessage("Cleared dirty regions list.");
-        } else {
-            console.sendMessage("Preserving dirty regions list due to save errors.");
-        }
     }
 
     public void loadConfigValues() {
@@ -983,14 +918,18 @@ public class ArenaRegen extends JavaPlugin {
                                         continue;
                                     }
                                     Object value = pdcEntry.getValue();
-                                    switch (value) {
-                                        case String s -> pdc.set(key, PersistentDataType.STRING, s);
-                                        case Integer i -> pdc.set(key, PersistentDataType.INTEGER, i);
-                                        case Double v -> pdc.set(key, PersistentDataType.DOUBLE, v);
-                                        case Byte b -> pdc.set(key, PersistentDataType.BYTE, b);
-                                        case Long l -> pdc.set(key, PersistentDataType.LONG, l);
-                                        case null, default ->
-                                                getLogger().warning("Unsupported PDC value type for key " + key + " at " + loc + ", skipping.");
+                                    if (value instanceof String s) {
+                                        pdc.set(key, PersistentDataType.STRING, s);
+                                    } else if (value instanceof Integer i) {
+                                        pdc.set(key, PersistentDataType.INTEGER, i);
+                                    } else if (value instanceof Double d) {
+                                        pdc.set(key, PersistentDataType.DOUBLE, d);
+                                    } else if (value instanceof Byte b) {
+                                        pdc.set(key, PersistentDataType.BYTE, b);
+                                    } else if (value instanceof Long l) {
+                                        pdc.set(key, PersistentDataType.LONG, l);
+                                    } else {
+                                        getLogger().warning("Unsupported PDC value type for key " + key + " at " + loc + ", skipping.");
                                     }
                                 }
                             }
@@ -1041,15 +980,20 @@ public class ArenaRegen extends JavaPlugin {
                                         continue;
                                     }
                                     Object value = pdcEntry.getValue();
-                                    switch (value) {
-                                        case String s -> pdc.set(key, PersistentDataType.STRING, s);
-                                        case Integer i -> pdc.set(key, PersistentDataType.INTEGER, i);
-                                        case Double v -> pdc.set(key, PersistentDataType.DOUBLE, v);
-                                        case Byte b -> pdc.set(key, PersistentDataType.BYTE, b);
-                                        case Long l -> pdc.set(key, PersistentDataType.LONG, l);
-                                        case null, default ->
-                                                getLogger().warning("Unsupported PDC value type for key " + key + " at " + loc + ", skipping.");
+                                    if (value instanceof String s) {
+                                        pdc.set(key, PersistentDataType.STRING, s);
+                                    } else if (value instanceof Integer i) {
+                                        pdc.set(key, PersistentDataType.INTEGER, i);
+                                    } else if (value instanceof Double d) {
+                                        pdc.set(key, PersistentDataType.DOUBLE, d);
+                                    } else if (value instanceof Byte b) {
+                                        pdc.set(key, PersistentDataType.BYTE, b);
+                                    } else if (value instanceof Long l) {
+                                        pdc.set(key, PersistentDataType.LONG, l);
+                                    } else {
+                                        getLogger().warning("Unsupported PDC value type for key " + key + " at " + loc + ", skipping.");
                                     }
+
                                 }
                             }
 
