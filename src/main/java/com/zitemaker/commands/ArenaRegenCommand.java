@@ -25,7 +25,6 @@ import org.bukkit.util.Vector;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.awt.*;
 import java.io.File;
 import java.util.*;
 import java.util.List;
@@ -139,8 +138,8 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                 int width = maxX - minX + 1;
                 int height = maxY - minY + 1;
                 int depth = maxZ - minZ + 1;
-                long volume = (long) width * height * depth;
-                if (volume > plugin.arenaSize) {
+                long area = (long) width * depth;
+                if (area > plugin.arenaSize) {
                     commandSender.sendMessage(pluginPrefix + " " + regionSizeLimit.replace("{arena_size_limit}", String.valueOf(plugin.arenaSize)));
                     return true;
                 }
@@ -179,7 +178,7 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
 
                 Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, task -> {
                     int start = blocksProcessed.get();
-                    int end = Math.min(start + blocksPerTick, (int) volume);
+                    int end = Math.min(start + blocksPerTick, (int) area);
 
                     for (int i = start; i < end; i++) {
                         int x = minX + (i % width);
@@ -189,7 +188,7 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                         regionData.addBlockToSection("temp", new Location(world, x, y, z), blockData);
                     }
 
-                    if (end >= volume) {
+                    if (end >= area) {
                         task.cancel();
                         int chunkMinX = minX >> 4;
                         int chunkMinZ = minZ >> 4;
@@ -722,16 +721,6 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
         }
 
         return true;
-    }
-
-
-    private boolean isRegionSizeValid(int minX, int maxX, int minY, int maxY, int minZ, int maxZ) {
-        arenaSizeLimit = plugin.getConfig().getLong("general.arena-size-limit", 1000000L);
-        int width = maxX - minX + 1;
-        int height = maxY - minY + 1;
-        int depth = maxZ - minZ + 1;
-        long volume = (long) width * height * depth;
-        return volume <= arenaSizeLimit;
     }
 
     private void listRegions(CommandSender sender) {

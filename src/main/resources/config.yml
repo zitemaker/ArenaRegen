@@ -17,7 +17,7 @@
 prefix: "&e[&2ArenaRegen&e]"
 
 general:
-  arena-size-limit: 40000 # Maximum volume of an arena in blocks
+  arena-size-limit: 40000 # Maximum area of an arena in blocks
   analyze-speed: 40000 # How many blocks to analyze per second when creating an arena
   selection-tool: GOLDEN_HOE # The item to be used as the selection tool (Valid options: https://dev.bukkit.org/projects/supplies/pages/material-list)
   preview-particle: FLAME # The particles to be used for arena previews (Valid options: https://hub.spigotmc.org/javadocs/spigot/org/bukkit/Particle.html)
