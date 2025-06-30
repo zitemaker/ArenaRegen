@@ -638,16 +638,17 @@ public class ArenaRegen extends JavaPlugin{
             int currentSection = sectionIndex.get();
             if (currentSection >= sectionNames.size()) {
                 if (trackEntities) {
-                    Map<Location, Map<String, Object>> entityDataMap = regionData.getEntityDataMap();
-                    for (Map.Entry<Location, Map<String, Object>> entry : entityDataMap.entrySet()) {
-                        Location loc = entry.getKey();
-                        Map<String, Object> serializedEntity = entry.getValue();
-                        try {
-                            EntitySerializer.deserializeEntity(serializedEntity, loc);
-                        } catch (Exception e) {
-                            getLogger().warning("Failed to restore entity at " + loc + ": " + e.getMessage());
+                    regionData.getEntityDataMap().thenAccept(entityDataMap -> {
+                        for (Map.Entry<Location, Map<String, Object>> entry : entityDataMap.entrySet()) {
+                            Location loc = entry.getKey();
+                            Map<String, Object> serializedEntity = entry.getValue();
+                            try {
+                                EntitySerializer.deserializeEntity(serializedEntity, loc);
+                            } catch (Exception e) {
+                                getLogger().warning("Failed to restore entity at " + loc + ": " + e.getMessage());
+                            }
                         }
-                    }
+                    });
                 }
 
                 for (Chunk chunk : chunksToRefresh) {
@@ -867,144 +868,147 @@ public class ArenaRegen extends JavaPlugin{
             int currentSection = sectionIndex.get();
             if (currentSection >= sectionNames.size()) {
                 if (trackEntities) {
-                    Map<Location, Map<String, Object>> entityDataMap = regionData.getEntityDataMap();
-                    for (Map.Entry<Location, Map<String, Object>> entry : entityDataMap.entrySet()) {
-                        Location loc = entry.getKey();
-                        Map<String, Object> serializedEntity = entry.getValue();
-                        try {
-                            EntitySerializer.deserializeEntity(serializedEntity, loc);
-                        } catch (Exception e) {
-                            getLogger().warning("Failed to restore entity at " + loc + ": " + e.getMessage());
-                        }
-                    }
-                }
-
-                Map<Location, Map<String, Object>> bannerStates = regionData.getBannerStates();
-                for (Map.Entry<Location, Map<String, Object>> entry : bannerStates.entrySet()) {
-                    Location loc = entry.getKey();
-                    Map<String, Object> bannerData = entry.getValue();
-
-                    try {
-                        BlockState state = world.getBlockAt(loc).getState();
-                        if (state instanceof Banner banner) {
-                            String baseColorStr = (String) bannerData.get("baseColor");
-                            DyeColor baseColor = baseColorStr.equals("NONE") ? null : DyeColor.valueOf(baseColorStr);
-                            banner.setBaseColor(Objects.requireNonNull(baseColor));
-
-                            List<Map<String, String>> patternDataList = (List<Map<String, String>>) bannerData.get("patterns");
-                            if (patternDataList != null && !patternDataList.isEmpty()) {
-                                List<Pattern> patterns = new ArrayList<>();
-                                for (Map<String, String> patternData : patternDataList) {
-                                    DyeColor color = DyeColor.valueOf(patternData.get("color"));
-                                    String typeStr = patternData.get("type");
-                                    NamespacedKey key = new NamespacedKey("minecraft", typeStr);
-                                    PatternType patternType = Bukkit.getRegistry(PatternType.class).get(key);
-                                    if (patternType == null) {
-                                        getLogger().warning("Invalid pattern type '" + typeStr + "' for banner at " + loc + ", defaulting to base.");
-                                        patternType = PatternType.BASE;
-                                    }
-                                    patterns.add(new Pattern(color, patternType));
-                                }
-                                banner.setPatterns(patterns);
-                            }
-
-                            Map<String, Object> pdcData = (Map<String, Object>) bannerData.get("persistentData");
-                            if (pdcData != null && !pdcData.isEmpty()) {
-                                PersistentDataContainer pdc = banner.getPersistentDataContainer();
-                                for (Map.Entry<String, Object> pdcEntry : pdcData.entrySet()) {
-                                    NamespacedKey key = NamespacedKey.fromString(pdcEntry.getKey());
-                                    if (key == null) {
-                                        getLogger().warning("Invalid NamespacedKey '" + pdcEntry.getKey() + "' for banner at " + loc + ", skipping PDC entry.");
-                                        continue;
-                                    }
-                                    Object value = pdcEntry.getValue();
-                                    if (value instanceof String s) {
-                                        pdc.set(key, PersistentDataType.STRING, s);
-                                    } else if (value instanceof Integer i) {
-                                        pdc.set(key, PersistentDataType.INTEGER, i);
-                                    } else if (value instanceof Double d) {
-                                        pdc.set(key, PersistentDataType.DOUBLE, d);
-                                    } else if (value instanceof Byte b) {
-                                        pdc.set(key, PersistentDataType.BYTE, b);
-                                    } else if (value instanceof Long l) {
-                                        pdc.set(key, PersistentDataType.LONG, l);
-                                    } else {
-                                        getLogger().warning("Unsupported PDC value type for key " + key + " at " + loc + ", skipping.");
-                                    }
-                                }
-                            }
-
-                            banner.update();
-                        } else {
-                            getLogger().warning("Block at " + loc + " is not a banner, cannot restore banner state.");
-                        }
-                    } catch (Exception e) {
-                        getLogger().warning("Failed to restore banner at " + loc + ": " + e.getMessage());
-                    }
-                }
-
-                Map<Location, Map<String, Object>> signStates = regionData.getSignStates();
-                for (Map.Entry<Location, Map<String, Object>> entry : signStates.entrySet()) {
-                    Location loc = entry.getKey();
-                    Map<String, Object> signData = entry.getValue();
-
-                    try {
-                        BlockState state = world.getBlockAt(loc).getState();
-                        if (state instanceof Sign sign) {
-                            List<String> lines = (List<String>) signData.get("lines");
-                            if (lines != null) {
-                                for (int i = 0; i < Math.min(lines.size(), 4); i++) {
-                                    sign.setLine(i, lines.get(i));
-                                }
-                            }
-
-                            String colorStr = (String) signData.get("color");
-                            DyeColor color = DyeColor.BLACK;
+                    regionData.getEntityDataMap().thenAccept(entityDataMap -> {
+                        for (Map.Entry<Location, Map<String, Object>> entry : entityDataMap.entrySet()) {
+                            Location loc = entry.getKey();
+                            Map<String, Object> serializedEntity = entry.getValue();
                             try {
-                                color = DyeColor.valueOf(colorStr);
-                            } catch (IllegalArgumentException e) {
-                                getLogger().warning("Invalid color '" + colorStr + "' for sign at " + loc + ", defaulting to BLACK.");
+                                EntitySerializer.deserializeEntity(serializedEntity, loc);
+                            } catch (Exception e) {
+                                getLogger().warning("Failed to restore entity at " + loc + ": " + e.getMessage());
                             }
-                            sign.setColor(color);
-
-                            boolean glowing = (boolean) signData.getOrDefault("glowing", false);
-                            sign.setGlowingText(glowing);
-
-                            Map<String, Object> pdcData = (Map<String, Object>) signData.get("persistentData");
-                            if (pdcData != null && !pdcData.isEmpty()) {
-                                PersistentDataContainer pdc = sign.getPersistentDataContainer();
-                                for (Map.Entry<String, Object> pdcEntry : pdcData.entrySet()) {
-                                    NamespacedKey key = NamespacedKey.fromString(pdcEntry.getKey());
-                                    if (key == null) {
-                                        getLogger().warning("Invalid NamespacedKey '" + pdcEntry.getKey() + "' for sign at " + loc + ", skipping PDC entry.");
-                                        continue;
-                                    }
-                                    Object value = pdcEntry.getValue();
-                                    if (value instanceof String s) {
-                                        pdc.set(key, PersistentDataType.STRING, s);
-                                    } else if (value instanceof Integer i) {
-                                        pdc.set(key, PersistentDataType.INTEGER, i);
-                                    } else if (value instanceof Double d) {
-                                        pdc.set(key, PersistentDataType.DOUBLE, d);
-                                    } else if (value instanceof Byte b) {
-                                        pdc.set(key, PersistentDataType.BYTE, b);
-                                    } else if (value instanceof Long l) {
-                                        pdc.set(key, PersistentDataType.LONG, l);
-                                    } else {
-                                        getLogger().warning("Unsupported PDC value type for key " + key + " at " + loc + ", skipping.");
-                                    }
-
-                                }
-                            }
-
-                            sign.update();
-                        } else {
-                            getLogger().warning("Block at " + loc + " is not a sign, cannot restore sign state.");
                         }
-                    } catch (Exception e) {
-                        getLogger().warning("Failed to restore sign at " + loc + ": " + e.getMessage());
-                    }
+                    });
                 }
+
+                regionData.getBannerStates().thenAccept(bannerStates -> {
+                    for (Map.Entry<Location, Map<String, Object>> entry : bannerStates.entrySet()) {
+                        Location loc = entry.getKey();
+                        Map<String, Object> bannerData = entry.getValue();
+
+                        try {
+                            BlockState state = world.getBlockAt(loc).getState();
+                            if (state instanceof Banner banner) {
+                                String baseColorStr = (String) bannerData.get("baseColor");
+                                DyeColor baseColor = baseColorStr.equals("NONE") ? null : DyeColor.valueOf(baseColorStr);
+                                banner.setBaseColor(Objects.requireNonNull(baseColor));
+
+                                List<Map<String, String>> patternDataList = (List<Map<String, String>>) bannerData.get("patterns");
+                                if (patternDataList != null && !patternDataList.isEmpty()) {
+                                    List<Pattern> patterns = new ArrayList<>();
+                                    for (Map<String, String> patternData : patternDataList) {
+                                        DyeColor color = DyeColor.valueOf(patternData.get("color"));
+                                        String typeStr = patternData.get("type");
+                                        NamespacedKey key = new NamespacedKey("minecraft", typeStr);
+                                        PatternType patternType = Bukkit.getRegistry(PatternType.class).get(key);
+                                        if (patternType == null) {
+                                            getLogger().warning("Invalid pattern type '" + typeStr + "' for banner at " + loc + ", defaulting to base.");
+                                            patternType = PatternType.BASE;
+                                        }
+                                        patterns.add(new Pattern(color, patternType));
+                                    }
+                                    banner.setPatterns(patterns);
+                                }
+
+                                Map<String, Object> pdcData = (Map<String, Object>) bannerData.get("persistentData");
+                                if (pdcData != null && !pdcData.isEmpty()) {
+                                    PersistentDataContainer pdc = banner.getPersistentDataContainer();
+                                    for (Map.Entry<String, Object> pdcEntry : pdcData.entrySet()) {
+                                        NamespacedKey key = NamespacedKey.fromString(pdcEntry.getKey());
+                                        if (key == null) {
+                                            getLogger().warning("Invalid NamespacedKey '" + pdcEntry.getKey() + "' for banner at " + loc + ", skipping PDC entry.");
+                                            continue;
+                                        }
+                                        Object value = pdcEntry.getValue();
+                                        if (value instanceof String s) {
+                                            pdc.set(key, PersistentDataType.STRING, s);
+                                        } else if (value instanceof Integer i) {
+                                            pdc.set(key, PersistentDataType.INTEGER, i);
+                                        } else if (value instanceof Double d) {
+                                            pdc.set(key, PersistentDataType.DOUBLE, d);
+                                        } else if (value instanceof Byte b) {
+                                            pdc.set(key, PersistentDataType.BYTE, b);
+                                        } else if (value instanceof Long l) {
+                                            pdc.set(key, PersistentDataType.LONG, l);
+                                        } else {
+                                            getLogger().warning("Unsupported PDC value type for key " + key + " at " + loc + ", skipping.");
+                                        }
+                                    }
+                                }
+
+                                banner.update();
+                            } else {
+                                getLogger().warning("Block at " + loc + " is not a banner, cannot restore banner state.");
+                            }
+                        } catch (Exception e) {
+                            getLogger().warning("Failed to restore banner at " + loc + ": " + e.getMessage());
+                        }
+                    }
+                });
+
+                regionData.getSignStates().thenAccept(signStates -> {
+                    for (Map.Entry<Location, Map<String, Object>> entry : signStates.entrySet()) {
+                        Location loc = entry.getKey();
+                        Map<String, Object> signData = entry.getValue();
+
+                        try {
+                            BlockState state = world.getBlockAt(loc).getState();
+                            if (state instanceof Sign sign) {
+                                List<String> lines = (List<String>) signData.get("lines");
+                                if (lines != null) {
+                                    for (int i = 0; i < Math.min(lines.size(), 4); i++) {
+                                        sign.setLine(i, lines.get(i));
+                                    }
+                                }
+
+                                String colorStr = (String) signData.get("color");
+                                DyeColor color = DyeColor.BLACK;
+                                try {
+                                    color = DyeColor.valueOf(colorStr);
+                                } catch (IllegalArgumentException e) {
+                                    getLogger().warning("Invalid color '" + colorStr + "' for sign at " + loc + ", defaulting to BLACK.");
+                                }
+                                sign.setColor(color);
+
+                                boolean glowing = (boolean) signData.getOrDefault("glowing", false);
+                                sign.setGlowingText(glowing);
+
+                                Map<String, Object> pdcData = (Map<String, Object>) signData.get("persistentData");
+                                if (pdcData != null && !pdcData.isEmpty()) {
+                                    PersistentDataContainer pdc = sign.getPersistentDataContainer();
+                                    for (Map.Entry<String, Object> pdcEntry : pdcData.entrySet()) {
+                                        NamespacedKey key = NamespacedKey.fromString(pdcEntry.getKey());
+                                        if (key == null) {
+                                            getLogger().warning("Invalid NamespacedKey '" + pdcEntry.getKey() + "' for sign at " + loc + ", skipping PDC entry.");
+                                            continue;
+                                        }
+                                        Object value = pdcEntry.getValue();
+                                        if (value instanceof String s) {
+                                            pdc.set(key, PersistentDataType.STRING, s);
+                                        } else if (value instanceof Integer i) {
+                                            pdc.set(key, PersistentDataType.INTEGER, i);
+                                        } else if (value instanceof Double d) {
+                                            pdc.set(key, PersistentDataType.DOUBLE, d);
+                                        } else if (value instanceof Byte b) {
+                                            pdc.set(key, PersistentDataType.BYTE, b);
+                                        } else if (value instanceof Long l) {
+                                            pdc.set(key, PersistentDataType.LONG, l);
+                                        } else {
+                                            getLogger().warning("Unsupported PDC value type for key " + key + " at " + loc + ", skipping.");
+                                        }
+
+                                    }
+                                }
+
+                                sign.update();
+                            } else {
+                                getLogger().warning("Block at " + loc + " is not a sign, cannot restore sign state.");
+                            }
+                        } catch (Exception e) {
+                            getLogger().warning("Failed to restore sign at " + loc + ": " + e.getMessage());
+                        }
+                    }
+                });
 
                 for (Chunk chunk : chunksToRefresh) {
                     try {

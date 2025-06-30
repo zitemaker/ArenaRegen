@@ -3,14 +3,16 @@ package com.zitemaker.helpers;
 import com.zitemaker.ArenaRegen;
 import org.bukkit.*;
 import org.bukkit.block.BlockState;
-import org.bukkit.block.data.BlockData;
 import org.bukkit.block.Banner;
 import org.bukkit.block.Sign;
 import org.bukkit.block.banner.Pattern;
 import org.bukkit.block.banner.PatternType;
+import org.bukkit.block.data.BlockData;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.NamespacedKey;
+import org.bukkit.util.Vector;
 
 import java.io.*;
 import java.util.*;
@@ -24,7 +26,7 @@ public class RegionData {
     private static final Logger LOGGER = Bukkit.getLogger();
     private static final String FILE_FORMAT_VERSION = "4";
     private static final int GZIP_COMPRESSION_LEVEL = 6;
-    private static final byte[] GZIP_MAGIC = new byte[] { (byte) 0x1F, (byte) 0x8B };
+    private static final byte[] GZIP_MAGIC = new byte[]{(byte) 0x1F, (byte) 0x8B};
 
     private static final List<String> KNOWN_PATTERN_IDENTIFIERS = Arrays.asList(
             "base", "square_bottom_left", "square_bottom_right", "square_top_left", "square_top_right",
@@ -51,96 +53,39 @@ public class RegionData {
     private String fileFormatVersion = FILE_FORMAT_VERSION;
     private int minX, minY, minZ;
     private int width, height, depth;
-    private Location spawnLocation;
-    private boolean locked = false;
-    private boolean isBlockDataLoaded = false;
-    private File datcFile;
-    private boolean loadFailed = false;
-    private boolean isLoading = false;
+    private volatile Location spawnLocation;
+    private volatile boolean locked = false;
+    private volatile boolean isBlockDataLoaded = false;
+    private volatile File datcFile;
+    private volatile boolean loadFailed = false;
+    private final Object loadLock = new Object();
+    private volatile CompletableFuture<Void> loadingFuture = null;
 
     public RegionData(ArenaRegen plugin) {
         this.plugin = plugin;
     }
 
-    public void setDatcFile(File datcFile) {
-        this.datcFile = datcFile;
+    public CompletableFuture<Void> setDatcFile(File datcFile) {
+        return CompletableFuture.runAsync(() -> this.datcFile = datcFile,
+                runnable -> Bukkit.getScheduler().runTaskAsynchronously(plugin, runnable));
     }
 
-    public void setSpawnLocation(Location location) {
-        this.spawnLocation = location != null ? location.clone() : null;
+    public CompletableFuture<Void> setSpawnLocation(Location location) {
+        return CompletableFuture.runAsync(() -> this.spawnLocation = location != null ? location.clone() : null,
+                runnable -> Bukkit.getScheduler().runTaskAsynchronously(plugin, runnable));
     }
 
     public Location getSpawnLocation() {
         return spawnLocation != null ? spawnLocation.clone() : null;
     }
 
-    public void addBlockToSection(String section, Location location, BlockData blockData) {
-        sectionedBlockData.computeIfAbsent(section, k -> new ConcurrentHashMap<>()).put(location, blockData);
-
-        World world = location.getWorld();
-        if (world != null) {
-            Bukkit.getScheduler().runTask(plugin, () -> {
-                BlockState state = world.getBlockAt(location).getState();
-                if (state instanceof Banner) {
-                    Banner banner = (Banner) state;
-                    Map<String, Object> bannerData = new HashMap<>();
-                    DyeColor baseColor = banner.getBaseColor();
-                    bannerData.put("baseColor", baseColor != null ? baseColor.name() : "NONE");
-                    List<Map<String, String>> patternDataList = new ArrayList<>();
-                    for (Pattern pattern : banner.getPatterns()) {
-                        Map<String, String> patternData = new HashMap<>();
-                        DyeColor color = pattern.getColor();
-                        patternData.put("color", color.name());
-                        String patternIdentifier = resolvePatternIdentifier(pattern);
-                        patternData.put("type", patternIdentifier);
-                        patternDataList.add(patternData);
-                    }
-                    bannerData.put("patterns", patternDataList);
-                    PersistentDataContainer pdc = banner.getPersistentDataContainer();
-                    if (!pdc.isEmpty()) {
-                        Map<String, Object> pdcData = serializePdc(pdc);
-                        bannerData.put("persistentData", pdcData);
-                    }
-                    bannerStates.put(location.clone(), bannerData);
-                }
-                if (state instanceof Sign) {
-                    Sign sign = (Sign) state;
-                    Map<String, Object> signData = new HashMap<>();
-                    List<String> lines = new ArrayList<>();
-                    for (int i = 0; i < 4; i++) {
-                        lines.add(sign.getLine(i));
-                    }
-                    signData.put("lines", lines);
-                    DyeColor color = sign.getColor();
-                    signData.put("color", color != null ? color.name() : "BLACK");
-                    signData.put("glowing", sign.isGlowingText());
-                    PersistentDataContainer pdc = sign.getPersistentDataContainer();
-                    if (!pdc.isEmpty()) {
-                        Map<String, Object> pdcData = serializePdc(pdc);
-                        signData.put("persistentData", pdcData);
-                    }
-                    signStates.put(location.clone(), signData);
-                }
-            });
-        }
-    }
-
-    public void addSection(String sectionName, Map<Location, BlockData> blocks) {
-        Map<Location, BlockData> sectionBlocks = new ConcurrentHashMap<>();
-        World world = Bukkit.getWorld(worldName);
-        if (world == null) {
-            LOGGER.warning("[ArenaRegen] World '" + worldName + "' not found, cannot check for banners or signs in section " + sectionName);
-        }
-
-        for (Map.Entry<Location, BlockData> entry : blocks.entrySet()) {
-            Location location = entry.getKey();
-            BlockData blockData = entry.getValue();
-            if (blockData == null) {
-                LOGGER.warning("[ArenaRegen] Block data in section " + sectionName + " at " + location + " is null, replacing with air.");
-                blockData = Bukkit.createBlockData(Material.AIR);
-            }
-            sectionBlocks.put(location, blockData);
-
+    public CompletableFuture<Void> addBlockToSection(String section, Location location, BlockData blockData) {
+        Objects.requireNonNull(section, "section");
+        Objects.requireNonNull(location, "location");
+        Objects.requireNonNull(blockData, "blockData");
+        return CompletableFuture.runAsync(() -> {
+            sectionedBlockData.computeIfAbsent(section, k -> new ConcurrentHashMap<>()).put(location.clone(), blockData);
+            World world = location.getWorld();
             if (world != null) {
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     BlockState state = world.getBlockAt(location).getState();
@@ -186,8 +131,76 @@ public class RegionData {
                     }
                 });
             }
-        }
-        sectionedBlockData.put(sectionName, sectionBlocks);
+        }, runnable -> Bukkit.getScheduler().runTaskAsynchronously(plugin, runnable));
+    }
+
+    public CompletableFuture<Void> addSection(String sectionName, Map<Location, BlockData> blocks) {
+        Objects.requireNonNull(sectionName, "sectionName");
+        Objects.requireNonNull(blocks, "blocks");
+        return CompletableFuture.runAsync(() -> {
+            Map<Location, BlockData> sectionBlocks = new ConcurrentHashMap<>();
+            World world = Bukkit.getWorld(worldName);
+            if (world == null) {
+                LOGGER.warning("[ArenaRegen] World '" + worldName + "' not found, cannot check for banners or signs in section " + sectionName);
+            }
+
+            for (Map.Entry<Location, BlockData> entry : blocks.entrySet()) {
+                Location location = entry.getKey();
+                BlockData blockData = entry.getValue();
+                if (blockData == null) {
+                    LOGGER.warning("[ArenaRegen] Block data in section " + sectionName + " at " + location + " is null, replacing with air.");
+                    blockData = Bukkit.createBlockData(Material.AIR);
+                }
+                sectionBlocks.put(location, blockData);
+
+                if (world != null) {
+                    Bukkit.getScheduler().runTask(plugin, () -> {
+                        BlockState state = world.getBlockAt(location).getState();
+                        if (state instanceof Banner) {
+                            Banner banner = (Banner) state;
+                            Map<String, Object> bannerData = new HashMap<>();
+                            DyeColor baseColor = banner.getBaseColor();
+                            bannerData.put("baseColor", baseColor != null ? baseColor.name() : "NONE");
+                            List<Map<String, String>> patternDataList = new ArrayList<>();
+                            for (Pattern pattern : banner.getPatterns()) {
+                                Map<String, String> patternData = new HashMap<>();
+                                DyeColor color = pattern.getColor();
+                                patternData.put("color", color.name());
+                                String patternIdentifier = resolvePatternIdentifier(pattern);
+                                patternData.put("type", patternIdentifier);
+                                patternDataList.add(patternData);
+                            }
+                            bannerData.put("patterns", patternDataList);
+                            PersistentDataContainer pdc = banner.getPersistentDataContainer();
+                            if (!pdc.isEmpty()) {
+                                Map<String, Object> pdcData = serializePdc(pdc);
+                                bannerData.put("persistentData", pdcData);
+                            }
+                            bannerStates.put(location.clone(), bannerData);
+                        }
+                        if (state instanceof Sign) {
+                            Sign sign = (Sign) state;
+                            Map<String, Object> signData = new HashMap<>();
+                            List<String> lines = new ArrayList<>();
+                            for (int i = 0; i < 4; i++) {
+                                lines.add(sign.getLine(i));
+                            }
+                            signData.put("lines", lines);
+                            DyeColor color = sign.getColor();
+                            signData.put("color", color != null ? color.name() : "BLACK");
+                            signData.put("glowing", sign.isGlowingText());
+                            PersistentDataContainer pdc = sign.getPersistentDataContainer();
+                            if (!pdc.isEmpty()) {
+                                Map<String, Object> pdcData = serializePdc(pdc);
+                                signData.put("persistentData", pdcData);
+                            }
+                            signStates.put(location.clone(), signData);
+                        }
+                    });
+                }
+            }
+            sectionedBlockData.put(sectionName, sectionBlocks);
+        }, runnable -> Bukkit.getScheduler().runTaskAsynchronously(plugin, runnable));
     }
 
     private String resolvePatternIdentifier(Pattern pattern) {
@@ -255,152 +268,153 @@ public class RegionData {
         }
     }
 
-    public void setMetadata(String creator, long creationDate, String world, String version, int minX, int minY, int minZ, int width, int height, int depth) {
-        if (world == null || world.trim().isEmpty()) {
-            throw new IllegalArgumentException("World name cannot be null or empty");
-        }
-        if (width <= 0 || height <= 0 || depth <= 0) {
-            throw new IllegalArgumentException("Region dimensions must be positive: width=" + width + ", height=" + height + ", depth=" + depth);
-        }
-        this.creator = creator;
-        this.creationDate = creationDate;
-        this.worldName = world;
-        this.minecraftVersion = version;
-        this.minX = minX;
-        this.minY = minY;
-        this.minZ = minZ;
-        this.width = width;
-        this.height = height;
-        this.depth = depth;
+    public CompletableFuture<Void> setMetadata(String creator, long creationDate, String world, String version, int minX, int minY, int minZ, int width, int height, int depth) {
+        return CompletableFuture.runAsync(() -> {
+            if (world == null || world.trim().isEmpty()) {
+                throw new IllegalArgumentException("World name cannot be null or empty");
+            }
+            if (width <= 0 || height <= 0 || depth <= 0) {
+                throw new IllegalArgumentException("Region dimensions must be positive: width=" + width + ", height=" + height + ", depth=" + depth);
+            }
+            this.creator = creator;
+            this.creationDate = creationDate;
+            this.worldName = world;
+            this.minecraftVersion = version;
+            this.minX = minX;
+            this.minY = minY;
+            this.minZ = minZ;
+            this.width = width;
+            this.height = height;
+            this.depth = depth;
+        }, runnable -> Bukkit.getScheduler().runTaskAsynchronously(plugin, runnable));
     }
 
-    public void markBlockModified(Location location, BlockData newBlockData) {
-        Map<Location, BlockData> allBlocks = getAllBlocks();
-
-        World arenaWorld = Bukkit.getWorld(worldName);
-        if (arenaWorld == null) {
-            return;
-        }
-        Location normalizedLoc = new Location(arenaWorld, location.getBlockX(), location.getBlockY(), location.getBlockZ());
-
-        BlockData original = allBlocks.get(normalizedLoc);
-        if (original != null && !original.getMaterial().equals(newBlockData.getMaterial())) {
-            modifiedBlocks.put(normalizedLoc, original);
-        }
+    public CompletableFuture<Void> markBlockModified(Location location, BlockData newBlockData) {
+        Objects.requireNonNull(location, "location");
+        Objects.requireNonNull(newBlockData, "newBlockData");
+        return ensureBlockDataLoaded().thenCompose(v -> getAllBlocks())
+                .thenAccept(allBlocks -> {
+                    World arenaWorld = Bukkit.getWorld(worldName);
+                    if (arenaWorld == null) return;
+                    Location normalizedLoc = new Location(arenaWorld, location.getBlockX(), location.getBlockY(), location.getBlockZ());
+                    BlockData original = allBlocks.get(normalizedLoc);
+                    if (original != null && !original.getMaterial().equals(newBlockData.getMaterial())) {
+                        modifiedBlocks.put(normalizedLoc, original);
+                    }
+                });
     }
 
-    public void clearModifiedBlocks() {
-        modifiedBlocks.clear();
+    public CompletableFuture<Void> clearModifiedBlocks() {
+        return CompletableFuture.runAsync(() -> modifiedBlocks.clear(),
+                runnable -> Bukkit.getScheduler().runTaskAsynchronously(plugin, runnable));
     }
 
-    public Map<Location, BlockData> getModifiedBlocks() {
-        try {
-            ensureBlockDataLoaded();
-        } catch (IOException e) {
-            LOGGER.warning("[ArenaRegen] Failed to load block data for modified blocks: " + e.getMessage());
-        }
-        return new HashMap<>(modifiedBlocks);
+    public CompletableFuture<Map<Location, BlockData>> getModifiedBlocks() {
+        return ensureBlockDataLoaded().thenApply(v -> Collections.unmodifiableMap(new HashMap<>(modifiedBlocks)));
     }
 
-    public void addEntity(Location location, Map<String, Object> serializedEntity) {
-        World arenaWorld = Bukkit.getWorld(worldName);
-        if (arenaWorld == null) {
-            return;
-        }
-        Location normalizedLoc = new Location(arenaWorld, location.getX(), location.getY(), location.getZ());
-        entityDataMap.put(normalizedLoc, serializedEntity);
+    public CompletableFuture<Void> addEntity(Location location, Map<String, Object> serializedEntity) {
+        Objects.requireNonNull(location, "location");
+        Objects.requireNonNull(serializedEntity, "serializedEntity");
+        return CompletableFuture.runAsync(() -> {
+            World arenaWorld = Bukkit.getWorld(worldName);
+            if (arenaWorld == null) return;
+            Location normalizedLoc = new Location(arenaWorld, location.getX(), location.getY(), location.getZ());
+            Map<String, Object> serializableEntity = new HashMap<>();
+            for (Map.Entry<String, Object> entry : serializedEntity.entrySet()) {
+                String key = entry.getKey();
+                Object value = entry.getValue();
+                if (value instanceof ItemStack) {
+                    ItemStack item = (ItemStack) value;
+                    serializableEntity.put(key, item.getType().name() + ":" + item.getAmount());
+                } else if (value instanceof Vector) {
+                    Vector vec = (Vector) value;
+                    serializableEntity.put(key, vec.getX() + "," + vec.getY() + "," + vec.getZ());
+                } else if (value instanceof Serializable) {
+                    serializableEntity.put(key, value);
+                } else {
+                    LOGGER.warning("[ArenaRegen] Non-serializable value at " + normalizedLoc + " for key " + key + ", replacing with null.");
+                    serializableEntity.put(key, null);
+                }
+            }
+            entityDataMap.put(normalizedLoc, serializableEntity);
+        }, runnable -> Bukkit.getScheduler().runTaskAsynchronously(plugin, runnable));
     }
 
-    public Map<Location, Map<String, Object>> getEntityDataMap() {
-        try {
-            ensureBlockDataLoaded();
-        } catch (IOException e) {
-            LOGGER.warning("[ArenaRegen] Failed to load block data for entity map: " + e.getMessage());
-        }
-        return new HashMap<>(entityDataMap);
+    public CompletableFuture<Map<Location, Map<String, Object>>> getEntityDataMap() {
+        return ensureBlockDataLoaded().thenApply(v -> Collections.unmodifiableMap(new HashMap<>(entityDataMap)));
     }
 
-    public void clearEntities() {
-        entityDataMap.clear();
+    public CompletableFuture<Void> clearEntities() {
+        return CompletableFuture.runAsync(() -> entityDataMap.clear(),
+                runnable -> Bukkit.getScheduler().runTaskAsynchronously(plugin, runnable));
     }
 
-    public Map<Location, Map<String, Object>> getBannerStates() {
-        try {
-            ensureBlockDataLoaded();
-        } catch (IOException e) {
-            LOGGER.warning("[ArenaRegen] Failed to load block data for banner states: " + e.getMessage());
-        }
-        return new HashMap<>(bannerStates);
+    public CompletableFuture<Map<Location, Map<String, Object>>> getBannerStates() {
+        return ensureBlockDataLoaded().thenApply(v -> Collections.unmodifiableMap(new HashMap<>(bannerStates)));
     }
 
-    public void clearBanners() {
-        bannerStates.clear();
+    public CompletableFuture<Void> clearBanners() {
+        return CompletableFuture.runAsync(() -> bannerStates.clear(),
+                runnable -> Bukkit.getScheduler().runTaskAsynchronously(plugin, runnable));
     }
 
-    public Map<Location, Map<String, Object>> getSignStates() {
-        try {
-            ensureBlockDataLoaded();
-        } catch (IOException e) {
-            LOGGER.warning("[ArenaRegen] Failed to load block data for sign states: " + e.getMessage());
-        }
-        return new HashMap<>(signStates);
+    public CompletableFuture<Map<Location, Map<String, Object>>> getSignStates() {
+        return ensureBlockDataLoaded().thenApply(v -> Collections.unmodifiableMap(new HashMap<>(signStates)));
     }
 
-    public void clearSigns() {
-        signStates.clear();
+    public CompletableFuture<Void> clearSigns() {
+        return CompletableFuture.runAsync(() -> signStates.clear(),
+                runnable -> Bukkit.getScheduler().runTaskAsynchronously(plugin, runnable));
     }
 
     private String coordsToString(Location loc) {
         return loc.getBlockX() + ":" + loc.getBlockY() + ":" + loc.getBlockZ();
     }
 
-    public void clearRegion(String regionName) {
-        sectionedBlockData.clear();
-        entityDataMap.clear();
-        modifiedBlocks.clear();
-        bannerStates.clear();
-        signStates.clear();
+    public CompletableFuture<Void> clearRegion(String regionName) {
+        return CompletableFuture.runAsync(() -> {
+            sectionedBlockData.clear();
+            entityDataMap.clear();
+            modifiedBlocks.clear();
+            bannerStates.clear();
+            signStates.clear();
 
-        plugin.getRegisteredRegions().remove(regionName);
-        plugin.getPendingDeletions().remove(regionName);
-        plugin.getPendingRegenerations().remove(regionName);
-        plugin.getDirtyRegions().remove(regionName);
+            plugin.getRegisteredRegions().remove(regionName);
+            plugin.getPendingDeletions().remove(regionName);
+            plugin.getPendingRegenerations().remove(regionName);
+            plugin.dirtyRegions.remove(regionName);
 
-        if (datcFile != null) {
-            if (datcFile.exists()) {
-                if (datcFile.delete()) {
-                    LOGGER.info("[ArenaRegen] Successfully deleted arena file: " + datcFile.getPath());
-                } else {
-                    LOGGER.warning("[ArenaRegen] Failed to delete arena file: " + datcFile.getPath());
+            if (datcFile != null) {
+                if (datcFile.exists()) {
+                    if (datcFile.delete()) {
+                        LOGGER.info("[ArenaRegen] Successfully deleted arena file: " + datcFile.getPath());
+                    } else {
+                        LOGGER.warning("[ArenaRegen] Failed to delete arena file: " + datcFile.getPath());
+                    }
                 }
-            } else {
-                LOGGER.warning("[ArenaRegen] No .datc file found for arena '" + regionName + "' to delete.");
-            }
 
-            File backupFile = new File(datcFile.getParent(), datcFile.getName() + ".bak");
-            if (backupFile.exists()) {
-                if (backupFile.delete()) {
-                    LOGGER.info("[ArenaRegen] Successfully deleted backup file: " + backupFile.getPath());
-                } else {
-                    LOGGER.warning("[ArenaRegen] Failed to delete backup file: " + backupFile.getPath());
+                File backupFile = new File(datcFile.getParent(), datcFile.getName() + ".bak");
+                if (backupFile.exists()) {
+                    if (backupFile.delete()) {
+                        LOGGER.info("[ArenaRegen] Successfully deleted backup file: " + backupFile.getPath());
+                    } else {
+                        LOGGER.warning("[ArenaRegen] Failed to delete backup file: " + backupFile.getPath());
+                    }
                 }
             }
-        } else {
-            LOGGER.warning("[ArenaRegen] No .datc file found for arena '" + regionName + "' to delete.");
-        }
 
-        File schematicFile = new File(plugin.getDataFolder(), "arenas/" + regionName + ".schem");
-        if (schematicFile.exists()) {
-            if (schematicFile.delete()) {
-                LOGGER.info("[ArenaRegen] Successfully deleted schematic file: " + schematicFile.getPath());
-            } else {
-                LOGGER.warning("[ArenaRegen] Failed to delete schematic file: " + schematicFile.getPath());
+            File schematicFile = new File(plugin.getDataFolder(), "arenas/" + regionName + ".schem");
+            if (schematicFile.exists()) {
+                if (schematicFile.delete()) {
+                    LOGGER.info("[ArenaRegen] Successfully deleted schematic file: " + schematicFile.getPath());
+                } else {
+                    LOGGER.warning("[ArenaRegen] Failed to delete schematic file: " + schematicFile.getPath());
+                }
             }
-        } else {
-            LOGGER.warning("[ArenaRegen] No schematic file found for arena '" + regionName + "' to delete.");
-        }
 
-        LOGGER.info("[ArenaRegen] Arena '" + regionName + "' has been fully removed from memory and disk.");
+            LOGGER.info("[ArenaRegen] Arena '" + regionName + "' has been fully removed from memory and disk.");
+        }, runnable -> Bukkit.getScheduler().runTaskAsynchronously(plugin, runnable));
     }
 
     private int calculateBufferSize() {
@@ -412,94 +426,68 @@ public class RegionData {
 
         long estimatedSize = (totalBlocks * 42) + (totalEntities * 124) + (totalModifiedBlocks * 42) + (totalBanners * 128) + (totalSigns * 64) + 1024;
 
-        if (estimatedSize < 500_000) {
-            return 4096;
-        } else if (estimatedSize < 5_000_000) {
-            return 16384;
-        } else {
-            return 32768;
-        }
+        return estimatedSize < 500_000 ? 4096 : (estimatedSize < 5_000_000 ? 16384 : 32768);
     }
 
     public CompletableFuture<Void> saveToDatc(File datcFile) {
-        CompletableFuture<Void> future = new CompletableFuture<>();
-        long startTime = System.currentTimeMillis();
+        return ensureBlockDataLoaded().thenCompose(v -> CompletableFuture.runAsync(() -> {
+            long startTime = System.currentTimeMillis();
+            int bufferSize = calculateBufferSize();
 
-        Map<String, Map<Location, BlockData>> sectionedBlockDataCopy = new ConcurrentHashMap<>();
-        for (Map.Entry<String, Map<Location, BlockData>> entry : sectionedBlockData.entrySet()) {
-            sectionedBlockDataCopy.put(entry.getKey(), new ConcurrentHashMap<>(entry.getValue()));
-        }
-        Map<Location, Map<String, Object>> entityDataMapCopy = new ConcurrentHashMap<>(entityDataMap);
-        Map<Location, BlockData> modifiedBlocksCopy = new ConcurrentHashMap<>(modifiedBlocks);
-        Map<Location, Map<String, Object>> bannerStatesCopy = new ConcurrentHashMap<>(bannerStates);
-        Map<Location, Map<String, Object>> signStatesCopy = new ConcurrentHashMap<>(signStates);
-
-        int bufferSize = calculateBufferSize();
-
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            try {
-                File backupFile = new File(datcFile.getParent(), datcFile.getName() + ".bak");
-                if (datcFile.exists()) {
-                    if (!datcFile.renameTo(backupFile)) {
-                        LOGGER.warning("[ArenaRegen] Failed to create backup of " + datcFile.getName());
-                    }
-                }
-
-                try (FileOutputStream fos = new FileOutputStream(datcFile);
-                     BufferedOutputStream bos = new BufferedOutputStream(fos, bufferSize);
-                     GZIPOutputStream gzip = new GZIPOutputStream(bos) {{ def.setLevel(GZIP_COMPRESSION_LEVEL); }};
-                     DataOutputStream dos = new DataOutputStream(gzip)) {
-
-                    String header = fileFormatVersion + "," + creator + "," + creationDate + "," + worldName + "," +
-                            minecraftVersion + "," + minX + "," + minY + "," + minZ + "," +
-                            width + "," + height + "," + depth;
-                    if (spawnLocation != null) {
-                        header += "," + spawnLocation.getX() + "," + spawnLocation.getY() + "," + spawnLocation.getZ() +
-                                "," + spawnLocation.getYaw() + "," + spawnLocation.getPitch();
-                    } else {
-                        header += ",0,0,0,0,0";
-                    }
-                    header += "," + locked;
-                    dos.writeBytes(header);
-                    dos.writeByte('\n');
-
-                    writeSections(dos, sectionedBlockDataCopy);
-                    writeEntities(dos, entityDataMapCopy);
-                    writeBanners(dos, bannerStatesCopy);
-                    writeSigns(dos, signStatesCopy);
-                    writeModifiedBlocks(dos, modifiedBlocksCopy);
-                    dos.flush();
-
-                } catch (IOException e) {
-                    if (backupFile.exists()) {
-                        if (datcFile.exists()) datcFile.delete();
-                        backupFile.renameTo(datcFile);
-                    }
-                    future.completeExceptionally(e);
-                    return;
-                }
-
-                long timeTaken = System.currentTimeMillis() - startTime;
-                long fileSize = datcFile.length();
-                LOGGER.info("[ArenaRegen] Saved RegionData to " + datcFile.getName() + ": " +
-                        sectionedBlockDataCopy.size() + " sections, " + sectionedBlockDataCopy.values().stream().mapToLong(Map::size).sum() + " total blocks, " +
-                        entityDataMapCopy.size() + " entities, " + bannerStatesCopy.size() + " banners, " + signStatesCopy.size() + " signs, " +
-                        modifiedBlocksCopy.size() + " modified blocks. " +
-                        "File size: " + (fileSize / 1024) + " KB, Time: " + timeTaken + "ms");
-
-                future.complete(null);
-            } catch (Exception e) {
-                future.completeExceptionally(e);
+            File backupFile = new File(datcFile.getParent(), datcFile.getName() + ".bak");
+            if (datcFile.exists() && !datcFile.renameTo(backupFile)) {
+                LOGGER.warning("[ArenaRegen] Failed to create backup of " + datcFile.getName());
+                return;
             }
-        });
 
-        return future;
+            try (FileOutputStream fos = new FileOutputStream(datcFile);
+                 BufferedOutputStream bos = new BufferedOutputStream(fos, bufferSize);
+                 GZIPOutputStream gzip = new GZIPOutputStream(bos) {{
+                     def.setLevel(GZIP_COMPRESSION_LEVEL);
+                 }};
+                 DataOutputStream dos = new DataOutputStream(gzip)) {
+
+                String header = fileFormatVersion + "," + creator + "," + creationDate + "," + worldName + "," +
+                        minecraftVersion + "," + minX + "," + minY + "," + minZ + "," +
+                        width + "," + height + "," + depth;
+                if (spawnLocation != null) {
+                    header += "," + spawnLocation.getX() + "," + spawnLocation.getY() + "," + spawnLocation.getZ() +
+                            "," + spawnLocation.getYaw() + "," + spawnLocation.getPitch();
+                } else {
+                    header += ",0,0,0,0,0";
+                }
+                header += "," + locked;
+                dos.writeBytes(header);
+                dos.writeByte('\n');
+
+                writeSections(dos, sectionedBlockData);
+                writeEntities(dos, entityDataMap);
+                writeBanners(dos, bannerStates);
+                writeSigns(dos, signStates);
+                writeModifiedBlocks(dos, modifiedBlocks);
+            } catch (IOException e) {
+                if (backupFile.exists()) {
+                    if (datcFile.exists()) datcFile.delete();
+                    backupFile.renameTo(datcFile);
+                }
+                LOGGER.severe("[ArenaRegen] Save failed: " + e.getMessage());
+                throw new RuntimeException(e);
+            }
+
+            long timeTaken = System.currentTimeMillis() - startTime;
+            long fileSize = datcFile.length();
+            long totalBlocks = sectionedBlockData.values().stream().mapToLong(Map::size).sum();
+            LOGGER.info("[ArenaRegen] Saved RegionData to " + datcFile.getName() + ": " +
+                    sectionedBlockData.size() + " sections, " + totalBlocks + " total blocks, " +
+                    entityDataMap.size() + " entities, " + bannerStates.size() + " banners, " + signStates.size() + " signs, " +
+                    modifiedBlocks.size() + " modified blocks. " +
+                    "File size: " + (fileSize / 1024) + " KB, Time: " + timeTaken + "ms");
+        }, runnable -> Bukkit.getScheduler().runTaskAsynchronously(plugin, runnable)));
     }
 
-
-    private void writeSections(DataOutputStream dos, Map<String, Map<Location, BlockData>> sectionedBlockDataCopy) throws IOException {
-        dos.writeInt(sectionedBlockDataCopy.size());
-        for (Map.Entry<String, Map<Location, BlockData>> entry : sectionedBlockDataCopy.entrySet()) {
+    private void writeSections(DataOutputStream dos, Map<String, Map<Location, BlockData>> sectionedBlockData) throws IOException {
+        dos.writeInt(sectionedBlockData.size());
+        for (Map.Entry<String, Map<Location, BlockData>> entry : sectionedBlockData.entrySet()) {
             String sectionName = entry.getKey();
             Map<Location, BlockData> blocks = entry.getValue();
 
@@ -526,11 +514,11 @@ public class RegionData {
         }
     }
 
-    private void writeEntities(DataOutputStream dos, Map<Location, Map<String, Object>> entityDataMapCopy) throws IOException {
-        dos.writeInt(entityDataMapCopy.size());
+    private void writeEntities(DataOutputStream dos, Map<Location, Map<String, Object>> entityDataMap) throws IOException {
+        dos.writeInt(entityDataMap.size());
         int batchSize = 100;
         int count = 0;
-        for (Map.Entry<Location, Map<String, Object>> entry : entityDataMapCopy.entrySet()) {
+        for (Map.Entry<Location, Map<String, Object>> entry : entityDataMap.entrySet()) {
             Location loc = entry.getKey();
             Map<String, Object> serializedEntity = entry.getValue();
 
@@ -540,7 +528,32 @@ public class RegionData {
 
             ByteArrayOutputStream entityStream = new ByteArrayOutputStream();
             try (ObjectOutputStream oos = new ObjectOutputStream(entityStream)) {
-                oos.writeObject(serializedEntity);
+                Map<String, Object> serializableEntity = new HashMap<>();
+                for (Map.Entry<String, Object> dataEntry : serializedEntity.entrySet()) {
+                    String key = dataEntry.getKey();
+                    Object value = dataEntry.getValue();
+                    if (value instanceof ItemStack) {
+                        ItemStack item = (ItemStack) value;
+                        serializableEntity.put(key, item.getType().name() + ":" + item.getAmount());
+                    } else if (value instanceof Vector) {
+                        Vector vec = (Vector) value;
+                        serializableEntity.put(key, vec.getX() + "," + vec.getY() + "," + vec.getZ());
+                    } else if (value instanceof Serializable) {
+                        serializableEntity.put(key, value);
+                    } else {
+                        LOGGER.warning("[ArenaRegen] Non-serializable value at " + loc + " for key " + key + ", replacing with null.");
+                        serializableEntity.put(key, null);
+                    }
+                }
+                oos.writeObject(serializableEntity);
+            } catch (IOException e) {
+                LOGGER.warning("[ArenaRegen] IO error serializing entity at " + loc + ": " + e.getMessage() + ", replacing with empty map.");
+                Map<String, Object> emptyEntity = new HashMap<>();
+                ByteArrayOutputStream fallbackStream = new ByteArrayOutputStream();
+                try (ObjectOutputStream fallbackOos = new ObjectOutputStream(fallbackStream)) {
+                    fallbackOos.writeObject(emptyEntity);
+                }
+                entityStream = fallbackStream;
             }
             byte[] entityDataBytes = entityStream.toByteArray();
             dos.writeInt(entityDataBytes.length);
@@ -556,11 +569,11 @@ public class RegionData {
         }
     }
 
-    private void writeBanners(DataOutputStream dos, Map<Location, Map<String, Object>> bannerStatesCopy) throws IOException {
-        dos.writeInt(bannerStatesCopy.size());
+    private void writeBanners(DataOutputStream dos, Map<Location, Map<String, Object>> bannerStates) throws IOException {
+        dos.writeInt(bannerStates.size());
         int batchSize = 100;
         int count = 0;
-        for (Map.Entry<Location, Map<String, Object>> entry : bannerStatesCopy.entrySet()) {
+        for (Map.Entry<Location, Map<String, Object>> entry : bannerStates.entrySet()) {
             Location loc = entry.getKey();
             Map<String, Object> bannerData = entry.getValue();
 
@@ -574,51 +587,27 @@ public class RegionData {
 
             List<Map<String, String>> patternDataList = (List<Map<String, String>>) bannerData.get("patterns");
             if (patternDataList != null && !patternDataList.isEmpty()) {
-                dos.writeByte((byte) patternDataList.size());
+                dos.writeInt(patternDataList.size());
                 for (Map<String, String> patternData : patternDataList) {
-                    String colorStr = patternData.get("color");
-                    String typeStr = patternData.get("type");
-                    try {
-                        DyeColor color = DyeColor.valueOf(colorStr);
-                        dos.writeByte((byte) color.ordinal());
-                        dos.writeUTF(typeStr);
-                    } catch (IllegalArgumentException e) {
-                        LOGGER.warning("[ArenaRegen] Invalid pattern color " + colorStr + " at " + loc + ", skipping.");
-                        dos.writeByte((byte) -1);
-                        dos.writeUTF("");
-                    }
-                }
-            } else {
-                dos.writeByte((byte) 0);
-            }
-
-            Map<String, Object> pdcData = (Map<String, Object>) bannerData.get("persistentData");
-            if (pdcData != null && !pdcData.isEmpty()) {
-                dos.writeInt(pdcData.size());
-                for (Map.Entry<String, Object> pdcEntry : pdcData.entrySet()) {
-                    dos.writeUTF(pdcEntry.getKey());
-                    Object value = pdcEntry.getValue();
-                    if (value instanceof String) {
-                        dos.writeByte(1);
-                        dos.writeUTF((String) value);
-                    } else if (value instanceof Integer) {
-                        dos.writeByte(2);
-                        dos.writeInt((Integer) value);
-                    } else if (value instanceof Double) {
-                        dos.writeByte(3);
-                        dos.writeDouble((Double) value);
-                    } else if (value instanceof Byte) {
-                        dos.writeByte(4);
-                        dos.writeByte((Byte) value);
-                    } else if (value instanceof Long) {
-                        dos.writeByte(5);
-                        dos.writeLong((Long) value);
-                    } else {
-                        dos.writeByte(0);
-                    }
+                    dos.writeUTF(patternData.get("color"));
+                    dos.writeUTF(patternData.get("type"));
                 }
             } else {
                 dos.writeInt(0);
+            }
+
+            if (bannerData.containsKey("persistentData")) {
+                dos.writeBoolean(true);
+                Map<String, Object> pdcData = (Map<String, Object>) bannerData.get("persistentData");
+                ByteArrayOutputStream pdcStream = new ByteArrayOutputStream();
+                try (ObjectOutputStream oos = new ObjectOutputStream(pdcStream)) {
+                    oos.writeObject(pdcData);
+                }
+                byte[] pdcBytes = pdcStream.toByteArray();
+                dos.writeInt(pdcBytes.length);
+                dos.write(pdcBytes);
+            } else {
+                dos.writeBoolean(false);
             }
 
             count++;
@@ -631,11 +620,11 @@ public class RegionData {
         }
     }
 
-    private void writeSigns(DataOutputStream dos, Map<Location, Map<String, Object>> signStatesCopy) throws IOException {
-        dos.writeInt(signStatesCopy.size());
+    private void writeSigns(DataOutputStream dos, Map<Location, Map<String, Object>> signStates) throws IOException {
+        dos.writeInt(signStates.size());
         int batchSize = 100;
         int count = 0;
-        for (Map.Entry<Location, Map<String, Object>> entry : signStatesCopy.entrySet()) {
+        for (Map.Entry<Location, Map<String, Object>> entry : signStates.entrySet()) {
             Location loc = entry.getKey();
             Map<String, Object> signData = entry.getValue();
 
@@ -644,49 +633,24 @@ public class RegionData {
             dos.writeDouble(loc.getZ());
 
             List<String> lines = (List<String>) signData.get("lines");
-            if (lines != null && !lines.isEmpty()) {
-                dos.writeByte((byte) lines.size());
-                for (String line : lines) {
-                    dos.writeUTF(line != null ? line : "");
-                }
-            } else {
-                dos.writeByte((byte) 0);
+            for (String line : lines) {
+                dos.writeUTF(line);
             }
+            dos.writeUTF((String) signData.get("color"));
+            dos.writeBoolean((Boolean) signData.get("glowing"));
 
-            String colorStr = (String) signData.get("color");
-            DyeColor color = colorStr != null ? DyeColor.valueOf(colorStr) : DyeColor.BLACK;
-            dos.writeByte((byte) color.ordinal());
-
-            boolean glowing = (boolean) signData.getOrDefault("glowing", false);
-            dos.writeBoolean(glowing);
-
-            Map<String, Object> pdcData = (Map<String, Object>) signData.get("persistentData");
-            if (pdcData != null && !pdcData.isEmpty()) {
-                dos.writeInt(pdcData.size());
-                for (Map.Entry<String, Object> pdcEntry : pdcData.entrySet()) {
-                    dos.writeUTF(pdcEntry.getKey());
-                    Object value = pdcEntry.getValue();
-                    if (value instanceof String) {
-                        dos.writeByte(1);
-                        dos.writeUTF((String) value);
-                    } else if (value instanceof Integer) {
-                        dos.writeByte(2);
-                        dos.writeInt((Integer) value);
-                    } else if (value instanceof Double) {
-                        dos.writeByte(3);
-                        dos.writeDouble((Double) value);
-                    } else if (value instanceof Byte) {
-                        dos.writeByte(4);
-                        dos.writeByte((Byte) value);
-                    } else if (value instanceof Long) {
-                        dos.writeByte(5);
-                        dos.writeLong((Long) value);
-                    } else {
-                        dos.writeByte(0);
-                    }
+            if (signData.containsKey("persistentData")) {
+                dos.writeBoolean(true);
+                Map<String, Object> pdcData = (Map<String, Object>) signData.get("persistentData");
+                ByteArrayOutputStream pdcStream = new ByteArrayOutputStream();
+                try (ObjectOutputStream oos = new ObjectOutputStream(pdcStream)) {
+                    oos.writeObject(pdcData);
                 }
+                byte[] pdcBytes = pdcStream.toByteArray();
+                dos.writeInt(pdcBytes.length);
+                dos.write(pdcBytes);
             } else {
-                dos.writeInt(0);
+                dos.writeBoolean(false);
             }
 
             count++;
@@ -699,20 +663,17 @@ public class RegionData {
         }
     }
 
-    private void writeModifiedBlocks(DataOutputStream dos, Map<Location, BlockData> modifiedBlocksCopy) throws IOException {
-        dos.writeInt(modifiedBlocksCopy.size());
+    private void writeModifiedBlocks(DataOutputStream dos, Map<Location, BlockData> modifiedBlocks) throws IOException {
+        dos.writeInt(modifiedBlocks.size());
         int batchSize = 1000;
         int count = 0;
-        for (Map.Entry<Location, BlockData> entry : modifiedBlocksCopy.entrySet()) {
+        for (Map.Entry<Location, BlockData> entry : modifiedBlocks.entrySet()) {
             Location loc = entry.getKey();
             BlockData blockData = entry.getValue();
-            String blockDataStr = blockData != null ? blockData.getAsString() : "minecraft:air";
-
             dos.writeInt(loc.getBlockX());
             dos.writeInt(loc.getBlockY());
             dos.writeInt(loc.getBlockZ());
-            dos.writeUTF(blockDataStr);
-
+            dos.writeUTF(blockData.getAsString());
             count++;
             if (count % batchSize == 0) {
                 dos.flush();
@@ -724,470 +685,346 @@ public class RegionData {
     }
 
     public CompletableFuture<Void> loadFromDatc(File datcFile) {
-        this.datcFile = datcFile;
-        CompletableFuture<Void> future = new CompletableFuture<>();
-        long startTime = System.currentTimeMillis();
-        int bufferSize = datcFile.length() < 500_000 ? 4096 : (datcFile.length() < 5_000_000 ? 16384 : 32768);
+        synchronized (loadLock) {
+            if (loadingFuture != null && !loadingFuture.isDone()) {
+                return loadingFuture;
+            }
+            if (isBlockDataLoaded) {
+                return CompletableFuture.completedFuture(null);
+            }
+            this.datcFile = datcFile;
+            loadFailed = false;
 
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            try {
+            loadingFuture = CompletableFuture.runAsync(() -> {
+                if (!datcFile.exists()) {
+                    LOGGER.warning("[ArenaRegen] .datc file not found: " + datcFile.getPath());
+                    loadFailed = true;
+                    return;
+                }
+                long startTime = System.currentTimeMillis();
                 try (FileInputStream fis = new FileInputStream(datcFile);
-                     BufferedInputStream bis = new BufferedInputStream(fis, bufferSize);
+                     BufferedInputStream bis = new BufferedInputStream(fis, 16384);
                      GZIPInputStream gzip = new GZIPInputStream(bis);
                      DataInputStream dis = new DataInputStream(gzip)) {
 
-                    String header = readHeader(dis);
-                    String[] headerParts = header.split(",");
-                    if (headerParts.length < 11) {
-                        throw new IOException("Invalid .datc file: Incomplete header");
+                    String header = dis.readLine();
+                    if (header == null) {
+                        throw new IOException("Empty or invalid header in .datc file.");
+                    }
+                    String[] parts = header.split(",");
+                    if (parts.length < 12) {
+                        throw new IOException("Invalid header format. Expected at least 12 parts, got " + parts.length);
                     }
 
-                    String fileVersion = headerParts[0];
-                    this.fileFormatVersion = fileVersion;
-                    if (!fileVersion.equals(FILE_FORMAT_VERSION)) {
-                        headerParts = migrateHeader(fileVersion, headerParts);
+                    fileFormatVersion = parts[0];
+                    creator = parts[1];
+                    creationDate = Long.parseLong(parts[2]);
+                    worldName = parts[3];
+                    minecraftVersion = parts[4];
+                    minX = Integer.parseInt(parts[5]);
+                    minY = Integer.parseInt(parts[6]);
+                    minZ = Integer.parseInt(parts[7]);
+                    width = Integer.parseInt(parts[8]);
+                    height = Integer.parseInt(parts[9]);
+                    depth = Integer.parseInt(parts[10]);
+
+                    if (parts.length >= 16) {
+                        double spawnX = Double.parseDouble(parts[11]);
+                        double spawnY = Double.parseDouble(parts[12]);
+                        double spawnZ = Double.parseDouble(parts[13]);
+                        float spawnYaw = Float.parseFloat(parts[14]);
+                        float spawnPitch = Float.parseFloat(parts[15]);
+                        spawnLocation = new Location(Bukkit.getWorld(worldName), spawnX, spawnY, spawnZ, spawnYaw, spawnPitch);
+                    }
+                    if (parts.length >= 17) {
+                        locked = Boolean.parseBoolean(parts[16]);
                     }
 
-                    creator = headerParts[1];
-                    creationDate = Long.parseLong(headerParts[2]);
-                    worldName = headerParts[3];
-                    minecraftVersion = headerParts[4];
-                    minX = Integer.parseInt(headerParts[5]);
-                    minY = Integer.parseInt(headerParts[6]);
-                    minZ = Integer.parseInt(headerParts[7]);
-                    width = Integer.parseInt(headerParts[8]);
-                    height = Integer.parseInt(headerParts[9]);
-                    depth = Integer.parseInt(headerParts[10]);
-
-                    World world = Bukkit.getWorld(worldName);
-                    if (world == null) {
-                        LOGGER.warning("[ArenaRegen] World '" + worldName + "' not found for region in " + datcFile.getName() + ". Deferring block data loading.");
-                        isBlockDataLoaded = false;
-                        spawnLocation = null;
-                        locked = false;
-                        future.complete(null);
-                        return;
-                    }
-
-                    if (headerParts.length >= 16) {
-                        double spawnX = Double.parseDouble(headerParts[11]);
-                        double spawnY = Double.parseDouble(headerParts[12]);
-                        double spawnZ = Double.parseDouble(headerParts[13]);
-                        float spawnYaw = Float.parseFloat(headerParts[14]);
-                        float spawnPitch = Float.parseFloat(headerParts[15]);
-                        if (spawnX == 0 && spawnY == 0 && spawnZ == 0 && spawnYaw == 0 && spawnPitch == 0) {
-                            spawnLocation = null;
-                        } else {
-                            spawnLocation = new Location(world, spawnX, spawnY, spawnZ, spawnYaw, spawnPitch);
-                        }
-                        locked = Boolean.parseBoolean(headerParts[16]);
-                    } else if (headerParts.length >= 11) {
-                        double spawnX = headerParts.length > 11 ? Double.parseDouble(headerParts[11]) : 0;
-                        double spawnY = headerParts.length > 12 ? Double.parseDouble(headerParts[12]) : 0;
-                        double spawnZ = headerParts.length > 13 ? Double.parseDouble(headerParts[13]) : 0;
-                        float spawnYaw = headerParts.length > 14 ? Float.parseFloat(headerParts[14]) : 0;
-                        float spawnPitch = headerParts.length > 15 ? Float.parseFloat(headerParts[15]) : 0;
-                        if (spawnX == 0 && spawnY == 0 && spawnZ == 0 && spawnYaw == 0 && spawnPitch == 0) {
-                            spawnLocation = null;
-                        } else {
-                            spawnLocation = new Location(world, spawnX, spawnY, spawnZ, spawnYaw, spawnPitch);
-                        }
-                        locked = false;
-                    } else {
-                        spawnLocation = null;
-                        locked = false;
-                    }
-
-                    readSections(dis, world);
-                    readEntities(dis, world);
-                    if (fileVersion.equals("4")) {
-                        readBanners(dis, world, fileVersion);
-                        readSigns(dis, world, fileVersion);
-                    } else {
-                        bannerStates.clear();
-                        signStates.clear();
-                    }
-                    readModifiedBlocks(dis, world);
+                    readSections(dis, sectionedBlockData);
+                    readEntities(dis, entityDataMap);
+                    readBanners(dis, bannerStates);
+                    readSigns(dis, signStates);
+                    readModifiedBlocks(dis, modifiedBlocks);
 
                     isBlockDataLoaded = true;
-
+                } catch (EOFException e) {
+                    LOGGER.severe("[ArenaRegen] Unexpected EOF in .datc file, likely corrupted or incomplete: " + datcFile.getPath());
+                    loadFailed = true;
+                    throw new RuntimeException("Incomplete .datc file.", e);
+                } catch (IOException | NumberFormatException e) {
+                    LOGGER.severe("[ArenaRegen] Failed to load RegionData from " + datcFile.getPath() + ": " + e.getMessage());
+                    loadFailed = true;
+                    throw new RuntimeException(e);
+                } finally {
                     long timeTaken = System.currentTimeMillis() - startTime;
-                    long fileSize = datcFile.length();
-                    LOGGER.info("[ArenaRegen] Loaded RegionData for file " + datcFile.getName() + ": " +
-                            sectionedBlockData.size() + " sections, " + getAllBlocks().size() + " total blocks, " +
+                    long totalBlocks = sectionedBlockData.values().stream().mapToLong(Map::size).sum();
+                    LOGGER.info("[ArenaRegen] Loaded RegionData from " + datcFile.getName() + ": " +
+                            sectionedBlockData.size() + " sections, " + totalBlocks + " total blocks, " +
                             entityDataMap.size() + " entities, " + bannerStates.size() + " banners, " + signStates.size() + " signs, " +
-                            modifiedBlocks.size() + " modified blocks. " +
-                            "Locked: " + locked + ", File size: " + (fileSize / 1024) + " KB, Time: " + timeTaken + "ms");
-
-                    future.complete(null);
+                            modifiedBlocks.size() + " modified blocks. Time: " + timeTaken + "ms");
                 }
-            } catch (Exception e) {
-                future.completeExceptionally(e);
-            }
-        });
-
-        return future;
-    }
-
-    private String readHeader(DataInputStream dis) throws IOException {
-        StringBuilder headerBuilder = new StringBuilder();
-        int b;
-        while ((b = dis.read()) != -1 && b != '\n') {
-            headerBuilder.append((char) b);
+            }, runnable -> Bukkit.getScheduler().runTaskAsynchronously(plugin, runnable));
+            return loadingFuture;
         }
-        if (b == -1) throw new IOException("Invalid .datc file: No header section found");
-        return headerBuilder.toString();
     }
 
-    private String[] migrateHeader(String fileVersion, String[] headerParts) throws IOException {
-        if (fileVersion.equals("1") || fileVersion.equals("2") || fileVersion.equals("3")) {
-            LOGGER.info("[ArenaRegen] Migrating file format version '" + fileVersion + "' to version " + FILE_FORMAT_VERSION + ".");
-            String[] newHeader = new String[17];
-            System.arraycopy(headerParts, 0, newHeader, 0, Math.min(headerParts.length, 11));
-            for (int i = headerParts.length; i < 11; i++) {
-                newHeader[i] = "0";
-            }
-            if (headerParts.length < 16) {
-                newHeader[11] = "0";
-                newHeader[12] = "0";
-                newHeader[13] = "0";
-                newHeader[14] = "0";
-                newHeader[15] = "0";
-            } else {
-                System.arraycopy(headerParts, 11, newHeader, 11, 5);
-            }
-            newHeader[16] = "false";
-            newHeader[0] = FILE_FORMAT_VERSION;
-            return newHeader;
-        }
-        throw new IOException("Unsupported .datc file version: " + fileVersion);
-    }
-
-    private void readSections(DataInputStream dis, World world) throws IOException {
-        int sectionCount = dis.readInt();
-        sectionedBlockData.clear();
-
-        for (int i = 0; i < sectionCount; i++) {
+    private void readSections(DataInputStream dis, Map<String, Map<Location, BlockData>> sectionedBlockData) throws IOException {
+        int numSections = dis.readInt();
+        for (int i = 0; i < numSections; i++) {
             String sectionName = dis.readUTF();
-            int blockCount = dis.readInt();
+            int numBlocks = dis.readInt();
             Map<Location, BlockData> blocks = new ConcurrentHashMap<>();
-
-            for (int j = 0; j < blockCount; j++) {
+            World world = Bukkit.getWorld(worldName);
+            for (int j = 0; j < numBlocks; j++) {
                 int x = dis.readInt();
                 int y = dis.readInt();
                 int z = dis.readInt();
                 String blockDataStr = dis.readUTF();
-
-                Location loc = new Location(world, x, y, z);
                 try {
-                    BlockData blockData = Bukkit.createBlockData(blockDataStr);
-                    blocks.put(loc, blockData);
+                    blocks.put(new Location(world, x, y, z), Bukkit.createBlockData(blockDataStr));
                 } catch (IllegalArgumentException e) {
-                    LOGGER.warning("[ArenaRegen] Invalid block data '" + blockDataStr + "' at " + loc + " in section " + sectionName + ": " + e.getMessage() + ", replacing with air.");
-                    blocks.put(loc, Bukkit.createBlockData(Material.AIR));
+                    LOGGER.warning("[ArenaRegen] Failed to create block data from string '" + blockDataStr + "' for section " + sectionName + " at " + x + "," + y + "," + z + ". Replacing with AIR. Error: " + e.getMessage());
+                    blocks.put(new Location(world, x, y, z), Bukkit.createBlockData(Material.AIR));
                 }
             }
             sectionedBlockData.put(sectionName, blocks);
         }
     }
 
-    private void readEntities(DataInputStream dis, World world) throws IOException {
-        int entityCount = dis.readInt();
-        entityDataMap.clear();
-        for (int i = 0; i < entityCount; i++) {
+    private void readEntities(DataInputStream dis, Map<Location, Map<String, Object>> entityDataMap) throws IOException {
+        int numEntities = dis.readInt();
+        World world = Bukkit.getWorld(worldName);
+        for (int i = 0; i < numEntities; i++) {
             double x = dis.readDouble();
             double y = dis.readDouble();
             double z = dis.readDouble();
-            int entityDataLength = dis.readInt();
-            byte[] entityDataBytes = new byte[entityDataLength];
+            int dataLength = dis.readInt();
+            byte[] entityDataBytes = new byte[dataLength];
             dis.readFully(entityDataBytes);
 
-            Location loc = new Location(world, x, y, z);
-            try {
-                ByteArrayInputStream entityStream = new ByteArrayInputStream(entityDataBytes);
-                try (ObjectInputStream ois = new ObjectInputStream(entityStream)) {
-                    Map<String, Object> serializedEntity = (Map<String, Object>) ois.readObject();
-                    entityDataMap.put(loc, serializedEntity);
+            try (ByteArrayInputStream bis = new ByteArrayInputStream(entityDataBytes);
+                 ObjectInputStream ois = new ObjectInputStream(bis)) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> serializedEntity = (Map<String, Object>) ois.readObject();
+
+                Map<String, Object> deserializedEntity = new HashMap<>();
+                for (Map.Entry<String, Object> entry : serializedEntity.entrySet()) {
+                    String key = entry.getKey();
+                    Object value = entry.getValue();
+                    if (value instanceof String) {
+                        String strValue = (String) value;
+                        if (strValue.contains(":") && Material.matchMaterial(strValue.split(":")[0]) != null) {
+                            String[] parts = strValue.split(":");
+                            deserializedEntity.put(key, new ItemStack(Material.valueOf(parts[0]), Integer.parseInt(parts[1])));
+                        } else if (strValue.contains(",")) {
+                            String[] parts = strValue.split(",");
+                            if (parts.length == 3) {
+                                try {
+                                    deserializedEntity.put(key, new Vector(Double.parseDouble(parts[0]), Double.parseDouble(parts[1]), Double.parseDouble(parts[2])));
+                                } catch (NumberFormatException e) {
+                                    LOGGER.warning("[ArenaRegen] Invalid vector format for key " + key + ": " + strValue + ", replacing with null.");
+                                    deserializedEntity.put(key, null);
+                                }
+                            } else {
+                                deserializedEntity.put(key, value);
+                            }
+                        } else {
+                            deserializedEntity.put(key, value);
+                        }
+                    } else {
+                        deserializedEntity.put(key, value);
+                    }
                 }
-            } catch (Exception e) {
-                LOGGER.warning("[ArenaRegen] Failed to deserialize entity data at " + loc + ": " + e.getMessage() + ", skipping.");
+                entityDataMap.put(new Location(world, x, y, z), deserializedEntity);
+            } catch (ClassNotFoundException | IOException e) {
+                LOGGER.warning("[ArenaRegen] Failed to deserialize entity data at " + x + "," + y + "," + z + ": " + e.getMessage());
             }
         }
     }
 
-    private void readBanners(DataInputStream dis, World world, String fileVersion) throws IOException {
-        bannerStates.clear();
-        int bannerCount = dis.readInt();
-        for (int i = 0; i < bannerCount; i++) {
+    private void readBanners(DataInputStream dis, Map<Location, Map<String, Object>> bannerStates) throws IOException {
+        int numBanners = dis.readInt();
+        World world = Bukkit.getWorld(worldName);
+        for (int i = 0; i < numBanners; i++) {
             double x = dis.readDouble();
             double y = dis.readDouble();
             double z = dis.readDouble();
-            Location loc = new Location(world, x, y, z);
-            Map<String, Object> bannerData = new HashMap<>();
+            byte baseColorByte = dis.readByte();
+            DyeColor baseColor = baseColorByte == -1 ? null : DyeColor.values()[baseColorByte];
 
-            if (!fileVersion.equals(FILE_FORMAT_VERSION)) {
-                if (bannerCount > 0) {
-                    dis.readByte();
-                    byte patternCount = dis.readByte();
-                    for (int j = 0; j < patternCount; j++) {
-                        dis.readByte();
-                        dis.readUTF();
-                    }
-                    int pdcSize = dis.readInt();
-                    for (int j = 0; j < pdcSize; j++) {
-                        dis.readUTF();
-                        byte type = dis.readByte();
-                        if (type == 1) dis.readUTF();
-                        else if (type == 2) dis.readInt();
-                        else if (type == 3) dis.readDouble();
-                        else if (type == 4) dis.readByte();
-                        else if (type == 5) dis.readLong();
-                    }
-                }
-                continue;
-            }
-
-            byte baseColorOrdinal = dis.readByte();
-            DyeColor baseColor = null;
-            try {
-                baseColor = baseColorOrdinal != -1 ? DyeColor.values()[baseColorOrdinal] : null;
-            } catch (ArrayIndexOutOfBoundsException e) {
-                LOGGER.warning("[ArenaRegen] Invalid base color ordinal " + baseColorOrdinal + " at " + loc + ", defaulting to null.");
-            }
-            bannerData.put("baseColor", baseColor != null ? baseColor.name() : "NONE");
-
-            byte patternCount = dis.readByte();
+            int numPatterns = dis.readInt();
             List<Map<String, String>> patternDataList = new ArrayList<>();
-            for (int j = 0; j < patternCount; j++) {
-                byte colorOrdinal = dis.readByte();
-                String typeStr = dis.readUTF();
-                try {
-                    DyeColor color = DyeColor.values()[colorOrdinal];
-                    String validTypeStr = KNOWN_PATTERN_IDENTIFIERS.contains(typeStr) ? typeStr : "base";
-                    patternDataList.add(Map.of("color", color.name(), "type", validTypeStr));
-                } catch (ArrayIndexOutOfBoundsException e) {
-                    LOGGER.warning("[ArenaRegen] Invalid color ordinal " + colorOrdinal + " for pattern at " + loc + ", skipping.");
-                }
+            for (int j = 0; j < numPatterns; j++) {
+                Map<String, String> patternData = new HashMap<>();
+                patternData.put("color", dis.readUTF());
+                patternData.put("type", dis.readUTF());
+                patternDataList.add(patternData);
             }
+
+            Map<String, Object> bannerData = new HashMap<>();
+            bannerData.put("baseColor", baseColor != null ? baseColor.name() : "NONE");
             bannerData.put("patterns", patternDataList);
 
-            int pdcSize = dis.readInt();
-            if (pdcSize > 0) {
-                Map<String, Object> pdcData = new HashMap<>();
-                for (int j = 0; j < pdcSize; j++) {
-                    String key = dis.readUTF();
-                    byte type = dis.readByte();
-                    try {
-                        switch (type) {
-                            case 1:
-                                pdcData.put(key, dis.readUTF());
-                                break;
-                            case 2:
-                                pdcData.put(key, dis.readInt());
-                                break;
-                            case 3:
-                                pdcData.put(key, dis.readDouble());
-                                break;
-                            case 4:
-                                pdcData.put(key, dis.readByte());
-                                break;
-                            case 5:
-                                pdcData.put(key, dis.readLong());
-                                break;
-                            default:
-                                LOGGER.warning("[ArenaRegen] Unknown PDC type " + type + " for key " + key + " at " + loc + ", skipping.");
-                        }
-                    } catch (Exception e) {
-                        LOGGER.warning("[ArenaRegen] Failed to read PDC entry for key " + key + " at " + loc + ": " + e.getMessage());
-                    }
-                }
-                bannerData.put("persistentData", pdcData);
-                try {
-                    BlockState state = world.getBlockAt(loc).getState();
-                    if (state instanceof Banner) {
-                        Banner banner = (Banner) state;
-                        deserializePdc(banner.getPersistentDataContainer(), pdcData);
-                    } else {
-                        LOGGER.warning("[ArenaRegen] Block at " + loc + " is not a banner, cannot apply PDC.");
-                    }
-                } catch (Exception e) {
-                    LOGGER.warning("[ArenaRegen] Failed to apply PDC for banner at " + loc + ": " + e.getMessage());
+            boolean hasPdc = dis.readBoolean();
+            if (hasPdc) {
+                int pdcLength = dis.readInt();
+                byte[] pdcBytes = new byte[pdcLength];
+                dis.readFully(pdcBytes);
+                try (ByteArrayInputStream bis = new ByteArrayInputStream(pdcBytes);
+                     ObjectInputStream ois = new ObjectInputStream(bis)) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> pdcData = (Map<String, Object>) ois.readObject();
+                    bannerData.put("persistentData", pdcData);
+                } catch (ClassNotFoundException | IOException e) {
+                    LOGGER.warning("[ArenaRegen] Failed to deserialize PDC for banner at " + x + "," + y + "," + z + ": " + e.getMessage());
                 }
             }
 
-            bannerStates.put(loc, bannerData);
+            bannerStates.put(new Location(world, x, y, z), bannerData);
         }
     }
 
-    private void readSigns(DataInputStream dis, World world, String fileVersion) throws IOException {
-        signStates.clear();
-        int signCount = dis.readInt();
-        for (int i = 0; i < signCount; i++) {
+    private void readSigns(DataInputStream dis, Map<Location, Map<String, Object>> signStates) throws IOException {
+        int numSigns = dis.readInt();
+        World world = Bukkit.getWorld(worldName);
+        for (int i = 0; i < numSigns; i++) {
             double x = dis.readDouble();
             double y = dis.readDouble();
             double z = dis.readDouble();
-            Location loc = new Location(world, x, y, z);
-            Map<String, Object> signData = new HashMap<>();
 
-            if (!fileVersion.equals(FILE_FORMAT_VERSION)) {
-                if (signCount > 0) {
-                    byte lineCount = dis.readByte();
-                    for (int j = 0; j < lineCount; j++) {
-                        dis.readUTF();
-                    }
-                    dis.readByte();
-                    dis.readBoolean();
-                    int pdcSize = dis.readInt();
-                    for (int j = 0; j < pdcSize; j++) {
-                        dis.readUTF();
-                        byte type = dis.readByte();
-                        if (type == 1) dis.readUTF();
-                        else if (type == 2) dis.readInt();
-                        else if (type == 3) dis.readDouble();
-                        else if (type == 4) dis.readByte();
-                        else if (type == 5) dis.readLong();
-                    }
-                }
-                continue;
-            }
-
-            byte lineCount = dis.readByte();
             List<String> lines = new ArrayList<>();
-            for (int j = 0; j < lineCount && j < 4; j++) {
+            for (int j = 0; j < 4; j++) {
                 lines.add(dis.readUTF());
             }
-            while (lines.size() < 4) {
-                lines.add("");
-            }
-            signData.put("lines", lines);
-
-            byte colorOrdinal = dis.readByte();
-            DyeColor color = null;
-            try {
-                color = DyeColor.values()[colorOrdinal];
-            } catch (ArrayIndexOutOfBoundsException e) {
-                LOGGER.warning("[ArenaRegen] Invalid color ordinal " + colorOrdinal + " at " + loc + ", defaulting to BLACK.");
-                color = DyeColor.BLACK;
-            }
-            signData.put("color", color.name());
-
+            String colorStr = dis.readUTF();
             boolean glowing = dis.readBoolean();
+
+            Map<String, Object> signData = new HashMap<>();
+            signData.put("lines", lines);
+            signData.put("color", colorStr);
             signData.put("glowing", glowing);
 
-            int pdcSize = dis.readInt();
-            if (pdcSize > 0) {
-                Map<String, Object> pdcData = new HashMap<>();
-                for (int j = 0; j < pdcSize; j++) {
-                    String key = dis.readUTF();
-                    byte type = dis.readByte();
-                    try {
-                        switch (type) {
-                            case 1:
-                                pdcData.put(key, dis.readUTF());
-                                break;
-                            case 2:
-                                pdcData.put(key, dis.readInt());
-                                break;
-                            case 3:
-                                pdcData.put(key, dis.readDouble());
-                                break;
-                            case 4:
-                                pdcData.put(key, dis.readByte());
-                                break;
-                            case 5:
-                                pdcData.put(key, dis.readLong());
-                                break;
-                            default:
-                                LOGGER.warning("[ArenaRegen] Unknown PDC type " + type + " for key " + key + " at " + loc + ", skipping.");
-                        }
-                    } catch (Exception e) {
-                        LOGGER.warning("[ArenaRegen] Failed to read PDC entry for key " + key + " at " + loc + ": " + e.getMessage());
-                    }
-                }
-                signData.put("persistentData", pdcData);
-                try {
-                    BlockState state = world.getBlockAt(loc).getState();
-                    if (state instanceof Sign) {
-                        Sign sign = (Sign) state;
-                        deserializePdc(sign.getPersistentDataContainer(), pdcData);
-                    } else {
-                        LOGGER.warning("[ArenaRegen] Block at " + loc + " is not a sign, cannot apply PDC.");
-                    }
-                } catch (Exception e) {
-                    LOGGER.warning("[ArenaRegen] Failed to apply PDC for sign at " + loc + ": " + e.getMessage());
+            // Read PersistentDataContainer
+            boolean hasPdc = dis.readBoolean();
+            if (hasPdc) {
+                int pdcLength = dis.readInt();
+                byte[] pdcBytes = new byte[pdcLength];
+                dis.readFully(pdcBytes);
+                try (ByteArrayInputStream bis = new ByteArrayInputStream(pdcBytes);
+                     ObjectInputStream ois = new ObjectInputStream(bis)) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> pdcData = (Map<String, Object>) ois.readObject();
+                    signData.put("persistentData", pdcData);
+                } catch (ClassNotFoundException | IOException e) {
+                    LOGGER.warning("[ArenaRegen] Failed to deserialize PDC for sign at " + x + "," + y + "," + z + ": " + e.getMessage());
                 }
             }
 
-            signStates.put(loc, signData);
+            signStates.put(new Location(world, x, y, z), signData);
         }
     }
 
-    private void readModifiedBlocks(DataInputStream dis, World world) throws IOException {
-        int modifiedCount = dis.readInt();
-        modifiedBlocks.clear();
-        for (int i = 0; i < modifiedCount; i++) {
+    private void readModifiedBlocks(DataInputStream dis, Map<Location, BlockData> modifiedBlocks) throws IOException {
+        int numModifiedBlocks = dis.readInt();
+        World world = Bukkit.getWorld(worldName);
+        for (int i = 0; i < numModifiedBlocks; i++) {
             int x = dis.readInt();
             int y = dis.readInt();
             int z = dis.readInt();
             String blockDataStr = dis.readUTF();
-
-            Location loc = new Location(world, x, y, z);
             try {
-                BlockData blockData = Bukkit.createBlockData(blockDataStr);
-                modifiedBlocks.put(loc, blockData);
+                modifiedBlocks.put(new Location(world, x, y, z), Bukkit.createBlockData(blockDataStr));
             } catch (IllegalArgumentException e) {
-                LOGGER.warning("[ArenaRegen] Invalid block data '" + blockDataStr + "' for modified block at " + loc + ": " + e.getMessage() + ", skipping.");
+                LOGGER.warning("[ArenaRegen] Failed to create block data from string '" + blockDataStr + "' for modified block at " + x + "," + y + "," + z + ". Replacing with AIR. Error: " + e.getMessage());
+                modifiedBlocks.put(new Location(world, x, y, z), Bukkit.createBlockData(Material.AIR));
             }
         }
     }
 
-    public void ensureBlockDataLoaded() throws IOException {
-        if (isLoading) {
-            throw new IOException("Recursive loading detected for region in " + (datcFile != null ? datcFile.getName() : "unknown file"));
-        }
+    public String getCreator() {
+        return creator;
+    }
 
-        if (!isBlockDataLoaded && datcFile != null) {
+    public long getCreationDate() {
+        return creationDate;
+    }
+
+    public String getWorldName() {
+        return worldName;
+    }
+
+    public String getMinecraftVersion() {
+        return minecraftVersion;
+    }
+
+    public String getFileFormatVersion() {
+        return fileFormatVersion;
+    }
+
+    public int getMinX() {
+        return minX;
+    }
+
+    public int getMinY() {
+        return minY;
+    }
+
+    public int getMinZ() {
+        return minZ;
+    }
+
+    public int getWidth() {
+        return width;
+    }
+
+    public int getHeight() {
+        return height;
+    }
+
+    public int getDepth() {
+        return depth;
+    }
+
+    public boolean isBlockDataLoaded() {
+        return isBlockDataLoaded;
+    }
+
+    public CompletableFuture<Void> ensureBlockDataLoaded() {
+        synchronized (loadLock) {
+            if (isBlockDataLoaded) {
+                return CompletableFuture.completedFuture(null);
+            }
             if (loadFailed) {
-                throw new IOException("Block data loading previously failed for region in " + datcFile.getName());
+                return CompletableFuture.failedFuture(new IllegalStateException("Failed to load region data previously."));
+            }
+            if (loadingFuture != null) {
+                return loadingFuture;
             }
 
-            World world = Bukkit.getWorld(worldName);
-            if (world == null) {
-                loadFailed = true;
-                throw new IOException("World '" + worldName + "' not found for region in " + datcFile.getName());
-            }
-
-            try {
-                isLoading = true;
-                loadFromDatc(datcFile).join();
-            } catch (Exception e) {
-                throw new IOException("Failed to load region data", e);
-            } finally {
-                isLoading = false;
-            }
+            loadingFuture = loadFromDatc(datcFile).whenComplete((v, ex) -> {
+                synchronized (loadLock) {
+                    if (ex != null) {
+                        loadFailed = true;
+                    }
+                    loadingFuture = null;
+                }
+            });
+            return loadingFuture;
         }
+    }
+
+    public CompletableFuture<Map<Location, BlockData>> getAllBlocks() {
+        return ensureBlockDataLoaded().thenApply(v -> {
+            Map<Location, BlockData> allBlocks = new HashMap<>();
+            for (Map<Location, BlockData> section : sectionedBlockData.values()) {
+                allBlocks.putAll(section);
+            }
+            return Collections.unmodifiableMap(allBlocks);
+        });
     }
 
     public Map<String, Map<Location, BlockData>> getSectionedBlockData() {
-        try {
-            ensureBlockDataLoaded();
-        } catch (IOException e) {
-            LOGGER.warning("[ArenaRegen] Failed to load block data for sectionedBlockData: " + e.getMessage());
-        }
-        return sectionedBlockData;
-    }
-
-    public Map<Location, BlockData> getAllBlocks() {
-        try {
-            ensureBlockDataLoaded();
-        } catch (IOException e) {
-            LOGGER.warning("[ArenaRegen] Failed to load block data for all blocks: " + e.getMessage());
-        }
-        Map<Location, BlockData> allBlocks = new ConcurrentHashMap<>();
-        for (Map.Entry<String, Map<Location, BlockData>> entry : sectionedBlockData.entrySet()) {
-            allBlocks.putAll(entry.getValue());
-        }
-        return allBlocks;
+        return Collections.unmodifiableMap(sectionedBlockData);
     }
 
     public boolean isLocked() {
@@ -1196,29 +1033,21 @@ public class RegionData {
 
     public void setLocked(boolean locked) {
         this.locked = locked;
-
-        if (datcFile != null) {
-            String regionName = datcFile.getName().replace(".datc", "");
-            plugin.markRegionDirty(regionName);
-        }
     }
 
-    public String getCreator() { return creator; }
-    public long getCreationDate() { return creationDate; }
-    public String getWorldName() { return worldName; }
-    public String getMinecraftVersion() { return minecraftVersion; }
-    public String getFileFormatVersion() { return fileFormatVersion; }
-    public int getMinX() { return minX; }
-    public int getMinY() { return minY; }
-    public int getMinZ() { return minZ; }
-    public int getMaxX() { return minX + width - 1; }
-    public int getMaxY() { return minY + height - 1; }
-    public int getMaxZ() { return minZ + depth - 1; }
-    public int getWidth() { return width; }
-    public int getHeight() { return height; }
-    public int getDepth() { return depth; }
-    public File getDatcFile() { return datcFile; }
-    public long getArea() {
-        return (long) width * height * depth;
+    public int getMaxX() {
+        return minX + width - 1;
+    }
+
+    public int getMaxY() {
+        return minY + height - 1;
+    }
+
+    public int getMaxZ() {
+        return minZ + depth - 1;
+    }
+
+    public int getArea() {
+        return width * height * depth;
     }
 }
