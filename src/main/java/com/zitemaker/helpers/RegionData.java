@@ -8,6 +8,7 @@ import org.bukkit.block.Banner;
 import org.bukkit.block.Sign;
 import org.bukkit.block.banner.Pattern;
 import org.bukkit.block.banner.PatternType;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.NamespacedKey;
@@ -303,13 +304,47 @@ public class RegionData {
     }
 
     public void addEntity(Location location, Map<String, Object> serializedEntity) {
+        Objects.requireNonNull(location, "location");
+        Objects.requireNonNull(serializedEntity, "serializedEntity");
+
         World arenaWorld = Bukkit.getWorld(worldName);
-        if (arenaWorld == null) {
-            return;
-        }
+        if (arenaWorld == null) return;
+
         Location normalizedLoc = new Location(arenaWorld, location.getX(), location.getY(), location.getZ());
-        entityDataMap.put(normalizedLoc, serializedEntity);
+        Map<String, Object> serializableEntity = new HashMap<>();
+
+        for (Map.Entry<String, Object> entry : serializedEntity.entrySet()) {
+            String key = entry.getKey();
+            Object value = entry.getValue();
+
+            if (value instanceof ItemStack) {
+                ItemStack item = (ItemStack) value;
+                serializableEntity.put(key, item.getType().name() + ":" + item.getAmount());
+
+            } else if (value instanceof org.bukkit.util.Vector) {
+                org.bukkit.util.Vector vec = (org.bukkit.util.Vector) value;
+                serializableEntity.put(key, vec.getX() + "," + vec.getY() + "," + vec.getZ());
+
+            } else if (value instanceof java.util.Vector<?>) {
+                java.util.Vector<?> vec = (java.util.Vector<?>) value;
+                String joined = vec.stream()
+                        .map(Object::toString)
+                        .collect(java.util.stream.Collectors.joining(","));
+                serializableEntity.put(key, joined);
+
+            } else if (value instanceof Serializable) {
+                serializableEntity.put(key, value);
+
+            } else {
+                LOGGER.warning("[ArenaRegen] Non-serializable value at " + normalizedLoc + " for key " + key + ", replacing with null.");
+                serializableEntity.put(key, null);
+            }
+        }
+
+        entityDataMap.put(normalizedLoc, serializableEntity);
     }
+
+
 
     public Map<Location, Map<String, Object>> getEntityDataMap() {
         try {
