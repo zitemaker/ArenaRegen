@@ -497,238 +497,14 @@ public class ArenaRegen extends JavaPlugin{
         saveSchedules();
     }
 
-    public void regenerateArenaSchedule(String arenaName) {
-        synchronized (regeneratingArenas) {
-            if (regeneratingArenas.contains(arenaName)) {
-                return;
-            }
-            regeneratingArenas.add(arenaName);
-        }
 
-        RegionData regionData = registeredRegions.get(arenaName);
-        if (regionData == null) {
-            synchronized (regeneratingArenas) {
-                regeneratingArenas.remove(arenaName);
-            }
-            logger.info(ChatColor.RED + " Arena '" + arenaName + "' not found.");
-            return;
-        }
-
-        World world = Bukkit.getWorld(regionData.getWorldName());
-        if (world == null) {
-            synchronized (regeneratingArenas) {
-                regeneratingArenas.remove(arenaName);
-            }
-            logger.info(ChatColor.RED + " World '" + regionData.getWorldName() + "' not found.");
-            return;
-        }
-
-        if (regionData.getSectionedBlockData().isEmpty()) {
-            synchronized (regeneratingArenas) {
-                regeneratingArenas.remove(arenaName);
-            }
-            logger.info(ChatColor.RED + " No sections found for region '" + arenaName + "'.");
-            return;
-        }
-
-        boolean wasLocked = regionData.isLocked();
-        if (lockDuringRegeneration && !wasLocked) {
-            regionData.setLocked(true);
-        }
-
-        Location min = null;
-        Location max = null;
-        for (Map<Location, BlockData> section : regionData.getSectionedBlockData().values()) {
-            for (Location loc : section.keySet()) {
-                if (min == null) {
-                    min = new Location(world, loc.getX(), loc.getY(), loc.getZ());
-                    max = new Location(world, loc.getX(), loc.getY(), loc.getZ());
-                } else {
-                    min.setX(Math.min(min.getX(), loc.getX()));
-                    min.setY(Math.min(min.getY(), loc.getY()));
-                    min.setZ(Math.min(min.getZ(), loc.getZ()));
-                    max.setX(Math.max(max.getX(), loc.getX()));
-                    max.setY(Math.max(max.getY(), loc.getY()));
-                    max.setZ(Math.max(max.getZ(), loc.getZ()));
-                }
-            }
-        }
-
-        final Location finalMin = min;
-        final Location finalMax = max;
-
-        List<Player> playersInside = new ArrayList<>();
-        for (Player p : world.getPlayers()) {
-            Location loc = p.getLocation();
-            if (loc.getX() >= finalMin.getX() && loc.getX() <= finalMax.getX() &&
-                    loc.getY() >= finalMin.getY() && loc.getY() <= finalMax.getY() &&
-                    loc.getZ() >= finalMin.getZ() && loc.getZ() <= finalMax.getZ()) {
-                playersInside.add(p);
-            }
-        }
-
-        if (!playersInside.isEmpty()) {
-            if (cancelRegen) {
-                synchronized (regeneratingArenas) {
-                    regeneratingArenas.remove(arenaName);
-                }
-                logger.info(ChatColor.RED + "Regeneration of '" + arenaName + "' canceled due to players inside the arena.");
-                return;
-            }
-
-            for (Player p : playersInside) {
-                if (killPlayers) {
-                    p.setHealth(0.0);
-                }
-                if (teleportToSpawn) {
-                    p.teleport(world.getSpawnLocation());
-                }
-                if (executeCommands && !commands.isEmpty()) {
-                    for (String cmd : commands) {
-                        Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd.replace("{player}", p.getName()));
-                    }
-                }
-            }
-        }
-
-        int minX = regionData.getMinX();
-        int minY = regionData.getMinY();
-        int minZ = regionData.getMinZ();
-        int maxX = regionData.getMaxX();
-        int maxY = regionData.getMaxY();
-        int maxZ = regionData.getMaxZ();
-
-        if (trackEntities) {
-            world.getEntities().stream()
-                    .filter(e -> {
-                        Location loc = e.getLocation();
-                        return loc.getX() >= minX && loc.getX() <= maxX &&
-                                loc.getY() >= minY && loc.getY() <= maxY &&
-                                loc.getZ() >= minZ && loc.getZ() <= maxZ;
-                    })
-                    .forEach(e -> {
-                        if (!(e instanceof Player)) e.remove();
-                    });
-        }
-
-        //logger.info(ChatColor.YELLOW + " Regenerating region '" + arenaName + "', please wait...");
-        int blocksPerTick = regenType.equals("PRESET") ? switch (regenSpeed.toUpperCase()) {
-            case "SLOW" -> 1000;
-            case "NORMAL" -> 10000;
-            case "FAST" -> 40000;
-            case "VERYFAST" -> 100000;
-            case "EXTREME" -> 4000000;
-            default -> 10000;
-        } : customRegenSpeed;
-
-        AtomicInteger sectionIndex = new AtomicInteger(0);
-        List<String> sectionNames = new ArrayList<>(regionData.getSectionedBlockData().keySet());
-        AtomicInteger totalBlocksReset = new AtomicInteger(0);
-        long startTime = System.currentTimeMillis();
-        Set<Chunk> chunksToRefresh = new HashSet<>();
-        Map<String, Integer> sectionProgress = new HashMap<>();
-
-        Map<String, List<Map.Entry<Location, BlockData>>> sectionBlockLists = new HashMap<>();
-        for (String sectionName : sectionNames) {
-            Map<Location, BlockData> section = regionData.getSectionedBlockData().get(sectionName);
-            sectionBlockLists.put(sectionName, new ArrayList<>(section.entrySet()));
-        }
-
-        Bukkit.getScheduler().runTaskTimer(this, task -> {
-            int currentSection = sectionIndex.get();
-            if (currentSection >= sectionNames.size()) {
-                if (trackEntities) {
-                    Map<Location, Map<String, Object>> entityDataMap = regionData.getEntityDataMap();
-                    for (Map.Entry<Location, Map<String, Object>> entry : entityDataMap.entrySet()) {
-                        Location loc = entry.getKey();
-                        Map<String, Object> serializedEntity = entry.getValue();
-                        try {
-                            EntitySerializer.deserializeEntity(serializedEntity, loc);
-                        } catch (Exception e) {
-                            getLogger().warning("Failed to restore entity at " + loc + ": " + e.getMessage());
-                        }
-                    }
-                }
-
-                for (Chunk chunk : chunksToRefresh) {
-                    try {
-                        world.refreshChunk(chunk.getX(), chunk.getZ());
-                    } catch (Exception e) {
-                        logger.info(ChatColor.RED + "Failed to refresh chunk at " + chunk.getX() + "," + chunk.getZ() + ": " + e.getMessage());
-                    }
-                }
-
-                long timeTaken = System.currentTimeMillis() - startTime;
-                //logger.info(ChatColor.GREEN + " Regeneration of '" + arenaName + "' complete! " +
-                        //ChatColor.GRAY + " (" + totalBlocksReset.get() + " blocks reset in " + (timeTaken / 1000.0) + "s)");
-                synchronized (regeneratingArenas) {
-                    regeneratingArenas.remove(arenaName);
-                }
-                task.cancel();
-                if (regionData.isLocked()) {
-                    regionData.setLocked(false);
-                }
-                return;
-            }
-
-            String sectionName = sectionNames.get(currentSection);
-            List<Map.Entry<Location, BlockData>> blockList = sectionBlockLists.get(sectionName);
-
-            int blockIndex = sectionProgress.getOrDefault(sectionName, 0);
-            List<BlockUpdate> updates = new ArrayList<>();
-
-            if (blockIndex == 0) {
-                //logger.info("Starting regeneration of section " + sectionName + " in arena " + arenaName + " (" + blockList.size() + " total blocks)");
-            }
-
-            while (blockIndex < blockList.size() && updates.size() < blocksPerTick) {
-                Map.Entry<Location, BlockData> entry = blockList.get(blockIndex);
-                Location loc = entry.getKey();
-                loc.setWorld(world);
-                BlockData originalData = entry.getValue();
-
-                boolean shouldUpdate;
-                if (regenOnlyModified) {
-                    Block block = world.getBlockAt(loc);
-                    BlockData currentData = block.getBlockData();
-                    shouldUpdate = !currentData.equals(originalData);
-                    if (shouldUpdate) {
-                        updates.add(new BlockUpdate(block.getX(), block.getY(), block.getZ(), originalData));
-                        chunksToRefresh.add(block.getChunk());
-                        totalBlocksReset.incrementAndGet();
-                    }
-                } else {
-                    updates.add(new BlockUpdate((int) loc.getX(), (int) loc.getY(), (int) loc.getZ(), originalData));
-                    int chunkX = ((int) loc.getX()) >> 4;
-                    int chunkZ = ((int) loc.getZ()) >> 4;
-                    chunksToRefresh.add(world.getChunkAt(chunkX, chunkZ));
-                    totalBlocksReset.incrementAndGet();
-                }
-                blockIndex++;
-            }
-
-            if (!updates.isEmpty()) {
-                try {
-                    NMSHandlerFactoryProvider.getNMSHandler().setBlocks(world, updates);
-                } catch (Exception e) {
-                    logger.info(ChatColor.RED + "Failed to set blocks in section " + sectionName + ": " + e.getMessage());
-                }
-            }
-
-            if (blockIndex < blockList.size()) {
-                sectionProgress.put(sectionName, blockIndex);
-            } else {
-                //logger.info("Finished regeneration of section " + sectionName + " in arena " + arenaName);
-                sectionProgress.remove(sectionName);
-                sectionIndex.incrementAndGet();
-            }
-        }, 0L, 1L);
-    }
 
     public void regenerateArena(String arenaName, CommandSender sender) {
         synchronized (regeneratingArenas) {
             if (regeneratingArenas.contains(arenaName)) {
-                sender.sendMessage(prefix + ChatColor.RED + " Arena '" + arenaName + "' is already being regenerated. Please wait until the current regeneration is complete.");
+                if (sender != null) {
+                    sender.sendMessage(prefix + ChatColor.RED + " Arena '" + arenaName + "' is already being regenerated. Please wait until the current regeneration is complete.");
+                }
                 return;
             }
             regeneratingArenas.add(arenaName);
@@ -739,7 +515,9 @@ public class ArenaRegen extends JavaPlugin{
             synchronized (regeneratingArenas) {
                 regeneratingArenas.remove(arenaName);
             }
-            sender.sendMessage(prefix + ChatColor.RED + " Arena '" + arenaName + "' not found.");
+            if (sender != null) {
+                sender.sendMessage(prefix + ChatColor.RED + " Arena '" + arenaName + "' not found.");
+            }
             return;
         }
 
@@ -748,7 +526,9 @@ public class ArenaRegen extends JavaPlugin{
             synchronized (regeneratingArenas) {
                 regeneratingArenas.remove(arenaName);
             }
-            sender.sendMessage(prefix + ChatColor.RED + " World '" + regionData.getWorldName() + "' not found.");
+            if (sender != null) {
+                sender.sendMessage(prefix + ChatColor.RED + " World '" + regionData.getWorldName() + "' not found.");
+            }
             return;
         }
 
@@ -756,7 +536,9 @@ public class ArenaRegen extends JavaPlugin{
             synchronized (regeneratingArenas) {
                 regeneratingArenas.remove(arenaName);
             }
-            sender.sendMessage(prefix + ChatColor.RED + " No sections found for region '" + arenaName + "'.");
+            if (sender != null) {
+                sender.sendMessage(prefix + ChatColor.RED + " No sections found for region '" + arenaName + "'.");
+            }
             return;
         }
 
@@ -840,7 +622,9 @@ public class ArenaRegen extends JavaPlugin{
                     });
         }
 
-        sender.sendMessage(prefix + ChatColor.YELLOW + " Regenerating region '" + arenaName + "', please wait...");
+        if (sender != null) {
+            sender.sendMessage(prefix + ChatColor.YELLOW + " Regenerating region '" + arenaName + "', please wait...");
+        }
         int blocksPerTick = regenType.equals("PRESET") ? switch (regenSpeed.toUpperCase()) {
             case "SLOW" -> 1000;
             case "NORMAL" -> 10000;
@@ -1015,8 +799,10 @@ public class ArenaRegen extends JavaPlugin{
                 }
 
                 long timeTaken = System.currentTimeMillis() - startTime;
-                sender.sendMessage(prefix + ChatColor.GREEN + " Regeneration of '" + arenaName + "' complete! " +
-                        ChatColor.GRAY + " (" + totalBlocksReset.get() + " blocks reset in " + (timeTaken / 1000.0) + "s)");
+                if (sender != null) {
+                    sender.sendMessage(prefix + ChatColor.GREEN + " Regeneration of '" + arenaName + "' complete! " +
+                            ChatColor.GRAY + " (" + totalBlocksReset.get() + " blocks reset in " + (timeTaken / 1000.0) + "s)");
+                }
                 synchronized (regeneratingArenas) {
                     regeneratingArenas.remove(arenaName);
                 }
@@ -1089,7 +875,7 @@ public class ArenaRegen extends JavaPlugin{
                 cancelScheduledRegeneration(arenaName);
                 return;
             }
-            regenerateArenaSchedule(arenaName);
+            regenerateArena(arenaName, null);
         };
     }
 
