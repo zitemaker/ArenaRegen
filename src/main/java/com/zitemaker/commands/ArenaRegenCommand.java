@@ -155,78 +155,81 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                 plugin.getRegisteredRegions().put(regionName, regionData);
 
                 File datcFile = new File(new File(plugin.getDataFolder(), "arenas"), regionName + ".datc");
-                regionData.saveToDatc(datcFile);
-
-                commandSender.sendMessage(pluginPrefix + ChatColor.YELLOW + " Analyzing and creating region '" + regionName + "', please wait...");
-
-                int blocksPerTick = plugin.analyzeSpeed / 20;
-                AtomicInteger blocksProcessed = new AtomicInteger(0);
-
-                if (plugin.trackEntities) {
-                    for (Entity entity : world.getEntities()) {
-                        Location loc = entity.getLocation();
-                        if (loc.getX() >= minX && loc.getX() <= maxX &&
-                                loc.getY() >= minY && loc.getY() <= maxY &&
-                                loc.getZ() >= minZ && loc.getZ() <= maxZ) {
-
-                            Map<String, Object> serialized = EntitySerializer.serializeEntity(entity);
-                            if (serialized != null) {
-                                regionData.addEntity(loc, serialized);
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    regionData.saveToDatc(datcFile);
+                    commandSender.sendMessage(pluginPrefix + ChatColor.YELLOW + " Analyzing and creating region '" + regionName + "', please wait...");
+                    int blocksPerTick = plugin.analyzeSpeed / 20;
+                    AtomicInteger blocksProcessed = new AtomicInteger(0);
+                    List<Map.Entry<Location, Map<String, Object>>> entitiesToAdd = new ArrayList<>();
+                    List<Map.Entry<Location, BlockData>> blocksToAdd = new ArrayList<>();
+                    if (plugin.trackEntities) {
+                        for (Entity entity : world.getEntities()) {
+                            Location loc = entity.getLocation();
+                            if (loc.getX() >= minX && loc.getX() <= maxX &&
+                                    loc.getY() >= minY && loc.getY() <= maxY &&
+                                    loc.getZ() >= minZ && loc.getZ() <= maxZ) {
+                                Map<String, Object> serialized = EntitySerializer.serializeEntity(entity);
+                                if (serialized != null) {
+                                    entitiesToAdd.add(new AbstractMap.SimpleEntry<>(loc, serialized));
+                                }
+                            }
+                        }
+                        for (int x = minX; x <= maxX; x++) {
+                            for (int y = minY; y <= maxY; y++) {
+                                for (int z = minZ; z <= maxZ; z++) {
+                                    Location loc = new Location(world, x, y, z);
+                                    BlockData blockData = world.getBlockAt(x, y, z).getBlockData();
+                                    blocksToAdd.add(new AbstractMap.SimpleEntry<>(loc, blockData));
+                                }
                             }
                         }
                     }
-                }
-
-                Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, task -> {
-                    int start = blocksProcessed.get();
-                    int end = Math.min(start + blocksPerTick, (int) volume);
-
-                    for (int i = start; i < end; i++) {
-                        int x = minX + (i % width);
-                        int y = minY + ((i / width) % height);
-                        int z = minZ + (i / (width * height));
-                        BlockData blockData = world.getBlockAt(x, y, z).getBlockData();
-                        regionData.addBlockToSection("temp", new Location(world, x, y, z), blockData);
-                    }
-
-                    if (end >= volume) {
-                        task.cancel();
-                        int chunkMinX = minX >> 4;
-                        int chunkMinZ = minZ >> 4;
-                        int chunkMaxX = maxX >> 4;
-                        int chunkMaxZ = maxZ >> 4;
-                        int sectionId = 0;
-
-                        for (int chunkX = chunkMinX; chunkX <= chunkMaxX; chunkX++) {
-                            for (int chunkZ = chunkMinZ; chunkZ <= chunkMaxZ; chunkZ++) {
-                                int xStart = Math.max(chunkX << 4, minX);
-                                int zStart = Math.max(chunkZ << 4, minZ);
-                                int xEnd = Math.min((chunkX << 4) + 15, maxX);
-                                int zEnd = Math.min((chunkZ << 4) + 15, maxZ);
-                                Map<Location, BlockData> sectionBlocks = new HashMap<>();
-
-                                for (int x = xStart; x <= xEnd; x++) {
-                                    for (int y = minY; y <= maxY; y++) {
-                                        for (int z = zStart; z <= zEnd; z++) {
-                                            Location loc = new Location(world, x, y, z);
-                                            sectionBlocks.put(loc, regionData.getSectionedBlockData().get("temp").get(loc));
+                    Bukkit.getScheduler().runTask(plugin, () -> {
+                        for (Map.Entry<Location, Map<String, Object>> entry : entitiesToAdd) {
+                            regionData.addEntity(entry.getKey(), entry.getValue());
+                        }
+                        for (Map.Entry<Location, BlockData> entry : blocksToAdd) {
+                            regionData.addBlockToSection("temp", entry.getKey(), entry.getValue());
+                        }
+                        regionData.getSectionedBlockData().thenAccept(sectionedBlockData -> {
+                            Bukkit.getScheduler().runTask(plugin, () -> {
+                                int chunkMinX = minX >> 4;
+                                int chunkMinZ = minZ >> 4;
+                                int chunkMaxX = maxX >> 4;
+                                int chunkMaxZ = maxZ >> 4;
+                                int sectionId = 0;
+                                for (int chunkX = chunkMinX; chunkX <= chunkMaxX; chunkX++) {
+                                    for (int chunkZ = chunkMinZ; chunkZ <= chunkMaxZ; chunkZ++) {
+                                        int xStart = Math.max(chunkX << 4, minX);
+                                        int zStart = Math.max(chunkZ << 4, minZ);
+                                        int xEnd = Math.min((chunkX << 4) + 15, maxX);
+                                        int zEnd = Math.min((chunkZ << 4) + 15, maxZ);
+                                        Map<Location, BlockData> sectionBlocks = new HashMap<>();
+                                        for (int x = xStart; x <= xEnd; x++) {
+                                            for (int y = minY; y <= maxY; y++) {
+                                                for (int z = zStart; z <= zEnd; z++) {
+                                                    Location loc = new Location(world, x, y, z);
+                                                    Map<Location, BlockData> tempSection = sectionedBlockData.get("temp");
+                                                    if (tempSection != null) {
+                                                        sectionBlocks.put(loc, tempSection.get(loc));
+                                                    }
+                                                }
+                                            }
                                         }
+                                        regionData.addSection("chunk_" + sectionId++, sectionBlocks);
                                     }
                                 }
 
-                                regionData.addSection("chunk_" + sectionId++, sectionBlocks);
-                            }
-                        }
-
-                        Bukkit.getScheduler().runTask(plugin, () -> {
-                            regionData.saveToDatc(datcFile);
-                            plugin.markRegionDirty(regionName);
-                            clearSelection(player);
-                            commandSender.sendMessage(regionCreated.replace("{arena_name}", regionName));
+                                Bukkit.getScheduler().runTask(plugin, () -> {
+                                    regionData.saveToDatc(datcFile);
+                                    plugin.markRegionDirty(regionName);
+                                    clearSelection(player);
+                                    commandSender.sendMessage(regionCreated.replace("{arena_name}", regionName));
+                                });
+                            });
                         });
-                    }
-                    blocksProcessed.set(end);
-                }, 0L, 1L);
+                    });
+                });
                 return true;
             }
 
@@ -282,15 +285,13 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
 
 
                 RegionData regionData = plugin.getRegisteredRegions().get(confirmedRegion);
-                regionData.clearRegion(confirmedRegion);
-                plugin.getRegisteredRegions().remove(confirmedRegion);
-
-
-                Bukkit.getScheduler().runTaskAsynchronously(plugin, plugin::saveRegionsAsync);
-
-
-                regionDeleted = regionDeleted.replace("{arena_name}", confirmedRegion);
-                commandSender.sendMessage(pluginPrefix + " " + regionDeleted);
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    regionData.clearRegion(confirmedRegion);
+                    plugin.getRegisteredRegions().remove(confirmedRegion);
+                    Bukkit.getScheduler().runTaskAsynchronously(plugin, plugin::saveRegionsAsync);
+                    String regionDeletedMsg = regionDeleted.replace("{arena_name}", confirmedRegion);
+                    commandSender.sendMessage(pluginPrefix + " " + regionDeletedMsg);
+                });
 
                 return true;
             }
@@ -352,23 +353,18 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                 );
 
                 commandSender.sendMessage(pluginPrefix + ChatColor.YELLOW + " Resizing region '" + regionName + "', please wait...");
-                Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-
-                    regionData.clearRegion(regionName);
-
-
+                regionData.clearRegion(regionName);
+                Bukkit.getScheduler().runTask(plugin, () -> {
                     String sectionName = "default";
                     for (int x = minX; x <= maxX; x++) {
                         for (int y = minY; y <= maxY; y++) {
                             for (int z = minZ; z <= maxZ; z++) {
                                 Location loc = new Location(world, x, y, z);
                                 BlockData blockData = world.getBlockAt(loc).getBlockData();
-                                regionData.addBlockToSection(sectionName, loc, blockData);
+                                Bukkit.getScheduler().runTask(plugin, () -> regionData.addBlockToSection(sectionName, loc, blockData));
                             }
                         }
                     }
-
-
                     Bukkit.getScheduler().runTask(plugin, () -> {
                         plugin.getRegisteredRegions().put(regionName, regionData);
                         plugin.markRegionDirty(regionName);
@@ -544,7 +540,7 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                     return true;
                 }
 
-                regionData.setSpawnLocation(location);
+                Bukkit.getScheduler().runTask(plugin, () -> regionData.setSpawnLocation(location));
                 plugin.markRegionDirty(targetArenaName);
                 Bukkit.getScheduler().runTaskAsynchronously(plugin, plugin::saveRegionsAsync);
                 commandSender.sendMessage(spawnSet);
@@ -573,7 +569,7 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                     return true;
                 }
 
-                regionData.setSpawnLocation(null);
+                Bukkit.getScheduler().runTask(plugin, () -> regionData.setSpawnLocation(null));
                 plugin.markRegionDirty(targetArenaName);
                 Bukkit.getScheduler().runTaskAsynchronously(plugin, plugin::saveRegionsAsync);
                 commandSender.sendMessage(spawnDeleted);
@@ -741,21 +737,73 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
             return;
         }
 
-        sender.sendMessage(ChatColor.GREEN + "Registered Arenas:");
         for (Map.Entry<String, RegionData> entry : regions.entrySet()) {
             String name = entry.getKey();
             RegionData regionData = entry.getValue();
 
-            Location min = null;
-            Location max = null;
             World world = Bukkit.getWorld(regionData.getWorldName());
 
             if (world == null) {
-                sender.sendMessage(ChatColor.RED + "- " + name + ": World '" + regionData.getWorldName() + "' not found");
+                sender.sendMessage(ChatColor.YELLOW + "- " + name + ": " + ChatColor.RED + "World " + regionData.getWorldName() + " not found.");
                 continue;
             }
 
-            for (Map<Location, BlockData> section : regionData.getSectionedBlockData().values()) {
+            regionData.getSectionedBlockData().thenAccept(sectionedData -> {
+                Location min = null;
+                Location max = null;
+
+                for (Map<Location, BlockData> section : sectionedData.values()) {
+                    for (Location loc : section.keySet()) {
+                        if (min == null) {
+                            min = new Location(world, loc.getX(), loc.getY(), loc.getZ());
+                            max = new Location(world, loc.getX(), loc.getY(), loc.getZ());
+                        } else {
+                            min.setX(Math.min(min.getX(), loc.getX()));
+                            min.setY(Math.min(min.getY(), loc.getY()));
+                            min.setZ(Math.min(min.getZ(), loc.getZ()));
+                            max.setX(Math.max(max.getX(), loc.getX()));
+                            max.setY(Math.max(max.getY(), loc.getY()));
+                            max.setZ(Math.max(max.getZ(), loc.getZ()));
+                        }
+                    }
+                }
+
+                StringBuilder message = new StringBuilder();
+                message.append(ChatColor.GREEN).append("- ").append(name);
+
+                if (min != null) {
+                    message.append(String.format(": (%d, %d, %d) to (%d, %d, %d)",
+                            (int) min.getX(), (int) min.getY(), (int) min.getZ(),
+                            (int) max.getX(), (int) max.getY(), (int) max.getZ()));
+                } else {
+                    message.append(": No block data");
+                }
+
+                sender.sendMessage(message.toString());
+            });
+        }
+    }
+
+    private void showRegionDetails(CommandSender sender, String regionName) {
+        Map<String, RegionData> regions = plugin.getRegisteredRegions();
+        RegionData regionData = regions.get(regionName);
+
+        if (regionData == null) {
+            sender.sendMessage(ChatColor.RED + "Arena '" + regionName + "' not found.");
+            return;
+        }
+
+        World world = Bukkit.getWorld(regionData.getWorldName());
+
+        if (world == null) {
+            sender.sendMessage(ChatColor.RED + "World '" + regionData.getWorldName() + "' not found");
+            return;
+        }
+
+        regionData.getSectionedBlockData().thenAccept(sectionedBlockData -> {
+            Location min = null;
+            Location max = null;
+            for (Map<Location, BlockData> section : sectionedBlockData.values()) {
                 for (Location loc : section.keySet()) {
                     if (min == null) {
                         min = new Location(world, loc.getX(), loc.getY(), loc.getZ());
@@ -770,98 +818,50 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                     }
                 }
             }
-
+            long size = (regionData.getArea());
             StringBuilder message = new StringBuilder();
-            message.append(ChatColor.GREEN).append("- ").append(name);
+            message.append(ChatColor.GREEN).append("Arena Details for ").append(regionName).append(":");
 
             if (min != null) {
-                message.append(String.format(": (%d, %d, %d) to (%d, %d, %d)",
+                message.append(String.format("\n" + ChatColor.GREEN + "  Coordinates: (%d, %d, %d) to (%d, %d, %d)",
                         (int) min.getX(), (int) min.getY(), (int) min.getZ(),
                         (int) max.getX(), (int) max.getY(), (int) max.getZ()));
             } else {
-                message.append(": No block data");
+                message.append("\n" + ChatColor.GREEN + "  Coordinates: No block data");
+            }
+
+            message.append(ChatColor.GRAY)
+                    .append("\n  Volume: ").append(ChatColor.WHITE).append(size).append(" blocks");
+            message.append(ChatColor.GRAY)
+                    .append("\n  Creator: ").append(ChatColor.WHITE).append(regionData.getCreator())
+                    .append(ChatColor.GRAY)
+                    .append("\n  Created: ").append(ChatColor.WHITE)
+                    .append(new Date(regionData.getCreationDate()))
+                    .append(ChatColor.GRAY)
+                    .append("\n  World: ").append(ChatColor.WHITE).append(regionData.getWorldName())
+                    .append(ChatColor.GRAY)
+                    .append("\n  Minecraft Version: ").append(ChatColor.WHITE).append(regionData.getMinecraftVersion())
+                    .append(ChatColor.GRAY)
+                    .append("\n  File Format Version: ").append(ChatColor.WHITE).append(regionData.getFileFormatVersion())
+                    .append(ChatColor.GRAY)
+                    .append("\n  Dimensions: ").append(ChatColor.WHITE)
+                    .append(regionData.getWidth()).append("x")
+                    .append(regionData.getHeight()).append("x")
+                    .append(regionData.getDepth())
+                    .append(ChatColor.GRAY)
+                    .append("\n  Sections: ").append(ChatColor.WHITE)
+                    .append(size);
+
+            if (plugin.isScheduled(regionName)) {
+                long intervalTicks = plugin.getScheduledInterval(regionName);
+                String intervalString = formatTicksToTime(intervalTicks);
+                message.append(ChatColor.GRAY)
+                        .append("\n  Regeneration Schedule: ").append(ChatColor.WHITE)
+                        .append("Every ").append(intervalString);
             }
 
             sender.sendMessage(message.toString());
-        }
-    }
-
-    private void showRegionDetails(CommandSender sender, String regionName) {
-        Map<String, RegionData> regions = plugin.getRegisteredRegions();
-        RegionData regionData = regions.get(regionName);
-
-        if (regionData == null) {
-            sender.sendMessage(ChatColor.RED + "Arena '" + regionName + "' not found.");
-            return;
-        }
-
-        Location min = null;
-        Location max = null;
-        World world = Bukkit.getWorld(regionData.getWorldName());
-
-        if (world == null) {
-            sender.sendMessage(ChatColor.RED + "World '" + regionData.getWorldName() + "' not found");
-            return;
-        }
-
-        for (Map<Location, BlockData> section : regionData.getSectionedBlockData().values()) {
-            for (Location loc : section.keySet()) {
-                if (min == null) {
-                    min = new Location(world, loc.getX(), loc.getY(), loc.getZ());
-                    max = new Location(world, loc.getX(), loc.getY(), loc.getZ());
-                } else {
-                    min.setX(Math.min(min.getX(), loc.getX()));
-                    min.setY(Math.min(min.getY(), loc.getY()));
-                    min.setZ(Math.min(min.getZ(), loc.getZ()));
-                    max.setX(Math.max(max.getX(), loc.getX()));
-                    max.setY(Math.max(max.getY(), loc.getY()));
-                    max.setZ(Math.max(max.getZ(), loc.getZ()));
-                }
-            }
-        }
-
-        StringBuilder message = new StringBuilder();
-        message.append(ChatColor.GREEN).append("Arena Details for ").append(regionName).append(":");
-
-        if (min != null) {
-            message.append(String.format("\n" + ChatColor.GREEN + "  Coordinates: (%d, %d, %d) to (%d, %d, %d)",
-                    (int) min.getX(), (int) min.getY(), (int) min.getZ(),
-                    (int) max.getX(), (int) max.getY(), (int) max.getZ()));
-        } else {
-            message.append("\n" + ChatColor.GREEN + "  Coordinates: No block data");
-        }
-
-        message.append(ChatColor.GRAY)
-                .append("\n  Area: ").append(ChatColor.WHITE).append(regionData.getArea()).append(" blocks");
-        message.append(ChatColor.GRAY)
-                .append("\n  Creator: ").append(ChatColor.WHITE).append(regionData.getCreator())
-                .append(ChatColor.GRAY)
-                .append("\n  Created: ").append(ChatColor.WHITE)
-                .append(new Date(regionData.getCreationDate()))
-                .append(ChatColor.GRAY)
-                .append("\n  World: ").append(ChatColor.WHITE).append(regionData.getWorldName())
-                .append(ChatColor.GRAY)
-                .append("\n  Minecraft Version: ").append(ChatColor.WHITE).append(regionData.getMinecraftVersion())
-                .append(ChatColor.GRAY)
-                .append("\n  File Format Version: ").append(ChatColor.WHITE).append(regionData.getFileFormatVersion())
-                .append(ChatColor.GRAY)
-                .append("\n  Dimensions: ").append(ChatColor.WHITE)
-                .append(regionData.getWidth()).append("x")
-                .append(regionData.getHeight()).append("x")
-                .append(regionData.getDepth())
-                .append(ChatColor.GRAY)
-                .append("\n  Sections: ").append(ChatColor.WHITE)
-                .append(regionData.getSectionedBlockData().size());
-
-        if (plugin.isScheduled(regionName)) {
-            long intervalTicks = plugin.getScheduledInterval(regionName);
-            String intervalString = formatTicksToTime(intervalTicks);
-            message.append(ChatColor.GRAY)
-                    .append("\n  Regeneration Schedule: ").append(ChatColor.WHITE)
-                    .append("Every ").append(intervalString);
-        }
-
-        sender.sendMessage(message.toString());
+        });
     }
 
     @Override
@@ -1061,39 +1061,7 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
     private @NotNull String formatVector(@NotNull Vector vector) {
         return "(" + vector.getBlockX() + ", " + vector.getBlockY() + ", " + vector.getBlockZ() + ")";
     }
-
-    private long parseTimeToTicks(String timeInput) {
-        if (timeInput == null || timeInput.isEmpty()) {
-            throw new IllegalArgumentException("Time input cannot be empty");
-        }
-
-        String numberPart = timeInput.replaceAll("[^0-9]", "");
-        String unitPart = timeInput.replaceAll("[0-9]", "").toLowerCase();
-
-        if (numberPart.isEmpty() || unitPart.isEmpty()) {
-            throw new IllegalArgumentException("Invalid time format");
-        }
-
-        long number;
-        try {
-            number = Long.parseLong(numberPart);
-        } catch (NumberFormatException e) {
-            throw new IllegalArgumentException("Invalid number in time format");
-        }
-
-        if (number <= 0) {
-            throw new IllegalArgumentException("Time must be a positive number");
-        }
-
-        return switch (unitPart) {
-            case "s" -> number * 20;
-            case "m" -> number * 20 * 60;
-            case "d" -> number * 20 * 60 * 60 * 24;
-            case "w" -> number * 20 * 60 * 60 * 24 * 7;
-            default -> throw new IllegalArgumentException("Invalid time unit");
-        };
-    }
-
+    
     private String formatTicksToTime(long ticks) {
         if (ticks < 20 * 60) {
             return (ticks / 20) + " seconds";
@@ -1106,5 +1074,32 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
         } else {
             return (ticks / (20 * 60 * 60 * 24 * 7)) + " weeks";
         }
+    }
+    
+    private long parseTimeToTicks(String timeInput) {
+        if (timeInput == null || timeInput.isEmpty()) {
+            throw new IllegalArgumentException("Time input cannot be empty");
+        }
+        String numberPart = timeInput.replaceAll("[^0-9]", "");
+        String unitPart = timeInput.replaceAll("[0-9]", "").toLowerCase();
+        if (numberPart.isEmpty() || unitPart.isEmpty()) {
+            throw new IllegalArgumentException("Invalid time format");
+        }
+        long number;
+        try {
+            number = Long.parseLong(numberPart);
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("Invalid number in time format");
+        }
+        if (number <= 0) {
+            throw new IllegalArgumentException("Time must be a positive number");
+        }
+        return switch (unitPart) {
+            case "s" -> number * 20;
+            case "m" -> number * 20 * 60;
+            case "d" -> number * 20 * 60 * 60 * 24;
+            case "w" -> number * 20 * 60 * 60 * 24 * 7;
+            default -> throw new IllegalArgumentException("Invalid time unit");
+        };
     }
 }
