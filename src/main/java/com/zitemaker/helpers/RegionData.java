@@ -452,6 +452,30 @@ public class RegionData {
         }
     }
 
+    private static Object makeSerializable(Object obj) {
+        if (obj instanceof org.bukkit.util.Vector vector) {
+            return vector.serialize();
+        } else if (obj instanceof Map<?, ?> map) {
+            Map<Object, Object> newMap = new HashMap<>();
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+                newMap.put(entry.getKey(), makeSerializable(entry.getValue()));
+            }
+            return newMap;
+        } else if (obj instanceof List<?> list) {
+            List<Object> newList = new ArrayList<>();
+            for (Object item : list) {
+                newList.add(makeSerializable(item));
+            }
+            return newList;
+        } else if (obj == null || obj instanceof String || obj instanceof Number || obj instanceof Boolean) {
+            return obj;
+        } else if (obj instanceof java.io.Serializable) {
+            return obj;
+        } else {
+            return null;
+        }
+    }
+
     private void writeEntities(DataOutputStream dos, Map<Location, Map<String, Object>> entityDataMapCopy) throws IOException {
         dos.writeInt(entityDataMapCopy.size());
         int batchSize = 100;
@@ -465,10 +489,25 @@ public class RegionData {
             dos.writeDouble(loc.getZ());
 
             ByteArrayOutputStream entityStream = new ByteArrayOutputStream();
+            byte[] entityDataBytes;
+            Object safeEntity = makeSerializable(serializedEntity);
             try (ObjectOutputStream oos = new ObjectOutputStream(entityStream)) {
-                oos.writeObject(serializedEntity);
+                if (safeEntity instanceof java.io.Serializable) {
+                    oos.writeObject(safeEntity);
+                } else {
+                    oos.writeObject(new HashMap<>());
+                }
+                entityDataBytes = entityStream.toByteArray();
+            } catch (IOException e) {
+                LOGGER.warning("[ArenaRegen] Skipping non-serializable entity at " + loc + ": " + e.getMessage());
+                entityStream = new ByteArrayOutputStream();
+                try (ObjectOutputStream oos2 = new ObjectOutputStream(entityStream)) {
+                    oos2.writeObject(new HashMap<>());
+                    entityDataBytes = entityStream.toByteArray();
+                } catch (IOException ex) {
+                    entityDataBytes = new byte[0];
+                }
             }
-            byte[] entityDataBytes = entityStream.toByteArray();
             dos.writeInt(entityDataBytes.length);
             dos.write(entityDataBytes);
 

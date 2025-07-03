@@ -83,6 +83,9 @@ public class ArenaRegen extends JavaPlugin{
 
     @Override
     public void onEnable() {
+        if (regeneratingArenas != null) {
+            regeneratingArenas.clear();
+        }
         logger.info("");
         logger.info(ARChatColor.GOLD + "    +===============+");
         logger.info(ARChatColor.GOLD + "    |   ArenaRegen  |");
@@ -145,9 +148,6 @@ public class ArenaRegen extends JavaPlugin{
 
             saveTaskId = Bukkit.getScheduler().runTaskTimerAsynchronously((Plugin) this, this::saveRegionsAsync, 0L, 4000L).getTaskId();
             rescheduleTasks();
-            if (regeneratingArenas != null) {
-                regeneratingArenas.clear();
-            }
             logger.info("Plugin fully enabled.");
         }).exceptionally(e -> {
             logger.info("Failed to load regions during enable: " + e.getMessage());
@@ -254,8 +254,7 @@ public class ArenaRegen extends JavaPlugin{
         Set<String> regionsToProcess;
         synchronized (registeredRegions) {
             regionsToSave = new HashMap<>(registeredRegions);
-
-            if(regionsToSave.isEmpty()){
+            if (regionsToSave.isEmpty()) {
                 return;
             }
             synchronized (dirtyRegions) {
@@ -273,11 +272,12 @@ public class ArenaRegen extends JavaPlugin{
 
         List<CompletableFuture<Void>> saveFutures = new ArrayList<>();
         for (String regionName : regionsToProcess) {
-            if (!regionsToSave.containsKey(regionName)) {
+            RegionData region = regionsToSave.get(regionName);
+            if (region == null || isRegionEmpty(region)) {
                 continue;
             }
             File datcFile = new File(arenasDir, regionName + ".datc");
-            CompletableFuture<Void> saveFuture = regionsToSave.get(regionName).saveToDatc(datcFile)
+            CompletableFuture<Void> saveFuture = region.saveToDatc(datcFile)
                     .thenRun(() -> {
                         savedRegions.incrementAndGet();
                         logger.info("Saved region '" + regionName + "' to " + datcFile.getPath());
@@ -1003,6 +1003,16 @@ public class ArenaRegen extends JavaPlugin{
             }
         }
         return false;
+    }
+
+
+    private boolean isRegionEmpty(RegionData region) {
+        if (region == null) return true;
+        return region.sectionedBlockData.isEmpty()
+            && region.getEntityDataMap().isEmpty()
+            && region.getBannerStates().isEmpty()
+            && region.getSignStates().isEmpty()
+            && region.getModifiedBlocks().isEmpty();
     }
 
 }
