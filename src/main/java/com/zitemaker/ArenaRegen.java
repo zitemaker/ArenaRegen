@@ -122,6 +122,7 @@ public class ArenaRegen extends JavaPlugin{
             logger.info(ARChatColor.YELLOW + "    For better compatibility, please use the legacy JAR (built for 1.18–1.20.4).");
         }
 
+
         reloadPluginConfig();
         loadMessagesFile();
         saveMessagesFile();
@@ -144,6 +145,9 @@ public class ArenaRegen extends JavaPlugin{
 
             saveTaskId = Bukkit.getScheduler().runTaskTimerAsynchronously((Plugin) this, this::saveRegionsAsync, 0L, 4000L).getTaskId();
             rescheduleTasks();
+            if (regeneratingArenas != null) {
+                regeneratingArenas.clear();
+            }
             logger.info("Plugin fully enabled.");
         }).exceptionally(e -> {
             logger.info("Failed to load regions during enable: " + e.getMessage());
