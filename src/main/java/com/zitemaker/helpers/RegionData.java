@@ -59,6 +59,7 @@ public class RegionData {
     private File datcFile;
     private boolean loadFailed = false;
     private boolean isLoading = false;
+    private CompletableFuture<Void> blockDataLoadFuture = null;
 
     public RegionData(ArenaRegen plugin) {
         this.plugin = plugin;
@@ -1105,8 +1106,14 @@ public class RegionData {
         }
     }
 
-    public CompletableFuture<Void> ensureBlockDataLoaded() {
-        return CompletableFuture.runAsync(() -> {
+    public synchronized CompletableFuture<Void> ensureBlockDataLoaded() {
+        if (isBlockDataLoaded) {
+            return CompletableFuture.completedFuture(null);
+        }
+        if (blockDataLoadFuture != null && !blockDataLoadFuture.isDone()) {
+            return blockDataLoadFuture;
+        }
+        blockDataLoadFuture = CompletableFuture.runAsync(() -> {
             if (isLoading) {
                 throw new RuntimeException("Recursive loading detected for region in " + (datcFile != null ? datcFile.getName() : "unknown file"));
             }
@@ -1131,7 +1138,12 @@ public class RegionData {
                     isLoading = false;
                 }
             }
+        }).whenComplete((v, ex) -> {
+            if (ex != null) {
+                blockDataLoadFuture = null;
+            }
         });
+        return blockDataLoadFuture;
     }
 
     public CompletableFuture<Map<String, Map<Location, BlockData>>> getSectionedBlockData() {
@@ -1169,5 +1181,9 @@ public class RegionData {
     public File getDatcFile() { return datcFile; }
     public long getArea() {
         return (long) width * height * depth;
+    }
+
+    public boolean isBlockDataLoaded() {
+        return isBlockDataLoaded;
     }
 }
