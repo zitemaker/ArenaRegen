@@ -152,11 +152,13 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
 
                 RegionData regionData = new RegionData(plugin);
                 regionData.setMetadata(player.getName(), System.currentTimeMillis(), world.getName(), Bukkit.getVersion(), minX, minY, minZ, width, height, depth);
+                
+                File datcFile = new File(new File(plugin.getDataFolder(), "arenas"), regionName + ".datc");
+                regionData.setDatcFile(datcFile);
+                
                 plugin.getRegisteredRegions().put(regionName, regionData);
 
-                File datcFile = new File(new File(plugin.getDataFolder(), "arenas"), regionName + ".datc");
                 Bukkit.getScheduler().runTask(plugin, () -> {
-                    regionData.saveToDatc(datcFile);
                     commandSender.sendMessage(pluginPrefix + ChatColor.YELLOW + " Analyzing and creating region '" + regionName + "', please wait...");
                     int blocksPerTick = plugin.analyzeSpeed / 20;
                     AtomicInteger blocksProcessed = new AtomicInteger(0);
@@ -191,6 +193,9 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                         for (Map.Entry<Location, BlockData> entry : blocksToAdd) {
                             regionData.addBlockToSection("temp", entry.getKey(), entry.getValue());
                         }
+                        
+                        regionData.setBlockDataLoaded(true);
+                        
                         regionData.getSectionedBlockData().thenAccept(sectionedBlockData -> {
                             Bukkit.getScheduler().runTask(plugin, () -> {
                                 int chunkMinX = minX >> 4;
@@ -198,6 +203,14 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                                 int chunkMaxX = maxX >> 4;
                                 int chunkMaxZ = maxZ >> 4;
                                 int sectionId = 0;
+
+                                Map<Location, BlockData> tempSection = sectionedBlockData.get("temp");
+                                if (tempSection == null || tempSection.isEmpty()) {
+                                    commandSender.sendMessage(pluginPrefix + ChatColor.RED + " Failed to create arena: No blocks were analyzed.");
+                                    plugin.getRegisteredRegions().remove(regionName);
+                                    return;
+                                }
+                                
                                 for (int chunkX = chunkMinX; chunkX <= chunkMaxX; chunkX++) {
                                     for (int chunkZ = chunkMinZ; chunkZ <= chunkMaxZ; chunkZ++) {
                                         int xStart = Math.max(chunkX << 4, minX);
@@ -209,24 +222,39 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                                             for (int y = minY; y <= maxY; y++) {
                                                 for (int z = zStart; z <= zEnd; z++) {
                                                     Location loc = new Location(world, x, y, z);
-                                                    Map<Location, BlockData> tempSection = sectionedBlockData.get("temp");
-                                                    if (tempSection != null) {
-                                                        sectionBlocks.put(loc, tempSection.get(loc));
+                                                    BlockData blockData = tempSection.get(loc);
+                                                    if (blockData != null) {
+                                                        sectionBlocks.put(loc, blockData);
                                                     }
                                                 }
                                             }
                                         }
-                                        regionData.addSection("chunk_" + sectionId++, sectionBlocks);
+                                        if (!sectionBlocks.isEmpty()) {
+                                            regionData.addSection("chunk_" + sectionId++, sectionBlocks);
+                                        }
                                     }
                                 }
 
-                                Bukkit.getScheduler().runTask(plugin, () -> {
-                                    regionData.saveToDatc(datcFile);
-                                    plugin.markRegionDirty(regionName);
-                                    clearSelection(player);
-                                    commandSender.sendMessage(regionCreated.replace("{arena_name}", regionName));
+                                regionData.saveToDatc(datcFile).thenRun(() -> {
+                                    Bukkit.getScheduler().runTask(plugin, () -> {
+                                        plugin.markRegionDirty(regionName);
+                                        clearSelection(player);
+                                        commandSender.sendMessage(regionCreated.replace("{arena_name}", regionName));
+                                    });
+                                }).exceptionally(e -> {
+                                    Bukkit.getScheduler().runTask(plugin, () -> {
+                                        commandSender.sendMessage(pluginPrefix + ChatColor.RED + " Failed to save arena: " + e.getMessage());
+                                        plugin.getRegisteredRegions().remove(regionName);
+                                    });
+                                    return null;
                                 });
                             });
+                        }).exceptionally(e -> {
+                            Bukkit.getScheduler().runTask(plugin, () -> {
+                                commandSender.sendMessage(pluginPrefix + ChatColor.RED + " Failed to process arena data: " + e.getMessage());
+                                plugin.getRegisteredRegions().remove(regionName);
+                            });
+                            return null;
                         });
                     });
                 });
@@ -287,7 +315,6 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                 RegionData regionData = plugin.getRegisteredRegions().get(confirmedRegion);
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     regionData.clearRegion(confirmedRegion);
-                    plugin.getRegisteredRegions().remove(confirmedRegion);
                     Bukkit.getScheduler().runTaskAsynchronously(plugin, plugin::saveRegionsAsync);
                     String regionDeletedMsg = regionDeleted.replace("{arena_name}", confirmedRegion);
                     commandSender.sendMessage(pluginPrefix + " " + regionDeletedMsg);

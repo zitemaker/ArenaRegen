@@ -326,9 +326,9 @@ public class RegionData {
         modifiedBlocks.clear();
         bannerStates.clear();
         signStates.clear();
-        if (datcFile != null) {
-            plugin.markRegionDirty(regionName);
-        }
+        plugin.getPendingDeletions().remove(regionName);
+        plugin.getRegisteredRegions().remove(regionName);
+        plugin.regeneratingArenas.remove(regionName);
     }
 
     private int calculateBufferSize() {
@@ -1113,12 +1113,21 @@ public class RegionData {
         if (blockDataLoadFuture != null && !blockDataLoadFuture.isDone()) {
             return blockDataLoadFuture;
         }
+        
         blockDataLoadFuture = CompletableFuture.runAsync(() -> {
             if (isLoading) {
                 throw new RuntimeException("Recursive loading detected for region in " + (datcFile != null ? datcFile.getName() : "unknown file"));
             }
 
             if (!isBlockDataLoaded && datcFile != null) {
+                if (!datcFile.exists()) {
+                    throw new RuntimeException("Datc file does not exist: " + datcFile.getAbsolutePath());
+                }
+                
+                if (!datcFile.canRead()) {
+                    throw new RuntimeException("Cannot read datc file: " + datcFile.getAbsolutePath());
+                }
+                
                 if (loadFailed) {
                     throw new RuntimeException("Block data loading previously failed for region in " + datcFile.getName());
                 }
@@ -1128,15 +1137,27 @@ public class RegionData {
                     loadFailed = true;
                     throw new RuntimeException("World '" + worldName + "' not found for region in " + datcFile.getName());
                 }
+            }
+        }).thenCompose(v -> {
 
+            if (!isBlockDataLoaded && datcFile != null) {
                 try {
                     isLoading = true;
-                    loadFromDatc(datcFile).join();
+                    return loadFromDatc(datcFile).whenComplete((result, ex) -> {
+                        isLoading = false;
+                        if (ex != null) {
+                            LOGGER.severe("[ArenaRegen] Exception during loadFromDatc for " + datcFile.getName() + ": " + ex.getMessage());
+                            ex.printStackTrace();
+                        }
+                    });
                 } catch (Exception e) {
-                    throw new RuntimeException("Failed to load region data", e);
-                } finally {
                     isLoading = false;
+                    LOGGER.severe("[ArenaRegen] Exception during loadFromDatc for " + datcFile.getName() + ": " + e.getMessage());
+                    e.printStackTrace();
+                    throw new RuntimeException("Failed to load region data", e);
                 }
+            } else {
+                return CompletableFuture.completedFuture(null);
             }
         }).whenComplete((v, ex) -> {
             if (ex != null) {
@@ -1185,5 +1206,9 @@ public class RegionData {
 
     public boolean isBlockDataLoaded() {
         return isBlockDataLoaded;
+    }
+    
+    public void setBlockDataLoaded(boolean loaded) {
+        this.isBlockDataLoaded = loaded;
     }
 }

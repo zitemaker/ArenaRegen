@@ -45,7 +45,7 @@ public class ArenaRegen extends JavaPlugin{
     public final Console console = new SpigotConsole();
     public final Logger logger = new Logger(new JavaPlatformLogger(console, getLogger()), true);
     public final Set<String> dirtyRegions = new HashSet<>();
-    private final Set<String> regeneratingArenas = new HashSet<>();
+    public final Set<String> regeneratingArenas = new HashSet<>();
 
     // config stuff
     public String prefix;
@@ -553,40 +553,96 @@ public class ArenaRegen extends JavaPlugin{
             if (sender != null) {
                 sender.sendMessage(prefix + ChatColor.YELLOW + " Arena region data not loaded yet, loading... Please wait.");
             }
-            regionData.ensureBlockDataLoaded().thenRun(() -> {
+            
+            logger.info("[ArenaRegen] Block data not loaded for arena '" + arenaName + "', starting load process...");
+            logger.info("[ArenaRegen] Arena file: " + (regionData.getDatcFile() != null ? regionData.getDatcFile().getAbsolutePath() : "null"));
+            logger.info("[ArenaRegen] World name: " + regionData.getWorldName());
+            
+            CompletableFuture<Void> loadFuture = regionData.ensureBlockDataLoaded();
+            
+            CompletableFuture<Void> timeoutFuture = CompletableFuture.runAsync(() -> {
+                try {
+                    Thread.sleep(15000);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            });
+            
+            CompletableFuture.anyOf(loadFuture, timeoutFuture).thenAccept(result -> {
+                Bukkit.getScheduler().runTask(this, () -> {
+                    synchronized (regeneratingArenas) {
+                        if (!regeneratingArenas.contains(arenaName)) {
+                            logger.info("[ArenaRegen] Arena '" + arenaName + "' no longer in regenerating state, aborting");
+                            return;
+                        }
+                    }
+                    
+                    if (result == timeoutFuture) {
+                        synchronized (regeneratingArenas) {
+                            regeneratingArenas.remove(arenaName);
+                            logger.info("[ArenaRegen] Removed from regeneratingArenas (timeout): " + arenaName);
+                        }
+                        if (sender != null) {
+                            sender.sendMessage(prefix + ChatColor.RED + " Failed to load arena data: timeout after 15 seconds. Please try again.");
+                        }
+                        return;
+                    }
+                    
+                    logger.info("[ArenaRegen] Load future completed for arena '" + arenaName + "', checking if data is loaded...");
+                    if (!regionData.isBlockDataLoaded()) {
+                        synchronized (regeneratingArenas) {
+                            regeneratingArenas.remove(arenaName);
+                            logger.info("[ArenaRegen] Removed from regeneratingArenas (data still not loaded): " + arenaName);
+                        }
+                        if (sender != null) {
+                            sender.sendMessage(prefix + ChatColor.RED + " Failed to load arena data. The arena file may be corrupted.");
+                        }
+                        return;
+                    }
+                    
+                    logger.info("[ArenaRegen] Block data successfully loaded for arena '" + arenaName + "', proceeding with regeneration");
+                    proceedWithRegeneration(arenaName, sender, regionData, world);
+                });
+            }).exceptionally(e -> {
                 Bukkit.getScheduler().runTask(this, () -> {
                     synchronized (regeneratingArenas) {
                         regeneratingArenas.remove(arenaName);
+                        logger.info("[ArenaRegen] Removed from regeneratingArenas (exception): " + arenaName);
                     }
-                    regenerateArena(arenaName, sender, 0);
-                });
-            }).exceptionally(e -> {
-                if (retryCount < 3) {
-                    Bukkit.getScheduler().runTaskLater(this, () -> {
-                        synchronized (regeneratingArenas) {
-                            regeneratingArenas.remove(arenaName);
+                    
+                    logger.info("[ArenaRegen] Exception during block data loading for arena '" + arenaName + "': " + e.getMessage());
+                    e.printStackTrace();
+                    
+                    if (retryCount < 3) {
+                        logger.info("[ArenaRegen] Retrying regeneration for '" + arenaName + "' (attempt " + (retryCount + 1) + "/3)");
+                        Bukkit.getScheduler().runTaskLater(this, () -> {
+                            regenerateArena(arenaName, sender, retryCount + 1);
+                        }, 20L);
+                    } else {
+                        logger.info("[ArenaRegen] Failed to load region data for arena '" + arenaName + "' after " + retryCount + " attempts: " + e.getMessage());
+                        if (sender != null) {
+                            sender.sendMessage(prefix + ChatColor.RED + " Failed to load arena data after several attempts. This arena may be corrupted or missing. Please contact an admin or try recreating the arena.");
                         }
-                        regenerateArena(arenaName, sender, retryCount + 1);
-                    }, 20L);
-                } else {
-                    synchronized (regeneratingArenas) {
-                        regeneratingArenas.remove(arenaName);
                     }
-                    logger.info("[ArenaRegen] Failed to load region data for arena '" + arenaName + "': " + e);
-                    if (sender != null) {
-                        sender.sendMessage(prefix + ChatColor.RED + " Failed to load arena data after several attempts. This arena may be corrupted or missing. Please contact an admin or try recreating the arena.");
-                    }
-                }
+                });
                 return null;
             });
             return;
         }
 
+        proceedWithRegeneration(arenaName, sender, regionData, world);
+    }
+
+    private void proceedWithRegeneration(String arenaName, CommandSender sender, RegionData regionData, World world) {
         try {
             regionData.getSectionedBlockData().thenAccept(sectionedBlockData -> {
                 Bukkit.getScheduler().runTask(this, () -> {
                     try {
                         if (sectionedBlockData.isEmpty()) {
+                            synchronized (regeneratingArenas) {
+                                regeneratingArenas.remove(arenaName);
+                                logger.info("[ArenaRegen] Removed from regeneratingArenas (no sections): " + arenaName);
+                            }
                             if (sender != null) {
                                 sender.sendMessage(prefix + ChatColor.RED + " No sections found for region '" + arenaName + "'.");
                             }
@@ -633,8 +689,12 @@ public class ArenaRegen extends JavaPlugin{
                             if (cancelRegen) {
                                 synchronized (regeneratingArenas) {
                                     regeneratingArenas.remove(arenaName);
+                                    logger.info("[ArenaRegen] Removed from regeneratingArenas (players inside): " + arenaName);
                                 }
                                 logger.info(ChatColor.RED + "Regeneration of '" + arenaName + "' canceled due to players inside the arena.");
+                                if (sender != null) {
+                                    sender.sendMessage(prefix + ChatColor.RED + " Regeneration canceled due to players inside the arena.");
+                                }
                                 return;
                             }
 
@@ -856,6 +916,7 @@ public class ArenaRegen extends JavaPlugin{
                                 }
                                 synchronized (regeneratingArenas) {
                                     regeneratingArenas.remove(arenaName);
+                                    logger.info("[ArenaRegen] Removed from regeneratingArenas (completed): " + arenaName);
                                 }
                                 task.cancel();
                                 if (regionData.isLocked()) {
@@ -920,10 +981,9 @@ public class ArenaRegen extends JavaPlugin{
                         if (sender != null) {
                             sender.sendMessage(prefix + ChatColor.RED + " Regeneration failed: " + e.getMessage());
                         }
-                    } finally {
                         synchronized (regeneratingArenas) {
                             regeneratingArenas.remove(arenaName);
-                            logger.info("[ArenaRegen] Removed from regeneratingArenas (finally block): " + arenaName);
+                            logger.info("[ArenaRegen] Removed from regeneratingArenas (exception): " + arenaName);
                         }
                     }
                 });
