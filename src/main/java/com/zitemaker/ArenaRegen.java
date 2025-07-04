@@ -584,7 +584,7 @@ public class ArenaRegen extends JavaPlugin{
 
         try {
             regionData.getSectionedBlockData().thenAccept(sectionedBlockData -> {
-                Bukkit.getScheduler().runTask((JavaPlugin) this, () -> {
+                Bukkit.getScheduler().runTask(this, () -> {
                     try {
                         if (sectionedBlockData.isEmpty()) {
                             if (sender != null) {
