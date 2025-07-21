@@ -909,6 +909,20 @@ public class ArenaRegen extends JavaPlugin{
                                     }
                                 }
 
+                                int chunkMinX = minX >> 4;
+                                int chunkMaxX = maxX >> 4;
+                                int chunkMinZ = minZ >> 4;
+                                int chunkMaxZ = maxZ >> 4;
+                                for (int chunkX = chunkMinX; chunkX <= chunkMaxX; chunkX++) {
+                                    for (int chunkZ = chunkMinZ; chunkZ <= chunkMaxZ; chunkZ++) {
+                                        try {
+                                            world.refreshChunk(chunkX, chunkZ);
+                                        } catch (Exception e) {
+                                            logger.info(ChatColor.RED + "[Final Relight] Failed to refresh chunk at " + chunkX + "," + chunkZ + ": " + e.getMessage());
+                                        }
+                                    }
+                                }
+
                                 long timeTaken = System.currentTimeMillis() - startTime;
                                 if (sender != null) {
                                     sender.sendMessage(prefix + ChatColor.GREEN + " Regeneration of '" + arenaName + "' complete! " +

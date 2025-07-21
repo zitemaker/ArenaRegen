@@ -1,0 +1,51 @@
+plugins {
+    id 'java'
+    id 'io.papermc.paperweight.userdev' version '2.0.0-beta.14'
+    id 'com.gradleup.shadow' version '8.3.2'
+}
+
+group = 'com.zitemaker'
+version = '1.2.7-MODERN'
+description = 'ArenaRegen'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+repositories {
+    mavenLocal()
+    maven { url = 'https://repo.papermc.io/repository/maven-public/' }
+    maven { url = 'https://hub.spigotmc.org/nexus/content/repositories/snapshots/' }
+    maven { url = 'https://oss.sonatype.org/content/groups/public/' }
+    maven { url = 'https://repo.maven.apache.org/maven2/' }
+    maven { url = 'https://repo.extendedclip.com/releases/'
+    }
+}
+
+dependencies {
+    paperweight.paperDevBundle '1.21.4-R0.1-SNAPSHOT'
+
+    compileOnly 'io.papermc.paper:paper-api:1.21.4-R0.1-SNAPSHOT'
+    compileOnly 'me.clip:placeholderapi:2.11.6'
+    implementation 'org.jetbrains:annotations:26.0.1'
+}
+
+tasks {
+    compileJava {
+        options.encoding = 'UTF-8'
+        options.release = 21
+        options.compilerArgs << '-parameters'
+    }
+
+    shadowJar {
+        archiveFileName = "ArenaRegen-${version}.jar"
+        destinationDirectory = file('E:/Server/plugins')
+    }
+
+    build {
+        dependsOn shadowJar
+    }
+}
+
