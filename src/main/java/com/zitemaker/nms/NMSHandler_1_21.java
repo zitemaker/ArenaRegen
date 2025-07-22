@@ -7,6 +7,7 @@ import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.block.state.BlockState;
 import org.bukkit.Bukkit;
+import org.bukkit.Chunk;
 import org.bukkit.World;
 import org.bukkit.craftbukkit.CraftWorld;
 import org.bukkit.craftbukkit.block.data.CraftBlockData;
@@ -42,6 +43,23 @@ public class NMSHandler_1_21 implements NMSHandler {
         } catch (Throwable t) {
             LOGGER.warning("NMS failed, falling back to Bukkit API: " + t.getMessage());
             new BukkitNMSHandler().setBlocks(world, blockUpdates);
+        }
+    }
+
+    @Override
+    public void relightChunks(World world, List<Chunk> chunks) {
+        if (chunks == null || chunks.isEmpty()) return;
+        CraftWorld craftWorld = (CraftWorld) world;
+        try {
+            for (Chunk bukkitChunk : chunks) {
+                int cx = bukkitChunk.getX();
+                int cz = bukkitChunk.getZ();
+                LevelChunk chunk = craftWorld.getHandle().getChunk(cx, cz);
+                craftWorld.getHandle().getChunkSource().getLightEngine().checkBlock(new net.minecraft.core.BlockPos(cx << 4, 0, cz << 4));
+            }
+        } catch (Throwable t) {
+            LOGGER.warning("NMS relight failed, falling back to Bukkit API: " + t.getMessage());
+            new BukkitNMSHandler().relightChunks(world, chunks);
         }
     }
 }

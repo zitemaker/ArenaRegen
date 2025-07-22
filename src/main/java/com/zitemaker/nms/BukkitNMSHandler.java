@@ -1,5 +1,6 @@
 package com.zitemaker.nms;
 
+import org.bukkit.Chunk;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 
@@ -11,6 +12,14 @@ public class BukkitNMSHandler implements NMSHandler {
         for (BlockUpdate update : blockUpdates) {
             Block block = world.getBlockAt(update.getX(), update.getY(), update.getZ());
             block.setBlockData(update.getBlockData(), false);
+        }
+    }
+
+    @Override
+    public void relightChunks(World world, List<Chunk> chunks) {
+        if (chunks == null || chunks.isEmpty()) return;
+        for (Chunk chunk : chunks) {
+            world.refreshChunk(chunk.getX(), chunk.getZ());
         }
     }
 }
