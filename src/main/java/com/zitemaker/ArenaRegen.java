@@ -909,10 +909,10 @@ public class ArenaRegen extends JavaPlugin{
                                     }
                                 }
 
-                                int chunkMinX = minX >> 4;
-                                int chunkMaxX = maxX >> 4;
-                                int chunkMinZ = minZ >> 4;
-                                int chunkMaxZ = maxZ >> 4;
+                                int chunkMinX = (minX >> 4) - 1;
+                                int chunkMaxX = (maxX >> 4) + 1;
+                                int chunkMinZ = (minZ >> 4) - 1;
+                                int chunkMaxZ = (maxZ >> 4) + 1;
                                 for (int chunkX = chunkMinX; chunkX <= chunkMaxX; chunkX++) {
                                     for (int chunkZ = chunkMinZ; chunkZ <= chunkMaxZ; chunkZ++) {
                                         try {
@@ -977,6 +977,10 @@ public class ArenaRegen extends JavaPlugin{
                             if (!updates.isEmpty()) {
                                 try {
                                     NMSHandlerFactoryProvider.getNMSHandler().setBlocks(world, updates);
+                                    for (BlockUpdate update : updates) {
+                                        Block block = world.getBlockAt(update.getX(), update.getY(), update.getZ());
+                                        block.getState().update(true, true);
+                                    }
                                 } catch (Exception e) {
                                     logger.info(ChatColor.RED + "Failed to set blocks in section " + sectionName + ": " + e.getMessage());
                                 }
