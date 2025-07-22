@@ -8,5 +8,5 @@ import java.util.List;
 public interface NMSHandler {
     void setBlocks(World world, List<BlockUpdate> blockUpdates);
 
-    void relightChunks(World world, List<Chunk> chunks);
+    void relightChunks(World world, List<Chunk> chunks, List<BlockUpdate> blockUpdates);
 }

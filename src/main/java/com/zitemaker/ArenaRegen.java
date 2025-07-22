@@ -968,7 +968,7 @@ public class ArenaRegen extends JavaPlugin{
                                         block.getState().update(true);
                                     }
                                     if (!chunksToRefresh.isEmpty()) {
-                                        NMSHandlerFactoryProvider.getNMSHandler().relightChunks(world, new java.util.ArrayList<>(chunksToRefresh));
+                                        NMSHandlerFactoryProvider.getNMSHandler().relightChunks(world, new java.util.ArrayList<>(chunksToRefresh), updates);
                                     }
                                 } catch (Exception e) {
                                     logger.info(ChatColor.RED + "Failed to set blocks in section " + sectionName + ": " + e.getMessage());
