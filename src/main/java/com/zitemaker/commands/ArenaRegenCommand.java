@@ -25,7 +25,6 @@ import org.bukkit.util.Vector;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.awt.*;
 import java.io.File;
 import java.util.*;
 import java.util.List;
@@ -196,60 +195,56 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                         
                         regionData.setBlockDataLoaded(true);
                         
-                        regionData.getSectionedBlockData().thenAccept(sectionedBlockData -> {
-                            Bukkit.getScheduler().runTask(plugin, () -> {
-                                int chunkMinX = minX >> 4;
-                                int chunkMinZ = minZ >> 4;
-                                int chunkMaxX = maxX >> 4;
-                                int chunkMaxZ = maxZ >> 4;
-                                int sectionId = 0;
+                        regionData.getSectionedBlockData().thenAccept(sectionedBlockData -> Bukkit.getScheduler().runTask(plugin, () -> {
+                            int chunkMinX = minX >> 4;
+                            int chunkMinZ = minZ >> 4;
+                            int chunkMaxX = maxX >> 4;
+                            int chunkMaxZ = maxZ >> 4;
+                            int sectionId = 0;
 
-                                Map<Location, BlockData> tempSection = sectionedBlockData.get("temp");
-                                if (tempSection == null || tempSection.isEmpty()) {
-                                    commandSender.sendMessage(pluginPrefix + ChatColor.RED + " Failed to create arena: No blocks were analyzed.");
-                                    plugin.getRegisteredRegions().remove(regionName);
-                                    return;
-                                }
-                                
-                                for (int chunkX = chunkMinX; chunkX <= chunkMaxX; chunkX++) {
-                                    for (int chunkZ = chunkMinZ; chunkZ <= chunkMaxZ; chunkZ++) {
-                                        int xStart = Math.max(chunkX << 4, minX);
-                                        int zStart = Math.max(chunkZ << 4, minZ);
-                                        int xEnd = Math.min((chunkX << 4) + 15, maxX);
-                                        int zEnd = Math.min((chunkZ << 4) + 15, maxZ);
-                                        Map<Location, BlockData> sectionBlocks = new HashMap<>();
-                                        for (int x = xStart; x <= xEnd; x++) {
-                                            for (int y = minY; y <= maxY; y++) {
-                                                for (int z = zStart; z <= zEnd; z++) {
-                                                    Location loc = new Location(world, x, y, z);
-                                                    BlockData blockData = tempSection.get(loc);
-                                                    if (blockData != null) {
-                                                        sectionBlocks.put(loc, blockData);
-                                                    }
+                            Map<Location, BlockData> tempSection = sectionedBlockData.get("temp");
+                            if (tempSection == null || tempSection.isEmpty()) {
+                                commandSender.sendMessage(pluginPrefix + ChatColor.RED + " Failed to create arena: No blocks were analyzed.");
+                                plugin.getRegisteredRegions().remove(regionName);
+                                return;
+                            }
+
+                            for (int chunkX = chunkMinX; chunkX <= chunkMaxX; chunkX++) {
+                                for (int chunkZ = chunkMinZ; chunkZ <= chunkMaxZ; chunkZ++) {
+                                    int xStart = Math.max(chunkX << 4, minX);
+                                    int zStart = Math.max(chunkZ << 4, minZ);
+                                    int xEnd = Math.min((chunkX << 4) + 15, maxX);
+                                    int zEnd = Math.min((chunkZ << 4) + 15, maxZ);
+                                    Map<Location, BlockData> sectionBlocks = new HashMap<>();
+                                    for (int x = xStart; x <= xEnd; x++) {
+                                        for (int y = minY; y <= maxY; y++) {
+                                            for (int z = zStart; z <= zEnd; z++) {
+                                                Location loc = new Location(world, x, y, z);
+                                                BlockData blockData = tempSection.get(loc);
+                                                if (blockData != null) {
+                                                    sectionBlocks.put(loc, blockData);
                                                 }
                                             }
                                         }
-                                        if (!sectionBlocks.isEmpty()) {
-                                            regionData.addSection("chunk_" + sectionId++, sectionBlocks);
-                                        }
+                                    }
+                                    if (!sectionBlocks.isEmpty()) {
+                                        regionData.addSection("chunk_" + sectionId++, sectionBlocks);
                                     }
                                 }
+                            }
 
-                                regionData.saveToDatc(datcFile).thenRun(() -> {
-                                    Bukkit.getScheduler().runTask(plugin, () -> {
-                                        plugin.markRegionDirty(regionName);
-                                        clearSelection(player);
-                                        commandSender.sendMessage(regionCreated.replace("{arena_name}", regionName));
-                                    });
-                                }).exceptionally(e -> {
-                                    Bukkit.getScheduler().runTask(plugin, () -> {
-                                        commandSender.sendMessage(pluginPrefix + ChatColor.RED + " Failed to save arena: " + e.getMessage());
-                                        plugin.getRegisteredRegions().remove(regionName);
-                                    });
-                                    return null;
+                            regionData.saveToDatc(datcFile).thenRun(() -> Bukkit.getScheduler().runTask(plugin, () -> {
+                                plugin.markRegionDirty(regionName);
+                                clearSelection(player);
+                                commandSender.sendMessage(regionCreated.replace("{arena_name}", regionName));
+                            })).exceptionally(e -> {
+                                Bukkit.getScheduler().runTask(plugin, () -> {
+                                    commandSender.sendMessage(pluginPrefix + ChatColor.RED + " Failed to save arena: " + e.getMessage());
+                                    plugin.getRegisteredRegions().remove(regionName);
                                 });
+                                return null;
                             });
-                        }).exceptionally(e -> {
+                        })).exceptionally(e -> {
                             Bukkit.getScheduler().runTask(plugin, () -> {
                                 commandSender.sendMessage(pluginPrefix + ChatColor.RED + " Failed to process arena data: " + e.getMessage());
                                 plugin.getRegisteredRegions().remove(regionName);

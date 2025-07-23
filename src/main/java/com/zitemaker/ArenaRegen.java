@@ -147,7 +147,7 @@ public class ArenaRegen extends JavaPlugin{
                 logger.info(ARChatColor.RED + "Please check file permissions to ensure the server process has read/write access.");
             }
 
-            saveTaskId = Bukkit.getScheduler().runTaskTimerAsynchronously((Plugin) this, this::saveRegionsAsync, 0L, 4000L).getTaskId();
+            saveTaskId = Bukkit.getScheduler().runTaskTimerAsynchronously(this, this::saveRegionsAsync, 0L, 4000L).getTaskId();
             rescheduleTasks();
             logger.info("Plugin fully enabled.");
         }).exceptionally(e -> {
@@ -414,7 +414,7 @@ public class ArenaRegen extends JavaPlugin{
         cancelScheduledRegeneration(arenaName);
 
         Runnable regenerateTask = createRegenerateTask(arenaName);
-        int taskId = Bukkit.getScheduler().runTaskTimer((JavaPlugin) this, regenerateTask, intervalTicks, intervalTicks).getTaskId();
+        int taskId = Bukkit.getScheduler().runTaskTimer(this, regenerateTask, intervalTicks, intervalTicks).getTaskId();
 
         scheduledTasks.put(arenaName, taskId);
         scheduledIntervals.put(arenaName, intervalTicks);
@@ -495,7 +495,7 @@ public class ArenaRegen extends JavaPlugin{
             long intervalTicks = entry.getValue();
             if (registeredRegions.containsKey(arenaName)) {
                 Runnable regenerateTask = createRegenerateTask(arenaName);
-                int taskId = Bukkit.getScheduler().runTaskTimer((JavaPlugin) this, regenerateTask, intervalTicks, intervalTicks).getTaskId();
+                int taskId = Bukkit.getScheduler().runTaskTimer(this, regenerateTask, intervalTicks, intervalTicks).getTaskId();
                 scheduledTasks.put(arenaName, taskId);
                 if (!taskStartTimes.containsKey(arenaName)) {
                     taskStartTimes.put(arenaName, System.currentTimeMillis());
@@ -570,42 +570,40 @@ public class ArenaRegen extends JavaPlugin{
                 }
             });
             
-            CompletableFuture.anyOf(loadFuture, timeoutFuture).thenAccept(result -> {
-                Bukkit.getScheduler().runTask(this, () -> {
+            CompletableFuture.anyOf(loadFuture, timeoutFuture).thenAccept(result -> Bukkit.getScheduler().runTask(this, () -> {
+                synchronized (regeneratingArenas) {
+                    if (!regeneratingArenas.contains(arenaName)) {
+                        logger.info("[ArenaRegen] Arena '" + arenaName + "' no longer in regenerating state, aborting");
+                        return;
+                    }
+                }
+
+                if (result == timeoutFuture) {
                     synchronized (regeneratingArenas) {
-                        if (!regeneratingArenas.contains(arenaName)) {
-                            logger.info("[ArenaRegen] Arena '" + arenaName + "' no longer in regenerating state, aborting");
-                            return;
-                        }
+                        regeneratingArenas.remove(arenaName);
+                        logger.info("[ArenaRegen] Removed from regeneratingArenas (timeout): " + arenaName);
                     }
-                    
-                    if (result == timeoutFuture) {
-                        synchronized (regeneratingArenas) {
-                            regeneratingArenas.remove(arenaName);
-                            logger.info("[ArenaRegen] Removed from regeneratingArenas (timeout): " + arenaName);
-                        }
-                        if (sender != null) {
-                            sender.sendMessage(prefix + ChatColor.RED + " Failed to load arena data: timeout after 15 seconds. Please try again.");
-                        }
-                        return;
+                    if (sender != null) {
+                        sender.sendMessage(prefix + ChatColor.RED + " Failed to load arena data: timeout after 15 seconds. Please try again.");
                     }
-                    
-                    logger.info("[ArenaRegen] Load future completed for arena '" + arenaName + "', checking if data is loaded...");
-                    if (!regionData.isBlockDataLoaded()) {
-                        synchronized (regeneratingArenas) {
-                            regeneratingArenas.remove(arenaName);
-                            logger.info("[ArenaRegen] Removed from regeneratingArenas (data still not loaded): " + arenaName);
-                        }
-                        if (sender != null) {
-                            sender.sendMessage(prefix + ChatColor.RED + " Failed to load arena data. The arena file may be corrupted.");
-                        }
-                        return;
+                    return;
+                }
+
+                logger.info("[ArenaRegen] Load future completed for arena '" + arenaName + "', checking if data is loaded...");
+                if (!regionData.isBlockDataLoaded()) {
+                    synchronized (regeneratingArenas) {
+                        regeneratingArenas.remove(arenaName);
+                        logger.info("[ArenaRegen] Removed from regeneratingArenas (data still not loaded): " + arenaName);
                     }
-                    
-                    logger.info("[ArenaRegen] Block data successfully loaded for arena '" + arenaName + "', proceeding with regeneration");
-                    proceedWithRegeneration(arenaName, sender, regionData, world);
-                });
-            }).exceptionally(e -> {
+                    if (sender != null) {
+                        sender.sendMessage(prefix + ChatColor.RED + " Failed to load arena data. The arena file may be corrupted.");
+                    }
+                    return;
+                }
+
+                logger.info("[ArenaRegen] Block data successfully loaded for arena '" + arenaName + "', proceeding with regeneration");
+                proceedWithRegeneration(arenaName, sender, regionData, world);
+            })).exceptionally(e -> {
                 Bukkit.getScheduler().runTask(this, () -> {
                     synchronized (regeneratingArenas) {
                         regeneratingArenas.remove(arenaName);
@@ -613,13 +611,13 @@ public class ArenaRegen extends JavaPlugin{
                     }
                     
                     logger.info("[ArenaRegen] Exception during block data loading for arena '" + arenaName + "': " + e.getMessage());
-                    e.printStackTrace();
+                    for (StackTraceElement element : e.getStackTrace()) {
+                        getLogger().warning("    at " + element);
+                    }
                     
                     if (retryCount < 3) {
                         logger.info("[ArenaRegen] Retrying regeneration for '" + arenaName + "' (attempt " + (retryCount + 1) + "/3)");
-                        Bukkit.getScheduler().runTaskLater(this, () -> {
-                            regenerateArena(arenaName, sender, retryCount + 1);
-                        }, 20L);
+                        Bukkit.getScheduler().runTaskLater(this, () -> regenerateArena(arenaName, sender, retryCount + 1), 20L);
                     } else {
                         logger.info("[ArenaRegen] Failed to load region data for arena '" + arenaName + "' after " + retryCount + " attempts: " + e.getMessage());
                         if (sender != null) {
@@ -637,368 +635,358 @@ public class ArenaRegen extends JavaPlugin{
 
     private void proceedWithRegeneration(String arenaName, CommandSender sender, RegionData regionData, World world) {
         try {
-            regionData.getSectionedBlockData().thenAccept(sectionedBlockData -> {
-                Bukkit.getScheduler().runTask(this, () -> {
-                    try {
-                        if (sectionedBlockData.isEmpty()) {
+            regionData.getSectionedBlockData().thenAccept(sectionedBlockData -> Bukkit.getScheduler().runTask(this, () -> {
+                try {
+                    if (sectionedBlockData.isEmpty()) {
+                        synchronized (regeneratingArenas) {
+                            regeneratingArenas.remove(arenaName);
+                            logger.info("[ArenaRegen] Removed from regeneratingArenas (no sections): " + arenaName);
+                        }
+                        if (sender != null) {
+                            sender.sendMessage(prefix + ChatColor.RED + " No sections found for region '" + arenaName + "'.");
+                        }
+                        return;
+                    }
+
+                    boolean wasLocked = regionData.isLocked();
+                    if (lockDuringRegeneration && !wasLocked) {
+                        regionData.setLocked(true);
+                    }
+
+                    Location min = null;
+                    Location max = null;
+                    for (Map<Location, BlockData> section : sectionedBlockData.values()) {
+                        for (Location loc : section.keySet()) {
+                            if (min == null) {
+                                min = new Location(world, loc.getX(), loc.getY(), loc.getZ());
+                                max = new Location(world, loc.getX(), loc.getY(), loc.getZ());
+                            } else {
+                                min.setX(Math.min(min.getX(), loc.getX()));
+                                min.setY(Math.min(min.getY(), loc.getY()));
+                                min.setZ(Math.min(min.getZ(), loc.getZ()));
+                                max.setX(Math.max(max.getX(), loc.getX()));
+                                max.setY(Math.max(max.getY(), loc.getY()));
+                                max.setZ(Math.max(max.getZ(), loc.getZ()));
+                            }
+                        }
+                    }
+
+                    final Location finalMin = min;
+                    final Location finalMax = max;
+
+                    List<Player> playersInside = new ArrayList<>();
+                    for (Player p : world.getPlayers()) {
+                        Location loc = p.getLocation();
+                        if (loc.getX() >= finalMin.getX() && loc.getX() <= finalMax.getX() &&
+                                loc.getY() >= finalMin.getY() && loc.getY() <= finalMax.getY() &&
+                                loc.getZ() >= finalMin.getZ() && loc.getZ() <= finalMax.getZ()) {
+                            playersInside.add(p);
+                        }
+                    }
+
+                    if (!playersInside.isEmpty()) {
+                        if (cancelRegen) {
                             synchronized (regeneratingArenas) {
                                 regeneratingArenas.remove(arenaName);
-                                logger.info("[ArenaRegen] Removed from regeneratingArenas (no sections): " + arenaName);
+                                logger.info("[ArenaRegen] Removed from regeneratingArenas (players inside): " + arenaName);
                             }
+                            logger.info(ChatColor.RED + "Regeneration of '" + arenaName + "' canceled due to players inside the arena.");
                             if (sender != null) {
-                                sender.sendMessage(prefix + ChatColor.RED + " No sections found for region '" + arenaName + "'.");
+                                sender.sendMessage(prefix + ChatColor.RED + " Regeneration canceled due to players inside the arena.");
                             }
                             return;
                         }
 
-                        boolean wasLocked = regionData.isLocked();
-                        if (lockDuringRegeneration && !wasLocked) {
-                            regionData.setLocked(true);
-                        }
-
-                        Location min = null;
-                        Location max = null;
-                        for (Map<Location, BlockData> section : sectionedBlockData.values()) {
-                            for (Location loc : section.keySet()) {
-                                if (min == null) {
-                                    min = new Location(world, loc.getX(), loc.getY(), loc.getZ());
-                                    max = new Location(world, loc.getX(), loc.getY(), loc.getZ());
-                                } else {
-                                    min.setX(Math.min(min.getX(), loc.getX()));
-                                    min.setY(Math.min(min.getY(), loc.getY()));
-                                    min.setZ(Math.min(min.getZ(), loc.getZ()));
-                                    max.setX(Math.max(max.getX(), loc.getX()));
-                                    max.setY(Math.max(max.getY(), loc.getY()));
-                                    max.setZ(Math.max(max.getZ(), loc.getZ()));
-                                }
+                        for (Player players : playersInside) {
+                            if (killPlayers) {
+                                players.setHealth(0.0);
                             }
-                        }
-
-                        final Location finalMin = min;
-                        final Location finalMax = max;
-
-                        List<Player> playersInside = new ArrayList<>();
-                        for (Player p : world.getPlayers()) {
-                            Location loc = p.getLocation();
-                            if (loc.getX() >= finalMin.getX() && loc.getX() <= finalMax.getX() &&
-                                    loc.getY() >= finalMin.getY() && loc.getY() <= finalMax.getY() &&
-                                    loc.getZ() >= finalMin.getZ() && loc.getZ() <= finalMax.getZ()) {
-                                playersInside.add(p);
-                            }
-                        }
-
-                        if (!playersInside.isEmpty()) {
-                            if (cancelRegen) {
-                                synchronized (regeneratingArenas) {
-                                    regeneratingArenas.remove(arenaName);
-                                    logger.info("[ArenaRegen] Removed from regeneratingArenas (players inside): " + arenaName);
-                                }
-                                logger.info(ChatColor.RED + "Regeneration of '" + arenaName + "' canceled due to players inside the arena.");
-                                if (sender != null) {
-                                    sender.sendMessage(prefix + ChatColor.RED + " Regeneration canceled due to players inside the arena.");
-                                }
-                                return;
-                            }
-
-                            for (Player players : playersInside) {
-                                if (killPlayers) {
-                                    players.setHealth(0.0);
-                                }
-                                if (!teleport) {
-                                    if (teleportLocation.equals("WORLD_SPAWN")) {
-                                        players.teleport(world.getSpawnLocation());
-                                    } else if (teleportLocation.equals("ARENA_SPAWN")) {
-                                        Location arenaSpawn = getArenaSpawn(arenaName);
-                                        if (arenaSpawn != null) {
-                                            players.teleport(arenaSpawn);
-                                        } else {
-                                            getLogger().info((ChatColor.RED + "Arena spawn for '" + arenaName + "' is not set."));
-                                        }
-                                    }
-                                }
-                                if (executeCommands && !commands.isEmpty()) {
-                                    for (String cmd : commands) {
-                                        Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd.replace("%player%", players.getName()));
+                            if (!teleport) {
+                                if (teleportLocation.equals("WORLD_SPAWN")) {
+                                    players.teleport(world.getSpawnLocation());
+                                } else if (teleportLocation.equals("ARENA_SPAWN")) {
+                                    Location arenaSpawn = getArenaSpawn(arenaName);
+                                    if (arenaSpawn != null) {
+                                        players.teleport(arenaSpawn);
+                                    } else {
+                                        getLogger().info((ChatColor.RED + "Arena spawn for '" + arenaName + "' is not set."));
                                     }
                                 }
                             }
-                        }
-
-                        int minX = regionData.getMinX();
-                        int minY = regionData.getMinY();
-                        int minZ = regionData.getMinZ();
-                        int maxX = regionData.getMaxX();
-                        int maxY = regionData.getMaxY();
-                        int maxZ = regionData.getMaxZ();
-
-                        if (trackEntities) {
-                            world.getEntities().stream()
-                                    .filter(e -> {
-                                        Location loc = e.getLocation();
-                                        return loc.getX() >= minX && loc.getX() <= maxX &&
-                                                loc.getY() >= minY && loc.getY() <= maxY &&
-                                                loc.getZ() >= minZ && loc.getZ() <= maxZ;
-                                    })
-                                    .forEach(e -> {
-                                        if (!(e instanceof Player)) e.remove();
-                                    });
-                        }
-
-                        if (sender != null) {
-                            sender.sendMessage(prefix + ChatColor.YELLOW + " Regenerating region '" + arenaName + "', please wait...");
-                        }
-                        int blocksPerTick = regenType.equals("PRESET") ? switch (regenSpeed.toUpperCase()) {
-                            case "SLOW" -> 1000;
-                            case "NORMAL" -> 10000;
-                            case "FAST" -> 40000;
-                            case "VERYFAST" -> 100000;
-                            case "EXTREME" -> 4000000;
-                            default -> 10000;
-                        } : customRegenSpeed;
-
-                        AtomicInteger sectionIndex = new AtomicInteger(0);
-                        List<String> sectionNames = new ArrayList<>(sectionedBlockData.keySet());
-                        AtomicInteger totalBlocksReset = new AtomicInteger(0);
-                        long startTime = System.currentTimeMillis();
-                        Set<Chunk> chunksToRefresh = new HashSet<>();
-                        Map<String, Integer> sectionProgress = new HashMap<>();
-
-                        Map<String, List<Map.Entry<Location, BlockData>>> sectionBlockLists = new HashMap<>();
-                        for (String sectionName : sectionNames) {
-                            Map<Location, BlockData> section = sectionedBlockData.get(sectionName);
-                            sectionBlockLists.put(sectionName, new ArrayList<>(section.entrySet()));
-                        }
-
-                        Bukkit.getScheduler().runTaskTimer((JavaPlugin) this, task -> {
-                            int currentSection = sectionIndex.get();
-                            if (currentSection >= sectionNames.size()) {
-                                if (trackEntities) {
-                                    Map<Location, Map<String, Object>> entityDataMap = regionData.getEntityDataMap();
-                                    for (Map.Entry<Location, Map<String, Object>> entry : entityDataMap.entrySet()) {
-                                        Location loc = entry.getKey();
-                                        Map<String, Object> serializedEntity = entry.getValue();
-                                        try {
-                                            EntitySerializer.deserializeEntity(serializedEntity, loc);
-                                        } catch (Exception e) {
-                                            getLogger().warning("Failed to restore entity at " + loc + ": " + e.getMessage());
-                                        }
-                                    }
-                                }
-
-                                Map<Location, Map<String, Object>> bannerStates = regionData.getBannerStates();
-                                for (Map.Entry<Location, Map<String, Object>> entry : bannerStates.entrySet()) {
-                                    Location loc = entry.getKey();
-                                    Map<String, Object> bannerData = entry.getValue();
-
-                                    try {
-                                        BlockState state = world.getBlockAt(loc).getState();
-                                        if (state instanceof Banner banner) {
-                                            String baseColorStr = (String) bannerData.get("baseColor");
-                                            DyeColor baseColor = baseColorStr.equals("NONE") ? null : DyeColor.valueOf(baseColorStr);
-                                            banner.setBaseColor(Objects.requireNonNull(baseColor));
-
-                                            List<Map<String, String>> patternDataList = (List<Map<String, String>>) bannerData.get("patterns");
-                                            if (patternDataList != null && !patternDataList.isEmpty()) {
-                                                List<Pattern> patterns = new ArrayList<>();
-                                                for (Map<String, String> patternData : patternDataList) {
-                                                    DyeColor color = DyeColor.valueOf(patternData.get("color"));
-                                                    String typeStr = patternData.get("type");
-                                                    NamespacedKey key = new NamespacedKey("minecraft", typeStr);
-                                                    PatternType patternType = Bukkit.getRegistry(PatternType.class).get(key);
-                                                    if (patternType == null) {
-                                                        getLogger().warning("Invalid pattern type '" + typeStr + "' for banner at " + loc + ", defaulting to base.");
-                                                        patternType = PatternType.BASE;
-                                                    }
-                                                    patterns.add(new Pattern(color, patternType));
-                                                }
-                                                banner.setPatterns(patterns);
-                                            }
-
-                                            Map<String, Object> pdcData = (Map<String, Object>) bannerData.get("persistentData");
-                                            if (pdcData != null && !pdcData.isEmpty()) {
-                                                PersistentDataContainer pdc = banner.getPersistentDataContainer();
-                                                for (Map.Entry<String, Object> pdcEntry : pdcData.entrySet()) {
-                                                    NamespacedKey key = NamespacedKey.fromString(pdcEntry.getKey());
-                                                    if (key == null) {
-                                                        getLogger().warning("Invalid NamespacedKey '" + pdcEntry.getKey() + "' for banner at " + loc + ", skipping PDC entry.");
-                                                        continue;
-                                                    }
-                                                    Object value = pdcEntry.getValue();
-                                                    if (value instanceof String s) {
-                                                        pdc.set(key, PersistentDataType.STRING, s);
-                                                    } else if (value instanceof Integer i) {
-                                                        pdc.set(key, PersistentDataType.INTEGER, i);
-                                                    } else if (value instanceof Double d) {
-                                                        pdc.set(key, PersistentDataType.DOUBLE, d);
-                                                    } else if (value instanceof Byte b) {
-                                                        pdc.set(key, PersistentDataType.BYTE, b);
-                                                    } else if (value instanceof Long l) {
-                                                        pdc.set(key, PersistentDataType.LONG, l);
-                                                    } else {
-                                                        getLogger().warning("Unsupported PDC value type for key " + key + " at " + loc + ", skipping.");
-                                                    }
-                                                }
-                                            }
-
-                                            banner.update();
-                                        } else {
-                                            getLogger().warning("Block at " + loc + " is not a banner, cannot restore banner state.");
-                                        }
-                                    } catch (Exception e) {
-                                        getLogger().warning("Failed to restore banner at " + loc + ": " + e.getMessage());
-                                    }
-                                }
-
-                                Map<Location, Map<String, Object>> signStates = regionData.getSignStates();
-                                for (Map.Entry<Location, Map<String, Object>> entry : signStates.entrySet()) {
-                                    Location loc = entry.getKey();
-                                    Map<String, Object> signData = entry.getValue();
-
-                                    try {
-                                        BlockState state = world.getBlockAt(loc).getState();
-                                        if (state instanceof Sign sign) {
-                                            List<String> lines = (List<String>) signData.get("lines");
-                                            if (lines != null) {
-                                                for (int i = 0; i < Math.min(lines.size(), 4); i++) {
-                                                    sign.setLine(i, lines.get(i));
-                                                }
-                                            }
-
-                                            String colorStr = (String) signData.get("color");
-                                            DyeColor color = DyeColor.BLACK;
-                                            try {
-                                                color = DyeColor.valueOf(colorStr);
-                                            } catch (IllegalArgumentException e) {
-                                                getLogger().warning("Invalid color '" + colorStr + "' for sign at " + loc + ", defaulting to BLACK.");
-                                            }
-                                            sign.setColor(color);
-
-                                            boolean glowing = (boolean) signData.getOrDefault("glowing", false);
-                                            sign.setGlowingText(glowing);
-
-                                            Map<String, Object> pdcData = (Map<String, Object>) signData.get("persistentData");
-                                            if (pdcData != null && !pdcData.isEmpty()) {
-                                                PersistentDataContainer pdc = sign.getPersistentDataContainer();
-                                                for (Map.Entry<String, Object> pdcEntry : pdcData.entrySet()) {
-                                                    NamespacedKey key = NamespacedKey.fromString(pdcEntry.getKey());
-                                                    if (key == null) {
-                                                        getLogger().warning("Invalid NamespacedKey '" + pdcEntry.getKey() + "' for sign at " + loc + ", skipping PDC entry.");
-                                                        continue;
-                                                    }
-                                                    Object value = pdcEntry.getValue();
-                                                    if (value instanceof String s) {
-                                                        pdc.set(key, PersistentDataType.STRING, s);
-                                                    } else if (value instanceof Integer i) {
-                                                        pdc.set(key, PersistentDataType.INTEGER, i);
-                                                    } else if (value instanceof Double d) {
-                                                        pdc.set(key, PersistentDataType.DOUBLE, d);
-                                                    } else if (value instanceof Byte b) {
-                                                        pdc.set(key, PersistentDataType.BYTE, b);
-                                                    } else if (value instanceof Long l) {
-                                                        pdc.set(key, PersistentDataType.LONG, l);
-                                                    } else {
-                                                        getLogger().warning("Unsupported PDC value type for key " + key + " at " + loc + ", skipping.");
-                                                    }
-
-                                                }
-                                            }
-
-                                            sign.update();
-                                        } else {
-                                            getLogger().warning("Block at " + loc + " is not a sign, cannot restore sign state.");
-                                        }
-                                    } catch (Exception e) {
-                                        getLogger().warning("Failed to restore sign at " + loc + ": " + e.getMessage());
-                                    }
-                                }
-
-                                for (Chunk chunk : chunksToRefresh) {
-                                    try {
-                                        world.refreshChunk(chunk.getX(), chunk.getZ());
-                                    } catch (Exception e) {
-                                        logger.info(ChatColor.RED + "Failed to refresh chunk at " + chunk.getX() + "," + chunk.getZ() + ": " + e.getMessage());
-                                    }
-                                }
-
-                                long timeTaken = System.currentTimeMillis() - startTime;
-                                if (sender != null) {
-                                    sender.sendMessage(prefix + ChatColor.GREEN + " Regeneration of '" + arenaName + "' complete! " +
-                                            ChatColor.GRAY + " (" + totalBlocksReset.get() + " blocks reset in " + (timeTaken / 1000.0) + "s)");
-                                }
-                                synchronized (regeneratingArenas) {
-                                    regeneratingArenas.remove(arenaName);
-                                    logger.info("[ArenaRegen] Removed from regeneratingArenas (completed): " + arenaName);
-                                }
-                                task.cancel();
-                                if (regionData.isLocked()) {
-                                    regionData.setLocked(false);
-                                }
-                                return;
-                            }
-
-                            String sectionName = sectionNames.get(currentSection);
-                            List<Map.Entry<Location, BlockData>> blockList = sectionBlockLists.get(sectionName);
-
-                            int blockIndex = sectionProgress.getOrDefault(sectionName, 0);
-                            List<BlockUpdate> updates = new ArrayList<>();
-
-                            if (blockIndex == 0) {
-                            }
-
-                            while (blockIndex < blockList.size() && updates.size() < blocksPerTick) {
-                                Map.Entry<Location, BlockData> entry = blockList.get(blockIndex);
-                                Location loc = entry.getKey();
-                                loc.setWorld(world);
-                                BlockData originalData = entry.getValue();
-
-                                boolean shouldUpdate;
-                                if (regenOnlyModified) {
-                                    Block block = world.getBlockAt(loc);
-                                    BlockData currentData = block.getBlockData();
-                                    shouldUpdate = !currentData.equals(originalData);
-                                    if (shouldUpdate) {
-                                        updates.add(new BlockUpdate(block.getX(), block.getY(), block.getZ(), originalData));
-                                        chunksToRefresh.add(block.getChunk());
-                                        totalBlocksReset.incrementAndGet();
-                                    }
-                                } else {
-                                    updates.add(new BlockUpdate((int) loc.getX(), (int) loc.getY(), (int) loc.getZ(), originalData));
-                                    int chunkX = ((int) loc.getX()) >> 4;
-                                    int chunkZ = ((int) loc.getZ()) >> 4;
-                                    chunksToRefresh.add(world.getChunkAt(chunkX, chunkZ));
-                                    totalBlocksReset.incrementAndGet();
-                                }
-                                blockIndex++;
-                            }
-
-                            if (!updates.isEmpty()) {
-                                try {
-                                    NMSHandlerFactoryProvider.getNMSHandler().setBlocks(world, updates);
-                                } catch (Exception e) {
-                                    logger.info(ChatColor.RED + "Failed to set blocks in section " + sectionName + ": " + e.getMessage());
+                            if (executeCommands && !commands.isEmpty()) {
+                                for (String cmd : commands) {
+                                    Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd.replace("%player%", players.getName()));
                                 }
                             }
-
-                            if (blockIndex < blockList.size()) {
-                                sectionProgress.put(sectionName, blockIndex);
-                            } else {
-                                sectionProgress.remove(sectionName);
-                                sectionIndex.incrementAndGet();
-                                return;
-                            }
-                        }, 0L, 1L);
-                    } catch (Exception e) {
-                        logger.info("[ArenaRegen] Exception during regeneration: " + e.getMessage());
-                        if (sender != null) {
-                            sender.sendMessage(prefix + ChatColor.RED + " Regeneration failed: " + e.getMessage());
-                        }
-                        synchronized (regeneratingArenas) {
-                            regeneratingArenas.remove(arenaName);
-                            logger.info("[ArenaRegen] Removed from regeneratingArenas (exception): " + arenaName);
                         }
                     }
-                });
-            }).exceptionally(e -> {
+
+                    int minX = regionData.getMinX();
+                    int minY = regionData.getMinY();
+                    int minZ = regionData.getMinZ();
+                    int maxX = regionData.getMaxX();
+                    int maxY = regionData.getMaxY();
+                    int maxZ = regionData.getMaxZ();
+
+                    if (trackEntities) {
+                        world.getEntities().stream()
+                                .filter(e -> {
+                                    Location loc = e.getLocation();
+                                    return loc.getX() >= minX && loc.getX() <= maxX &&
+                                            loc.getY() >= minY && loc.getY() <= maxY &&
+                                            loc.getZ() >= minZ && loc.getZ() <= maxZ;
+                                })
+                                .forEach(e -> {
+                                    if (!(e instanceof Player)) e.remove();
+                                });
+                    }
+
+                    if (sender != null) {
+                        sender.sendMessage(prefix + ChatColor.YELLOW + " Regenerating region '" + arenaName + "', please wait...");
+                    }
+                    int blocksPerTick = regenType.equals("PRESET") ? switch (regenSpeed.toUpperCase()) {
+                        case "SLOW" -> 1000;
+                        case "NORMAL" -> 10000;
+                        case "FAST" -> 40000;
+                        case "VERYFAST" -> 100000;
+                        case "EXTREME" -> 4000000;
+                        default -> 10000;
+                    } : customRegenSpeed;
+
+                    AtomicInteger sectionIndex = new AtomicInteger(0);
+                    List<String> sectionNames = new ArrayList<>(sectionedBlockData.keySet());
+                    AtomicInteger totalBlocksReset = new AtomicInteger(0);
+                    long startTime = System.currentTimeMillis();
+                    Set<Chunk> chunksToRefresh = new HashSet<>();
+                    Map<String, Integer> sectionProgress = new HashMap<>();
+
+                    Map<String, List<Map.Entry<Location, BlockData>>> sectionBlockLists = new HashMap<>();
+                    for (String sectionName : sectionNames) {
+                        Map<Location, BlockData> section = sectionedBlockData.get(sectionName);
+                        sectionBlockLists.put(sectionName, new ArrayList<>(section.entrySet()));
+                    }
+
+                    Bukkit.getScheduler().runTaskTimer(this, task -> {
+                        int currentSection = sectionIndex.get();
+                        if (currentSection >= sectionNames.size()) {
+                            if (trackEntities) {
+                                Map<Location, Map<String, Object>> entityDataMap = regionData.getEntityDataMap();
+                                for (Map.Entry<Location, Map<String, Object>> entry : entityDataMap.entrySet()) {
+                                    Location loc = entry.getKey();
+                                    Map<String, Object> serializedEntity = entry.getValue();
+                                    try {
+                                        EntitySerializer.deserializeEntity(serializedEntity, loc);
+                                    } catch (Exception e) {
+                                        getLogger().warning("Failed to restore entity at " + loc + ": " + e.getMessage());
+                                    }
+                                }
+                            }
+
+                            Map<Location, Map<String, Object>> bannerStates = regionData.getBannerStates();
+                            for (Map.Entry<Location, Map<String, Object>> entry : bannerStates.entrySet()) {
+                                Location loc = entry.getKey();
+                                Map<String, Object> bannerData = entry.getValue();
+
+                                try {
+                                    BlockState state = world.getBlockAt(loc).getState();
+                                    if (state instanceof Banner banner) {
+                                        String baseColorStr = (String) bannerData.get("baseColor");
+                                        DyeColor baseColor = baseColorStr.equals("NONE") ? null : DyeColor.valueOf(baseColorStr);
+                                        banner.setBaseColor(Objects.requireNonNull(baseColor));
+
+                                        List<Map<String, String>> patternDataList = (List<Map<String, String>>) bannerData.get("patterns");
+                                        if (patternDataList != null && !patternDataList.isEmpty()) {
+                                            List<Pattern> patterns = new ArrayList<>();
+                                            for (Map<String, String> patternData : patternDataList) {
+                                                DyeColor color = DyeColor.valueOf(patternData.get("color"));
+                                                String typeStr = patternData.get("type");
+                                                NamespacedKey key = new NamespacedKey("minecraft", typeStr);
+                                                PatternType patternType = Bukkit.getRegistry(PatternType.class).get(key);
+                                                if (patternType == null) {
+                                                    getLogger().warning("Invalid pattern type '" + typeStr + "' for banner at " + loc + ", defaulting to base.");
+                                                    patternType = PatternType.BASE;
+                                                }
+                                                patterns.add(new Pattern(color, patternType));
+                                            }
+                                            banner.setPatterns(patterns);
+                                        }
+
+                                        Map<String, Object> pdcData = (Map<String, Object>) bannerData.get("persistentData");
+                                        if (pdcData != null && !pdcData.isEmpty()) {
+                                            PersistentDataContainer pdc = banner.getPersistentDataContainer();
+                                            for (Map.Entry<String, Object> pdcEntry : pdcData.entrySet()) {
+                                                NamespacedKey key = NamespacedKey.fromString(pdcEntry.getKey());
+                                                if (key == null) {
+                                                    getLogger().warning("Invalid NamespacedKey '" + pdcEntry.getKey() + "' for banner at " + loc + ", skipping PDC entry.");
+                                                    continue;
+                                                }
+                                                Object value = pdcEntry.getValue();
+                                                if (value instanceof String s) {
+                                                    pdc.set(key, PersistentDataType.STRING, s);
+                                                } else if (value instanceof Integer i) {
+                                                    pdc.set(key, PersistentDataType.INTEGER, i);
+                                                } else if (value instanceof Double d) {
+                                                    pdc.set(key, PersistentDataType.DOUBLE, d);
+                                                } else if (value instanceof Byte b) {
+                                                    pdc.set(key, PersistentDataType.BYTE, b);
+                                                } else if (value instanceof Long l) {
+                                                    pdc.set(key, PersistentDataType.LONG, l);
+                                                } else {
+                                                    getLogger().warning("Unsupported PDC value type for key " + key + " at " + loc + ", skipping.");
+                                                }
+                                            }
+                                        }
+
+                                        banner.update();
+                                    } else {
+                                        getLogger().warning("Block at " + loc + " is not a banner, cannot restore banner state.");
+                                    }
+                                } catch (Exception e) {
+                                    getLogger().warning("Failed to restore banner at " + loc + ": " + e.getMessage());
+                                }
+                            }
+
+                            Map<Location, Map<String, Object>> signStates = regionData.getSignStates();
+                            for (Map.Entry<Location, Map<String, Object>> entry : signStates.entrySet()) {
+                                Location loc = entry.getKey();
+                                Map<String, Object> signData = entry.getValue();
+
+                                try {
+                                    BlockState state = world.getBlockAt(loc).getState();
+                                    if (state instanceof Sign sign) {
+                                        List<String> lines = (List<String>) signData.get("lines");
+                                        if (lines != null) {
+                                            for (int i = 0; i < Math.min(lines.size(), 4); i++) {
+                                                sign.setLine(i, lines.get(i));
+                                            }
+                                        }
+
+                                        String colorStr = (String) signData.get("color");
+                                        DyeColor color = DyeColor.BLACK;
+                                        try {
+                                            color = DyeColor.valueOf(colorStr);
+                                        } catch (IllegalArgumentException e) {
+                                            getLogger().warning("Invalid color '" + colorStr + "' for sign at " + loc + ", defaulting to BLACK.");
+                                        }
+                                        sign.setColor(color);
+
+                                        boolean glowing = (boolean) signData.getOrDefault("glowing", false);
+                                        sign.setGlowingText(glowing);
+
+                                        Map<String, Object> pdcData = (Map<String, Object>) signData.get("persistentData");
+                                        if (pdcData != null && !pdcData.isEmpty()) {
+                                            PersistentDataContainer pdc = sign.getPersistentDataContainer();
+                                            for (Map.Entry<String, Object> pdcEntry : pdcData.entrySet()) {
+                                                NamespacedKey key = NamespacedKey.fromString(pdcEntry.getKey());
+                                                if (key == null) {
+                                                    getLogger().warning("Invalid NamespacedKey '" + pdcEntry.getKey() + "' for sign at " + loc + ", skipping PDC entry.");
+                                                    continue;
+                                                }
+                                                Object value = pdcEntry.getValue();
+                                                switch (value) {
+                                                    case String s -> pdc.set(key, PersistentDataType.STRING, s);
+                                                    case Integer i -> pdc.set(key, PersistentDataType.INTEGER, i);
+                                                    case Double d -> pdc.set(key, PersistentDataType.DOUBLE, d);
+                                                    case Byte b -> pdc.set(key, PersistentDataType.BYTE, b);
+                                                    case Long l -> pdc.set(key, PersistentDataType.LONG, l);
+                                                    case null, default ->
+                                                            getLogger().warning("Unsupported PDC value type for key " + key + " at " + loc + ", skipping.");
+                                                }
+
+                                            }
+                                        }
+
+                                        sign.update();
+                                    } else {
+                                        getLogger().warning("Block at " + loc + " is not a sign, cannot restore sign state.");
+                                    }
+                                } catch (Exception e) {
+                                    getLogger().warning("Failed to restore sign at " + loc + ": " + e.getMessage());
+                                }
+                            }
+
+                            for (Chunk chunk : chunksToRefresh) {
+                                try {
+                                    world.refreshChunk(chunk.getX(), chunk.getZ());
+                                } catch (Exception e) {
+                                    logger.info(ChatColor.RED + "Failed to refresh chunk at " + chunk.getX() + "," + chunk.getZ() + ": " + e.getMessage());
+                                }
+                            }
+
+                            long timeTaken = System.currentTimeMillis() - startTime;
+                            if (sender != null) {
+                                sender.sendMessage(prefix + ChatColor.GREEN + " Regeneration of '" + arenaName + "' complete! " +
+                                        ChatColor.GRAY + " (" + totalBlocksReset.get() + " blocks reset in " + (timeTaken / 1000.0) + "s)");
+                            }
+                            synchronized (regeneratingArenas) {
+                                regeneratingArenas.remove(arenaName);
+                                logger.info("[ArenaRegen] Removed from regeneratingArenas (completed): " + arenaName);
+                            }
+                            task.cancel();
+                            if (regionData.isLocked()) {
+                                regionData.setLocked(false);
+                            }
+                            return;
+                        }
+
+                        String sectionName = sectionNames.get(currentSection);
+                        List<Map.Entry<Location, BlockData>> blockList = sectionBlockLists.get(sectionName);
+
+                        int blockIndex = sectionProgress.getOrDefault(sectionName, 0);
+                        List<BlockUpdate> updates = new ArrayList<>();
+
+                        while (blockIndex < blockList.size() && updates.size() < blocksPerTick) {
+                            Map.Entry<Location, BlockData> entry = blockList.get(blockIndex);
+                            Location loc = entry.getKey();
+                            loc.setWorld(world);
+                            BlockData originalData = entry.getValue();
+
+                            boolean shouldUpdate;
+                            if (regenOnlyModified) {
+                                Block block = world.getBlockAt(loc);
+                                BlockData currentData = block.getBlockData();
+                                shouldUpdate = !currentData.equals(originalData);
+                                if (shouldUpdate) {
+                                    updates.add(new BlockUpdate(block.getX(), block.getY(), block.getZ(), originalData));
+                                    chunksToRefresh.add(block.getChunk());
+                                    totalBlocksReset.incrementAndGet();
+                                }
+                            } else {
+                                updates.add(new BlockUpdate((int) loc.getX(), (int) loc.getY(), (int) loc.getZ(), originalData));
+                                int chunkX = ((int) loc.getX()) >> 4;
+                                int chunkZ = ((int) loc.getZ()) >> 4;
+                                chunksToRefresh.add(world.getChunkAt(chunkX, chunkZ));
+                                totalBlocksReset.incrementAndGet();
+                            }
+                            blockIndex++;
+                        }
+
+                        if (!updates.isEmpty()) {
+                            try {
+                                NMSHandlerFactoryProvider.getNMSHandler().setBlocks(world, updates);
+                            } catch (Exception e) {
+                                logger.info(ChatColor.RED + "Failed to set blocks in section " + sectionName + ": " + e.getMessage());
+                            }
+                        }
+
+                        if (blockIndex < blockList.size()) {
+                            sectionProgress.put(sectionName, blockIndex);
+                        } else {
+                            sectionProgress.remove(sectionName);
+                            sectionIndex.incrementAndGet();
+                        }
+                    }, 0L, 1L);
+                } catch (Exception e) {
+                    logger.info("[ArenaRegen] Exception during regeneration: " + e.getMessage());
+                    if (sender != null) {
+                        sender.sendMessage(prefix + ChatColor.RED + " Regeneration failed: " + e.getMessage());
+                    }
+                    synchronized (regeneratingArenas) {
+                        regeneratingArenas.remove(arenaName);
+                        logger.info("[ArenaRegen] Removed from regeneratingArenas (exception): " + arenaName);
+                    }
+                }
+            })).exceptionally(e -> {
                 synchronized (regeneratingArenas) {
                     regeneratingArenas.remove(arenaName);
                     logger.info("[ArenaRegen] Removed from regeneratingArenas (exceptionally): " + arenaName);
@@ -1120,7 +1108,7 @@ public class ArenaRegen extends JavaPlugin{
 
                 ticks += 2;
             }
-        }.runTaskTimer((JavaPlugin) this, 0L, 2L);
+        }.runTaskTimer(this, 0L, 2L);
     }
 
     private void updateParticle() {
