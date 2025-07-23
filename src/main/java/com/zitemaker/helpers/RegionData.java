@@ -1119,6 +1119,11 @@ public class RegionData {
                 throw new RuntimeException("Recursive loading detected for region in " + (datcFile != null ? datcFile.getName() : "unknown file"));
             }
 
+            if (!sectionedBlockData.isEmpty()) {
+                isBlockDataLoaded = true;
+                return;
+            }
+
             if (!isBlockDataLoaded && datcFile != null) {
                 if (!datcFile.exists()) {
                     throw new RuntimeException("Datc file does not exist: " + datcFile.getAbsolutePath());

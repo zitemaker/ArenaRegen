@@ -16,12 +16,12 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 import java.util.logging.Logger;
-import java.util.stream.Stream;
 
 public final class EntitySerializer {
     private static final Logger LOGGER = Bukkit.getLogger();
-    private static final Attribute MAX_HEALTH_ATTRIBUTE = initializeMaxHealthAttribute();
     private static final Map<EntityType, EntitySerializerHandler> SERIALIZER_REGISTRY = new ConcurrentHashMap<>();
+
+    private static Attribute maxHealthAttribute;
 
     static {
         for (EntityType type : EntityType.values()) {
@@ -42,6 +42,27 @@ public final class EntitySerializer {
         void process(Entity entity, Map<String, Object> data, boolean serialize);
     }
 
+    private static Attribute getMaxHealthAttribute() {
+        if (maxHealthAttribute == null) {
+            try {
+                maxHealthAttribute = Attribute.valueOf("GENERIC_MAX_HEALTH");
+            } catch (Exception e) {
+                try {
+                    for (Attribute attr : Attribute.values()) {
+                        if (attr.getKey().getKey().equals("generic.max_health")) {
+                            maxHealthAttribute = attr;
+                            break;
+                        }
+                    }
+                } catch (Exception ex) {
+                    LOGGER.severe("Could not determine max health attribute. Entity health may not be preserved.");
+                    maxHealthAttribute = null;
+                }
+            }
+        }
+        return maxHealthAttribute;
+    }
+
     public static void registerSerializer(EntityType type, BiConsumer<Entity, Map<String, Object>> serializer,
                                           BiConsumer<Entity, Map<String, Object>> deserializer) {
         SERIALIZER_REGISTRY.put(type, (entity, data, isSerialize) ->
@@ -52,16 +73,6 @@ public final class EntitySerializer {
         registerSerializer(type,
                 (entity, data) -> LOGGER.fine("Using default serialization for " + type.name()),
                 (entity, data) -> LOGGER.fine("Using default deserialization for " + type.name()));
-    }
-
-    private static Attribute initializeMaxHealthAttribute() {
-        return Stream.of(Attribute.values())
-                .filter(attr -> "generic.max_health".equals(attr.getKey().getKey()))
-                .findFirst()
-                .orElseGet(() -> {
-                    LOGGER.severe("Could not determine max health attribute. Entity health may not be preserved.");
-                    return null;
-                });
     }
 
     public static Map<String, Object> serializeEntity(Entity entity) {
@@ -261,7 +272,8 @@ public final class EntitySerializer {
     }
 
     private static void serializeLivingEntity(LivingEntity livingEntity, Map<String, Object> data) {
-        if (MAX_HEALTH_ATTRIBUTE != null) {
+        Attribute maxHealthAttr = getMaxHealthAttribute();
+        if (maxHealthAttr != null) {
             double health = livingEntity.getHealth();
             if (health > 0) data.put("health", health);
         }
@@ -284,9 +296,10 @@ public final class EntitySerializer {
 
     @SuppressWarnings("unchecked")
     private static void deserializeLivingEntity(LivingEntity livingEntity, Map<String, Object> data) {
-        if (MAX_HEALTH_ATTRIBUTE != null && data.containsKey("health")) {
+        Attribute maxHealthAttr = getMaxHealthAttribute();
+        if (maxHealthAttr != null && data.containsKey("health")) {
             double health = getDouble(data, "health", 0.0);
-            livingEntity.setHealth(Math.min(health, livingEntity.getAttribute(MAX_HEALTH_ATTRIBUTE).getValue()));
+            livingEntity.setHealth(Math.min(health, livingEntity.getAttribute(maxHealthAttr).getValue()));
         }
 
         if (data.containsKey("potionEffects")) {
