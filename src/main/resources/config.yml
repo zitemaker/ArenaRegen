@@ -36,4 +36,5 @@ regen:
     execute-commands: false # Execute commands of your choice
     commands: # The commands to be executed
       - "say {player} is inside the arena!"
-    teleport-to-spawn: true # Teleport the player to world spawn
+    teleport: false # Teleport the player, edit location in teleport-location
+    teleport-location: WORLD_SPAWN # WORLD_SPAWN or ARENA_SPAWN

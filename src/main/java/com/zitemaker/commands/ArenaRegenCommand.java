@@ -361,10 +361,8 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                 int maxY = Math.max(selection[0].getBlockY(), selection[1].getBlockY());
                 int maxZ = Math.max(selection[0].getBlockZ(), selection[1].getBlockZ());
 
-
                 RegionData oldRegionData = plugin.getRegisteredRegions().get(regionName);
                 RegionData regionData = new RegionData(plugin);
-
 
                 regionData.setMetadata(
                         oldRegionData.getCreator(),
@@ -378,7 +376,7 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                         maxY - minY + 1,
                         maxZ - minZ + 1
                 );
-
+                regionData.setSpawnLocation(oldRegionData.getSpawnLocation());
                 commandSender.sendMessage(pluginPrefix + ChatColor.YELLOW + " Resizing region '" + regionName + "', please wait...");
                 regionData.clearRegion(regionName);
                 Bukkit.getScheduler().runTask(plugin, () -> {
@@ -388,18 +386,18 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                             for (int z = minZ; z <= maxZ; z++) {
                                 Location loc = new Location(world, x, y, z);
                                 BlockData blockData = world.getBlockAt(loc).getBlockData();
-                                Bukkit.getScheduler().runTask(plugin, () -> regionData.addBlockToSection(sectionName, loc, blockData));
+                                regionData.addBlockToSection(sectionName, loc, blockData);
                             }
                         }
                     }
-                    Bukkit.getScheduler().runTask(plugin, () -> {
-                        plugin.getRegisteredRegions().put(regionName, regionData);
-                        plugin.markRegionDirty(regionName);
-                        Bukkit.getScheduler().runTaskAsynchronously(plugin, plugin::saveRegionsAsync);
-                        clearSelection(player);
-                        commandSender.sendMessage(pluginPrefix + " " + regionResized.replace("{arena_name}", regionName));
-                    });
+
+                    plugin.getRegisteredRegions().put(regionName, regionData);
+                    plugin.markRegionDirty(regionName);
+                    Bukkit.getScheduler().runTaskAsynchronously(plugin, plugin::saveRegionsAsync);
+                    clearSelection(player);
+                    commandSender.sendMessage(pluginPrefix + " " + regionResized.replace("{arena_name}", regionName));
                 });
+
                 return true;
             }
 
@@ -556,8 +554,8 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                     commandSender.sendMessage(pluginPrefix + " " + showUsage);
                     return true;
                 }
+
                 String targetArenaName = strings[1];
-                spawnSet = spawnSet.replace("{arena_name}", targetArenaName);
 
                 Location location = player.getLocation();
 
@@ -567,10 +565,16 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                     return true;
                 }
 
+                Location previousSpawn = regionData.getSpawnLocation();
+                if (previousSpawn != null) {
+                    commandSender.sendMessage(pluginPrefix + ChatColor.YELLOW + " Spawn point for '" + targetArenaName + "' has been updated.");
+                } else {
+                    commandSender.sendMessage(pluginPrefix + ChatColor.GREEN + " Spawn point for '" + targetArenaName + "' has been set.");
+                }
+
                 Bukkit.getScheduler().runTask(plugin, () -> regionData.setSpawnLocation(location));
                 plugin.markRegionDirty(targetArenaName);
                 Bukkit.getScheduler().runTaskAsynchronously(plugin, plugin::saveRegionsAsync);
-                commandSender.sendMessage(spawnSet);
                 return true;
             }
 
@@ -604,25 +608,27 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
             }
 
             case "teleport", "tp" -> {
-                String showUsage = ChatColor.translateAlternateColorCodes('&', "&cUsage: /arenaregen teleport <arena>");
-
-                if (!(commandSender instanceof Player player)) {
-                    commandSender.sendMessage(onlyForPlayers);
-                    return true;
-                }
+                String showUsage = ChatColor.translateAlternateColorCodes('&', "&cUsage: /arenaregen teleport <player> <arena>");
 
                 if (!commandSender.hasPermission("arenaregen.teleport")) {
                     commandSender.sendMessage(pluginPrefix + " " + noPermission);
                     return true;
                 }
 
-                if (strings.length != 2) {
+                if (strings.length != 3) {
                     commandSender.sendMessage(pluginPrefix + " " + showUsage);
                     return true;
                 }
 
-                String targetArenaName = strings[1];
+                String playerName = strings[1];
+                String targetArenaName = strings[2];
                 teleportSuccess = teleportSuccess.replace("{arena_name}", targetArenaName);
+
+                Player targetPlayer = Bukkit.getPlayerExact(playerName);
+                if (targetPlayer == null) {
+                    commandSender.sendMessage(pluginPrefix + ChatColor.RED + " Player '" + playerName + "' is not online.");
+                    return true;
+                }
 
                 RegionData regionData = plugin.getRegisteredRegions().get(targetArenaName);
                 if (regionData == null) {
@@ -636,7 +642,7 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                     return true;
                 }
 
-                player.teleport(spawnLocation);
+                targetPlayer.teleport(spawnLocation);
                 commandSender.sendMessage(pluginPrefix + " " + teleportSuccess);
                 return true;
             }
@@ -681,8 +687,15 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
             }
 
             case "preview" -> {
+                String showUsage = ChatColor.translateAlternateColorCodes('&', "&cUsage: /arenaregen preview <arena>");
+
                 if (!commandSender.hasPermission("arenaregen.preview")) {
                     commandSender.sendMessage(pluginPrefix + " " + noPermission);
+                    return true;
+                }
+
+                if (strings.length != 2) {
+                    commandSender.sendMessage(pluginPrefix + " " + showUsage);
                     return true;
                 }
 

@@ -62,7 +62,8 @@ public class ArenaRegen extends JavaPlugin{
     public boolean killPlayers;
     public boolean executeCommands;
     public List<String> commands;
-    public boolean teleportToSpawn;
+    public boolean teleport;
+    public String teleportLocation;
     public String selectionTool;
     public String previewParticleString;
     public Particle previewParticle;
@@ -328,7 +329,8 @@ public class ArenaRegen extends JavaPlugin{
         this.killPlayers = getConfig().getBoolean("regen.players-inside-arena.kill", false);
         this.executeCommands = getConfig().getBoolean("regen.players-inside-arena.execute-commands", true);
         this.commands = getConfig().getStringList("regen.players-inside-arena.commands");
-        this.teleportToSpawn = getConfig().getBoolean("regen.players-inside-arena.teleport-to-spawn", true);
+        this.teleport = getConfig().getBoolean("regen.players-inside-arena.teleport", true);
+        this.teleportLocation = getConfig().getString("regen.players-inside-arena.teleport-location", "WORLD_SPAWN").toUpperCase();
         this.selectionTool = getConfig().getString("general.selection-tool", "GOLDEN_HOE").toUpperCase();
         this.previewParticleString = getConfig().getString("general.preview-particle", "FLAME").toUpperCase();
         this.lockDuringRegeneration = getConfig().getBoolean("regen.lock-arenas", true);
@@ -698,16 +700,25 @@ public class ArenaRegen extends JavaPlugin{
                                 return;
                             }
 
-                            for (Player p : playersInside) {
+                            for (Player players : playersInside) {
                                 if (killPlayers) {
-                                    p.setHealth(0.0);
+                                    players.setHealth(0.0);
                                 }
-                                if (teleportToSpawn) {
-                                    p.teleport(world.getSpawnLocation());
+                                if (!teleport) {
+                                    if (teleportLocation.equals("WORLD_SPAWN")) {
+                                        players.teleport(world.getSpawnLocation());
+                                    } else if (teleportLocation.equals("ARENA_SPAWN")) {
+                                        Location arenaSpawn = getArenaSpawn(arenaName);
+                                        if (arenaSpawn != null) {
+                                            players.teleport(arenaSpawn);
+                                        } else {
+                                            getLogger().info((ChatColor.RED + "Arena spawn for '" + arenaName + "' is not set."));
+                                        }
+                                    }
                                 }
                                 if (executeCommands && !commands.isEmpty()) {
                                     for (String cmd : commands) {
-                                        Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd.replace("{player}", p.getName()));
+                                        Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd.replace("%player%", players.getName()));
                                     }
                                 }
                             }
@@ -1006,6 +1017,12 @@ public class ArenaRegen extends JavaPlugin{
                 sender.sendMessage(prefix + ChatColor.RED + " Regeneration failed: " + e.getMessage());
             }
         }
+    }
+
+    public Location getArenaSpawn(String arenaName) {
+        RegionData regionData = getRegisteredRegions().get(arenaName);
+        if (regionData == null) return null;
+        return regionData.getSpawnLocation();
     }
 
     private Runnable createRegenerateTask(String arenaName) {
