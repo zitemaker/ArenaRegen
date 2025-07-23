@@ -10,3 +10,4 @@ public interface NMSHandler {
 
     void relightChunks(World world, List<Chunk> chunks, List<BlockUpdate> blockUpdates);
 }
+

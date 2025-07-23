@@ -1162,4 +1162,3 @@ public class ArenaRegen extends JavaPlugin{
     }
 
 }
-
