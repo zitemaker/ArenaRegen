@@ -709,7 +709,7 @@ public class ArenaRegen extends JavaPlugin{
                                     if (arenaSpawn != null) {
                                         players.teleport(arenaSpawn);
                                     } else {
-                                        getLogger().info((ChatColor.RED + "Arena spawn for '" + arenaName + "' is not set."));
+                                        getLogger().info("Arena spawn for '" + arenaName + "' is not set.");
                                     }
                                 }
                             }
