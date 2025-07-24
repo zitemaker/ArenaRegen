@@ -883,16 +883,19 @@ public class ArenaRegen extends JavaPlugin{
                                                     continue;
                                                 }
                                                 Object value = pdcEntry.getValue();
-                                                switch (value) {
-                                                    case String s -> pdc.set(key, PersistentDataType.STRING, s);
-                                                    case Integer i -> pdc.set(key, PersistentDataType.INTEGER, i);
-                                                    case Double d -> pdc.set(key, PersistentDataType.DOUBLE, d);
-                                                    case Byte b -> pdc.set(key, PersistentDataType.BYTE, b);
-                                                    case Long l -> pdc.set(key, PersistentDataType.LONG, l);
-                                                    case null, default ->
-                                                            getLogger().warning("Unsupported PDC value type for key " + key + " at " + loc + ", skipping.");
+                                                if (value instanceof String s) {
+                                                    pdc.set(key, PersistentDataType.STRING, s);
+                                                } else if (value instanceof Integer i) {
+                                                    pdc.set(key, PersistentDataType.INTEGER, i);
+                                                } else if (value instanceof Double d) {
+                                                    pdc.set(key, PersistentDataType.DOUBLE, d);
+                                                } else if (value instanceof Byte b) {
+                                                    pdc.set(key, PersistentDataType.BYTE, b);
+                                                } else if (value instanceof Long l) {
+                                                    pdc.set(key, PersistentDataType.LONG, l);
+                                                } else {
+                                                    getLogger().warning("Unsupported PDC value type for key " + key + " at " + loc + ", skipping.");
                                                 }
-
                                             }
                                         }
 
