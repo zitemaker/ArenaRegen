@@ -913,7 +913,6 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                 if (args[0].equalsIgnoreCase("regenerate") || args[0].equalsIgnoreCase("regen")
                         || args[0].equalsIgnoreCase("delete") || args[0].equalsIgnoreCase("resize")
                         || args[0].equalsIgnoreCase("setspawn") || args[0].equalsIgnoreCase("delspawn")
-                        || args[0].equalsIgnoreCase("teleport") || args[0].equalsIgnoreCase("tp")
                         || args[0].equalsIgnoreCase("preview")
                         || args[0].equalsIgnoreCase("schedule")
                         || args[0].equalsIgnoreCase("info") || args[0].equalsIgnoreCase("information")){
@@ -922,6 +921,8 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                     yield filterSuggestions(List.of("ArenaName"), args[1]);
                 } else if (args[0].equalsIgnoreCase("wand") || args[0].equalsIgnoreCase("selection")) {
                     yield getOnlinePlayers(args[1]);
+                } else if (args[0].equalsIgnoreCase("teleport") || args[0].equalsIgnoreCase("tp")) {
+                    yield getOnlinePlayers(args[1]);
                 }
                 yield List.of();
             }
@@ -929,6 +930,8 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
             case 3 -> {
                 if (args[0].equalsIgnoreCase("schedule")) {
                     yield filterSuggestions(List.of("10s", "1m", "1d", "1w"), args[2]);
+                } else if (args[0].equalsIgnoreCase("tp") || args[0].equalsIgnoreCase("teleport")) {
+                    yield listRegionsForTabComplete(args[2]);
                 }
                 yield List.of();
             }
