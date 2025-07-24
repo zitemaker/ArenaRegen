@@ -99,14 +99,14 @@ public final class EntitySerializer {
         SERIALIZER_REGISTRY.getOrDefault(entity.getType(), (e, d, s) -> {})
                 .process(entity, data, true);
 
-        return data.isEmpty() ? null : Collections.unmodifiableMap(new HashMap<>(data));
+        return data.isEmpty() ? null : Map.copyOf(data);
     }
 
-    public static Entity deserializeEntity(Map<String, Object> data, Location location) {
+    public static void deserializeEntity(Map<String, Object> data, Location location) {
         if (data == null || location == null || !data.containsKey("type") ||
                 !(data.get("type") instanceof String typeStr)) {
             LOGGER.warning("Invalid entity data: " + data);
-            return null;
+            return;
         }
 
         try {
@@ -114,12 +114,12 @@ public final class EntitySerializer {
             World world = location.getWorld();
             if (world == null) {
                 LOGGER.warning("World null for entity spawn at " + location);
-                return null;
+                return;
             }
 
             Entity entity = world.spawnEntity(location, type);
-            location.setYaw(getFloat(data, "yaw", 0.0f));
-            location.setPitch(getFloat(data, "pitch", 0.0f));
+            location.setYaw(getFloat(data, "yaw"));
+            location.setPitch(getFloat(data, "pitch"));
             entity.teleport(location);
 
             if (data.containsKey("velocity")) {
@@ -129,7 +129,7 @@ public final class EntitySerializer {
             }
             if (data.containsKey("isDead") && getBoolean(data, "isDead", false)) {
                 entity.remove();
-                return null;
+                return;
             }
 
             if (data.containsKey("customName") && data.get("customName") instanceof String customName) {
@@ -144,10 +144,8 @@ public final class EntitySerializer {
             SERIALIZER_REGISTRY.getOrDefault(type, (e, d, s) -> {})
                     .process(entity, data, false);
 
-            return entity;
         } catch (Exception e) {
             LOGGER.warning("Deserialization failed for type '" + typeStr + "': " + e.getMessage());
-            return null;
         }
     }
 
@@ -158,7 +156,7 @@ public final class EntitySerializer {
             put("z", loc.getZ());
             put("yaw", loc.getYaw());
             put("pitch", loc.getPitch());
-            put("world", loc.getWorld().getName());
+            put("world", Objects.requireNonNull(loc.getWorld()).getName());
         }};
     }
 
@@ -166,8 +164,8 @@ public final class EntitySerializer {
         return data.getOrDefault(key, defaultValue) instanceof Number n ? n.doubleValue() : defaultValue;
     }
 
-    private static float getFloat(Map<String, Object> data, String key, float defaultValue) {
-        return data.getOrDefault(key, defaultValue) instanceof Number n ? n.floatValue() : defaultValue;
+    private static float getFloat(Map<String, Object> data, String key) {
+        return data.getOrDefault(key, (float) 0.0) instanceof Number n ? n.floatValue() : (float) 0.0;
     }
 
     private static boolean getBoolean(Map<String, Object> data, String key, boolean defaultValue) {
@@ -187,7 +185,6 @@ public final class EntitySerializer {
         }};
     }
 
-    @SuppressWarnings("unchecked")
     private static Vector deserializeVector(Map<String, Object> data) {
         if (data == null) return new Vector();
         return new Vector(
@@ -197,16 +194,14 @@ public final class EntitySerializer {
         );
     }
 
-    @SuppressWarnings("unchecked")
     private static Map<String, Object> serializeItemStack(ItemStack item) {
         return item != null && item.getType() != Material.AIR ? new HashMap<>() {{
             put("type", item.getType().name());
             put("amount", item.getAmount());
-            put("meta", item.hasItemMeta() ? item.getItemMeta().toString() : null);
+            put("meta", item.hasItemMeta() ? Objects.requireNonNull(item.getItemMeta()).toString() : null);
         }} : null;
     }
 
-    @SuppressWarnings("unchecked")
     private static ItemStack deserializeItemStack(Object data) {
         if (!(data instanceof Map<?, ?> rawMap)) return null;
         Map<String, Object> map = new HashMap<>();
@@ -240,7 +235,6 @@ public final class EntitySerializer {
                 .toList();
     }
 
-    @SuppressWarnings("unchecked")
     private static void deserializePotionEffects(LivingEntity entity, List<?> effectsData) {
         effectsData.stream()
                 .filter(obj -> obj instanceof Map<?, ?>)
@@ -294,12 +288,11 @@ public final class EntitySerializer {
         }
     }
 
-    @SuppressWarnings("unchecked")
     private static void deserializeLivingEntity(LivingEntity livingEntity, Map<String, Object> data) {
         Attribute maxHealthAttr = getMaxHealthAttribute();
         if (maxHealthAttr != null && data.containsKey("health")) {
             double health = getDouble(data, "health", 0.0);
-            livingEntity.setHealth(Math.min(health, livingEntity.getAttribute(maxHealthAttr).getValue()));
+            livingEntity.setHealth(Math.min(health, Objects.requireNonNull(livingEntity.getAttribute(maxHealthAttr)).getValue()));
         }
 
         if (data.containsKey("potionEffects")) {
@@ -367,7 +360,8 @@ public final class EntitySerializer {
             if (data.containsKey("previouslyKilled")) {
                 battle.setPreviouslyKilled(getBoolean(data, "previouslyKilled", false));
             }
-            if (data.containsKey("healthProgress") && battle.getBossBar() != null) {
+            if (data.containsKey("healthProgress")) {
+                battle.getBossBar();
                 LOGGER.warning("Health progress deserialization not fully supported; consider NMS for precision.");
             }
             if (data.containsKey("deathAnimationTicks") && getInt(data, "deathAnimationTicks", 0) > 0) {
@@ -446,9 +440,18 @@ public final class EntitySerializer {
 
     private static void deserializeFireball(Entity entity, Map<String, Object> data) {
         Fireball fireball = (Fireball) entity;
-        if (data.containsKey("direction")) {
-            fireball.setDirection(deserializeVector((Map<String, Object>) data.get("direction")));
+
+        Object directionObj = data.get("direction");
+        if (directionObj instanceof Map<?, ?> rawMap) {
+            Map<String, Object> directionMap = new HashMap<>();
+            for (Map.Entry<?, ?> entry : rawMap.entrySet()) {
+                if (entry.getKey() instanceof String key) {
+                    directionMap.put(key, entry.getValue());
+                }
+            }
+            fireball.setDirection(deserializeVector(directionMap));
         }
+
         if (data.containsKey("yield")) {
             fireball.setYield((float) getDouble(data, "yield", 1.0));
         }
