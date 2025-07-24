@@ -103,8 +103,7 @@ public class NMSHandler_1_21 implements NMSHandler {
                     );
 
                 } catch (Exception e) {
-                    LOGGER.warning("Failed to relight chunk " + chunkPos + ": " + e.getMessage());
-                    world.refreshChunk(chunkPos.x, chunkPos.z);
+                   world.refreshChunk(chunkPos.x, chunkPos.z);
                 }
             }
 
