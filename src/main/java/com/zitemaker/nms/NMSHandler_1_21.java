@@ -96,7 +96,7 @@ public class NMSHandler_1_21 implements NMSHandler {
                                 try {
                                     world.refreshChunk(chunkX, chunkZ);
                                 } catch (Exception e) {
-                                    LOGGER.warning("Failed delayed chunk refresh for " + chunkX + "," + chunkZ + ": " + e.getMessage());
+                                    // LOGGER.warning("Failed delayed chunk refresh for " + chunkX + "," + chunkZ + ": " + e.getMessage());
                                 }
                             },
                             2L

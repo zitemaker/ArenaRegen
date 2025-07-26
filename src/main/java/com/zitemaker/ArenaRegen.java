@@ -964,6 +964,10 @@ public class ArenaRegen extends JavaPlugin{
                             blockIndex++;
                         }
 
+                        if (!chunksToRefresh.isEmpty()){
+                            NMSHandlerFactoryProvider.getNMSHandler().relightChunks(world, new ArrayList<>(chunksToRefresh), updates);
+                        }
+
                         if (!updates.isEmpty()) {
                             try {
                                 NMSHandlerFactoryProvider.getNMSHandler().setBlocks(world, updates);
