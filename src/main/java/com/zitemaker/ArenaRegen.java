@@ -908,13 +908,9 @@ public class ArenaRegen extends JavaPlugin{
                                 }
                             }
 
-                            for (Chunk chunk : chunksToRefresh) {
-                                try {
-                                    world.refreshChunk(chunk.getX(), chunk.getZ());
-                                } catch (Exception e) {
-                                    logger.info(ChatColor.RED + "Failed to refresh chunk at " + chunk.getX() + "," + chunk.getZ() + ": " + e.getMessage());
-                                }
-                            }
+                            Bukkit.getScheduler().runTaskLater(this, () -> {
+                                NMSHandlerFactoryProvider.getNMSHandler().relightChunks(world, new ArrayList<>(chunksToRefresh), new ArrayList<>());
+                            }, 20L);
 
                             long timeTaken = System.currentTimeMillis() - startTime;
                             if (sender != null) {
@@ -964,9 +960,7 @@ public class ArenaRegen extends JavaPlugin{
                             blockIndex++;
                         }
 
-                        if (!chunksToRefresh.isEmpty()){
-                            NMSHandlerFactoryProvider.getNMSHandler().relightChunks(world, new ArrayList<>(chunksToRefresh), updates);
-                        }
+
 
                         if (!updates.isEmpty()) {
                             try {

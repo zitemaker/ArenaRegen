@@ -13,6 +13,7 @@ import org.bukkit.World;
 import org.bukkit.craftbukkit.CraftWorld;
 import org.bukkit.craftbukkit.block.data.CraftBlockData;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -51,65 +52,35 @@ public class NMSHandler_1_21 implements NMSHandler {
 
     @Override
     public void relightChunks(World world, List<Chunk> chunks, List<BlockUpdate> blockUpdates) {
-        if (chunks == null || chunks.isEmpty() || blockUpdates == null || blockUpdates.isEmpty()) return;
+        if (chunks == null || chunks.isEmpty()) return;
 
-        CraftWorld craftWorld = (CraftWorld) world;
+        Set<ChunkPos> affectedChunks = new HashSet<>();
+        for (Chunk chunk : chunks) {
+            affectedChunks.add(new ChunkPos(chunk.getX(), chunk.getZ()));
+        }
 
-        try {
-            LevelLightEngine lightEngine = craftWorld.getHandle().getChunkSource().getLightEngine();
-            Set<ChunkPos> affectedChunks = new HashSet<>();
+        List<ChunkPos> chunkList = new ArrayList<>(affectedChunks);
+        processChunks(world, chunkList, 0);
+    }
 
-            for (BlockUpdate update : blockUpdates) {
-                int x = update.getX();
-                int y = update.getY();
-                int z = update.getZ();
+    private void processChunks(World world, List<ChunkPos> chunks, int index) {
+        if (index >= chunks.size()) return;
 
-                ChunkPos chunkPos = new ChunkPos(x >> 4, z >> 4);
-                affectedChunks.add(chunkPos);
-
-                BlockPos pos = new BlockPos(x, y, z);
-
-                lightEngine.checkBlock(pos);
-
-                for (int dx = -1; dx <= 1; dx++) {
-                    for (int dy = -1; dy <= 1; dy++) {
-                        for (int dz = -1; dz <= 1; dz++) {
-                            if (dx == 0 && dy == 0 && dz == 0) continue;
-                            BlockPos neighborPos = pos.offset(dx, dy, dz);
-                            lightEngine.checkBlock(neighborPos);
-                        }
-                    }
-                }
+        int batchSize = Math.min(3, chunks.size() - index);
+        for (int i = 0; i < batchSize; i++) {
+            ChunkPos chunkPos = chunks.get(index + i);
+            try {
+                world.refreshChunk(chunkPos.x, chunkPos.z);
+            } catch (Exception e) {
             }
+        }
 
-            for (ChunkPos chunkPos : affectedChunks) {
-                try {
-                    lightEngine.retainData(chunkPos, true);
-                    lightEngine.setLightEnabled(chunkPos, true);
-                    int maxUpdates = lightEngine.runLightUpdates();
-                    final int chunkX = chunkPos.x;
-                    final int chunkZ = chunkPos.z;
-
-                    Bukkit.getScheduler().runTaskLater(
-                            Bukkit.getPluginManager().getPlugin("ArenaRegen"),
-                            () -> {
-                                try {
-                                    world.refreshChunk(chunkX, chunkZ);
-                                } catch (Exception e) {
-                                    // LOGGER.warning("Failed delayed chunk refresh for " + chunkX + "," + chunkZ + ": " + e.getMessage());
-                                }
-                            },
-                            2L
-                    );
-
-                } catch (Exception e) {
-                   world.refreshChunk(chunkPos.x, chunkPos.z);
-                }
-            }
-
-        } catch (Throwable t) {
-            LOGGER.warning("NMS relight failed, falling back to Bukkit API: " + t.getMessage());
-            new BukkitNMSHandler().relightChunks(world, chunks, blockUpdates);
+        if (index + batchSize < chunks.size()) {
+            Bukkit.getScheduler().runTaskLater(
+                    Bukkit.getPluginManager().getPlugin("ArenaRegen"),
+                    () -> processChunks(world, chunks, index + batchSize),
+                    3L
+            );
         }
     }
 }
