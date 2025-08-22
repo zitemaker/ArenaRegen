@@ -701,7 +701,7 @@ public class ArenaRegen extends JavaPlugin{
                             if (killPlayers) {
                                 players.setHealth(0.0);
                             }
-                            if (!teleport) {
+                            if (teleport) {
                                 if (teleportLocation.equals("WORLD_SPAWN")) {
                                     players.teleport(world.getSpawnLocation());
                                 } else if (teleportLocation.equals("ARENA_SPAWN")) {
