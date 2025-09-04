@@ -230,6 +230,8 @@ public class ArenaRegen extends JavaPlugin{
                     int totalLoaded = loadedRegions.get();
                     logger.info("Successfully loaded " + totalLoaded + " out of " + files.length + " arenas.");
 
+                    unlockAllArenas();
+
                     if (totalLoaded < files.length) {
                         logger.info(ARChatColor.RED + "Errors occurred while loading the following arenas:");
                         logger.info(errorSummary.toString());
@@ -240,6 +242,28 @@ public class ArenaRegen extends JavaPlugin{
                         }
                     }
                 });
+    }
+
+    private void unlockAllArenas() {
+        int unlockedCount = 0;
+        for (Map.Entry<String, RegionData> entry : registeredRegions.entrySet()) {
+            String arenaName = entry.getKey();
+            RegionData regionData = entry.getValue();
+            
+            if (regionData.isLocked()) {
+                if (!regeneratingArenas.contains(arenaName)) {
+                    regionData.setLocked(false);
+                    unlockedCount++;
+                    logger.info(ARChatColor.YELLOW + "Unlocked arena '" + arenaName + "' during startup (was locked but not regenerating).");
+                } else {
+                    logger.info(ARChatColor.YELLOW + "Keeping arena '" + arenaName + "' locked during startup (currently regenerating).");
+                }
+            }
+        }
+        
+        if (unlockedCount > 0) {
+            logger.info(ARChatColor.GREEN + "Unlocked " + unlockedCount + " arena(s) after server restart to prevent access issues.");
+        }
     }
 
     public void saveRegionsAsync() {
@@ -368,7 +392,8 @@ public class ArenaRegen extends JavaPlugin{
             "arenaregen.teleport",
             "arenaregen.reload",
             "arenaregen.help",
-            "arenaregen.select"
+            "arenaregen.select",
+            "arenaregen.unlock"
     );
 
     public static boolean hasAnyPermissions(Player player) {
@@ -651,6 +676,11 @@ public class ArenaRegen extends JavaPlugin{
                     boolean wasLocked = regionData.isLocked();
                     if (lockDuringRegeneration && !wasLocked) {
                         regionData.setLocked(true);
+                        logger.info("[ArenaRegen] Locked arena '" + arenaName + "' for regeneration (lock-arenas config: " + lockDuringRegeneration + ")");
+                    } else if (!lockDuringRegeneration) {
+                        logger.info("[ArenaRegen] Arena locking is disabled in config for '" + arenaName + "' (lock-arenas: " + lockDuringRegeneration + ")");
+                    } else {
+                        logger.info("[ArenaRegen] Arena '" + arenaName + "' was already locked before regeneration");
                     }
 
                     Location min = null;
@@ -924,6 +954,7 @@ public class ArenaRegen extends JavaPlugin{
                             task.cancel();
                             if (regionData.isLocked()) {
                                 regionData.setLocked(false);
+                                logger.info("[ArenaRegen] Unlocked arena '" + arenaName + "' after regeneration completed");
                             }
                             return;
                         }

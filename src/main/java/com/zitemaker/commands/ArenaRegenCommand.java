@@ -720,6 +720,7 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                 commandSender.sendMessage(ChatColor.GREEN + "/arenaregen wand - Get the selection tool");
                 commandSender.sendMessage(ChatColor.GREEN + "/arenaregen schedule - Schedule a regeneration timer");
                 commandSender.sendMessage(ChatColor.GREEN + "/arenaregen preview - Preview the borders of an arena using particles");
+                commandSender.sendMessage(ChatColor.GREEN + "/arenaregen unlock [arena] - Unlock arena(s) that are stuck in locked state");
                 return true;
             }
 
@@ -742,6 +743,58 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                 }
 
                 giveSelectionTool(player);
+                return true;
+            }
+
+            case "unlock" -> {
+                String showUsage = ChatColor.translateAlternateColorCodes('&', "&cUsage: /arenaregen unlock [arena]");
+
+                if (!commandSender.hasPermission("arenaregen.unlock")) {
+                    commandSender.sendMessage(noPermission);
+                    return true;
+                }
+
+                if (strings.length > 2) {
+                    commandSender.sendMessage(pluginPrefix + " " + showUsage);
+                    return true;
+                }
+
+                if (strings.length == 1) {
+                    int unlockedCount = 0;
+                    for (Map.Entry<String, RegionData> entry : plugin.getRegisteredRegions().entrySet()) {
+                        String arenaName = entry.getKey();
+                        RegionData regionData = entry.getValue();
+                        
+                        if (regionData.isLocked() && !plugin.isArenaRegenerating(arenaName)) {
+                            regionData.setLocked(false);
+                            unlockedCount++;
+                        }
+                    }
+                    
+                    if (unlockedCount > 0) {
+                        commandSender.sendMessage(pluginPrefix + ChatColor.GREEN + " Unlocked " + unlockedCount + " arena(s).");
+                    } else {
+                        commandSender.sendMessage(pluginPrefix + ChatColor.YELLOW + " No locked arenas found that can be unlocked.");
+                    }
+                } else {
+                    String arenaName = strings[1];
+                    RegionData regionData = plugin.getRegisteredRegions().get(arenaName);
+                    
+                    if (regionData == null) {
+                        commandSender.sendMessage(pluginPrefix + ChatColor.RED + " Arena '" + arenaName + "' not found.");
+                        return true;
+                    }
+                    
+                    if (!regionData.isLocked()) {
+                        commandSender.sendMessage(pluginPrefix + ChatColor.YELLOW + " Arena '" + arenaName + "' is already unlocked.");
+                        return true;
+                    }
+                
+                    
+                    regionData.setLocked(false);
+                    commandSender.sendMessage(pluginPrefix + ChatColor.GREEN + " Arena '" + arenaName + "' has been unlocked.");
+                }
+                
                 return true;
             }
 
@@ -907,7 +960,7 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
     private List<String> handleTabComplete(String @NotNull [] args) {
         return switch (args.length) {
             case 1 -> filterSuggestions(List.of("create", "regenerate", "regen", "setspawn", "delspawn", "teleport", "tp",
-                    "list", "delete", "resize", "reload", "help", "wand", "selection", "schedule", "preview", "info"), args[0]);
+                    "list", "delete", "resize", "reload", "help", "wand", "selection", "schedule", "preview", "info", "unlock"), args[0]);
 
             case 2 -> {
                 if (args[0].equalsIgnoreCase("regenerate") || args[0].equalsIgnoreCase("regen")
@@ -915,7 +968,8 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                         || args[0].equalsIgnoreCase("setspawn") || args[0].equalsIgnoreCase("delspawn")
                         || args[0].equalsIgnoreCase("preview")
                         || args[0].equalsIgnoreCase("schedule")
-                        || args[0].equalsIgnoreCase("info") || args[0].equalsIgnoreCase("information")){
+                        || args[0].equalsIgnoreCase("info") || args[0].equalsIgnoreCase("information")
+                        || args[0].equalsIgnoreCase("unlock")){
                     yield listRegionsForTabComplete(args[1]);
                 } else if (args[0].equalsIgnoreCase("create")) {
                     yield filterSuggestions(List.of("ArenaName"), args[1]);
