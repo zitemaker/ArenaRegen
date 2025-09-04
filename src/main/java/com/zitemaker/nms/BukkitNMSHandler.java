@@ -46,7 +46,26 @@ public class BukkitNMSHandler implements NMSHandler {
         for (int i = 0; i < batchSize; i++) {
             Chunk chunk = chunks.get(index + i);
             try {
-                world.refreshChunk(chunk.getX(), chunk.getZ());
+
+                int chunkX = chunk.getX();
+                int chunkZ = chunk.getZ();
+                
+
+                world.refreshChunk(chunkX, chunkZ);
+
+                Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                    try {
+                        for (int dx = -1; dx <= 1; dx++) {
+                            for (int dz = -1; dz <= 1; dz++) {
+                                if (world.isChunkLoaded(chunkX + dx, chunkZ + dz)) {
+                                    world.refreshChunk(chunkX + dx, chunkZ + dz);
+                                }
+                            }
+                        }
+                    } catch (Exception e) {
+                    }
+                }, 10L);
+                
             } catch (Exception e) {
                 Bukkit.getLogger().warning("Failed delayed chunk refresh " + chunk.getX() + "," + chunk.getZ() + ": " + e.getMessage());
             }

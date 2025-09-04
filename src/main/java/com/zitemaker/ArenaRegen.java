@@ -938,9 +938,25 @@ public class ArenaRegen extends JavaPlugin{
                                 }
                             }
 
+
                             Bukkit.getScheduler().runTaskLater(this, () -> {
-                                NMSHandlerFactoryProvider.getNMSHandler().relightChunks(world, new ArrayList<>(chunksToRefresh), new ArrayList<>());
-                            }, 20L);
+                                Set<Chunk> extendedChunks = new HashSet<>(chunksToRefresh);
+                                for (Chunk chunk : chunksToRefresh) {
+                                    for (int dx = -1; dx <= 1; dx++) {
+                                        for (int dz = -1; dz <= 1; dz++) {
+                                            if (dx == 0 && dz == 0) continue;
+                                            try {
+                                                Chunk neighborChunk = world.getChunkAt(chunk.getX() + dx, chunk.getZ() + dz);
+                                                if (neighborChunk.isLoaded()) {
+                                                    extendedChunks.add(neighborChunk);
+                                                }
+                                            } catch (Exception e) {
+                                            }
+                                        }
+                                    }
+                                }
+                                NMSHandlerFactoryProvider.getNMSHandler().relightChunks(world, new ArrayList<>(extendedChunks), new ArrayList<>());
+                            }, 40L); 
 
                             long timeTaken = System.currentTimeMillis() - startTime;
                             if (sender != null) {

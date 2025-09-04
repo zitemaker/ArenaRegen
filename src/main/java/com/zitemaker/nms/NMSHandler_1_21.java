@@ -6,7 +6,8 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.lighting.LevelLightEngine;
-import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.LightLayer;
+import net.minecraft.core.SectionPos;
 import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
 import org.bukkit.World;
@@ -60,25 +61,61 @@ public class NMSHandler_1_21 implements NMSHandler {
         }
 
         List<ChunkPos> chunkList = new ArrayList<>(affectedChunks);
-        processChunks(world, chunkList, 0);
+        processChunksWithLighting(world, chunkList, 0);
     }
 
-    private void processChunks(World world, List<ChunkPos> chunks, int index) {
+    private void processChunksWithLighting(World world, List<ChunkPos> chunks, int index) {
         if (index >= chunks.size()) return;
 
         int batchSize = Math.min(3, chunks.size() - index);
-        for (int i = 0; i < batchSize; i++) {
-            ChunkPos chunkPos = chunks.get(index + i);
-            try {
-                world.refreshChunk(chunkPos.x, chunkPos.z);
-            } catch (Exception e) {
+        
+        try {
+            CraftWorld craftWorld = (CraftWorld) world;
+            LevelLightEngine lightEngine = craftWorld.getHandle().getLightEngine();
+            
+            for (int i = 0; i < batchSize; i++) {
+                ChunkPos chunkPos = chunks.get(index + i);
+                try {
+                    lightEngine.retainData(chunkPos, true);
+                    lightEngine.setLightEnabled(chunkPos, true);
+
+                    for (int sectionIndex = lightEngine.getMinLightSection(); 
+                         sectionIndex < lightEngine.getMaxLightSection(); sectionIndex++) {
+                        
+                        SectionPos sectionPos = SectionPos.of(chunkPos, sectionIndex);
+                        lightEngine.updateSectionStatus(sectionPos, false);
+                        
+                        lightEngine.queueSectionData(LightLayer.BLOCK, sectionPos, null);
+                        lightEngine.queueSectionData(LightLayer.SKY, sectionPos, null);
+                    }
+
+                    world.refreshChunk(chunkPos.x, chunkPos.z);
+                    
+                } catch (Exception e) {
+                    LOGGER.warning("Failed to relight chunk at " + chunkPos.x + ", " + chunkPos.z + ": " + e.getMessage());
+                    try {
+                        world.refreshChunk(chunkPos.x, chunkPos.z);
+                    } catch (Exception fallbackException) {
+                    }
+                }
+            }
+        } catch (Throwable t) {
+            LOGGER.warning("Lighting engine failed, falling back to simple chunk refresh: " + t.getMessage());
+            // Fallback to simple refresh for all chunks in this batch
+            for (int i = 0; i < batchSize; i++) {
+                ChunkPos chunkPos = chunks.get(index + i);
+                try {
+                    world.refreshChunk(chunkPos.x, chunkPos.z);
+                } catch (Exception e) {
+                    // Silent fallback failure
+                }
             }
         }
 
         if (index + batchSize < chunks.size()) {
             Bukkit.getScheduler().runTaskLater(
                     Bukkit.getPluginManager().getPlugin("ArenaRegen"),
-                    () -> processChunks(world, chunks, index + batchSize),
+                    () -> processChunksWithLighting(world, chunks, index + batchSize),
                     3L
             );
         }
