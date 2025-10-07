@@ -29,7 +29,8 @@ public class PlayerMoveListener implements Listener {
         updateRegionBounds();
     }
 
-    private void updateRegionBounds() {
+
+    public void updateRegionBounds() {
         regionBounds.clear();
         for (Map.Entry<String, RegionData> entry : plugin.getRegisteredRegions().entrySet()) {
             RegionData region = entry.getValue();

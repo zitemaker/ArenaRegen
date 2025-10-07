@@ -76,6 +76,7 @@ public class ArenaRegen extends JavaPlugin{
     private File schedulesFile;
     private FileConfiguration schedulesConfig;
     private ArenaRegenExpansion placeholderExpansion;
+    private PlayerMoveListener playerMoveListener;
 
     @Override
     public void onLoad() {
@@ -136,7 +137,8 @@ public class ArenaRegen extends JavaPlugin{
             Objects.requireNonNull(getCommand("arenaregen")).setExecutor(commandExecutor);
             Objects.requireNonNull(getCommand("arenaregen")).setTabCompleter(commandExecutor);
             Bukkit.getPluginManager().registerEvents(commandExecutor, this);
-            Bukkit.getPluginManager().registerEvents(new PlayerMoveListener(this), this);
+            playerMoveListener = new PlayerMoveListener(this);
+            Bukkit.getPluginManager().registerEvents(playerMoveListener, this);
 
             File arenasDir = new File(getDataFolder(), "arenas");
             if (!arenasDir.exists()) {
@@ -372,6 +374,10 @@ public class ArenaRegen extends JavaPlugin{
 
     public Map<String, String> getPendingDeletions() {
         return pendingDeletions;
+    }
+
+    public PlayerMoveListener getPlayerMoveListener() {
+        return playerMoveListener;
     }
 
     public Map<String, String> getPendingRegenerations() {

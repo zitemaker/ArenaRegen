@@ -236,6 +236,9 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                             regionData.saveToDatc(datcFile).thenRun(() -> Bukkit.getScheduler().runTask(plugin, () -> {
                                 plugin.markRegionDirty(regionName);
                                 clearSelection(player);
+                                if (plugin.getPlayerMoveListener() != null) {
+                                    plugin.getPlayerMoveListener().updateRegionBounds();
+                                }
                                 commandSender.sendMessage(regionCreated.replace("{arena_name}", regionName));
                             })).exceptionally(e -> {
                                 Bukkit.getScheduler().runTask(plugin, () -> {
@@ -310,6 +313,9 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                 RegionData regionData = plugin.getRegisteredRegions().get(confirmedRegion);
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     regionData.clearRegion(confirmedRegion);
+                    if (plugin.getPlayerMoveListener() != null) {
+                        plugin.getPlayerMoveListener().updateRegionBounds();
+                    }
                     Bukkit.getScheduler().runTaskAsynchronously(plugin, plugin::saveRegionsAsync);
                     String regionDeletedMsg = regionDeleted.replace("{arena_name}", confirmedRegion);
                     commandSender.sendMessage(pluginPrefix + " " + regionDeletedMsg);
@@ -388,6 +394,9 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
 
                     plugin.getRegisteredRegions().put(regionName, regionData);
                     plugin.markRegionDirty(regionName);
+                    if (plugin.getPlayerMoveListener() != null) {
+                        plugin.getPlayerMoveListener().updateRegionBounds();
+                    }
                     Bukkit.getScheduler().runTaskAsynchronously(plugin, plugin::saveRegionsAsync);
                     clearSelection(player);
                     commandSender.sendMessage(pluginPrefix + " " + regionResized.replace("{arena_name}", regionName));
