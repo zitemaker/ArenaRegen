@@ -3,6 +3,9 @@ package com.zitemaker.commands;
 import com.zitemaker.ArenaRegen;
 import com.zitemaker.helpers.EntitySerializer;
 import com.zitemaker.helpers.RegionData;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextDecoration;
 import net.md_5.bungee.api.chat.ClickEvent;
 import net.md_5.bungee.api.chat.TextComponent;
 import org.bukkit.*;
@@ -1116,8 +1119,45 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
         if (corners[index] == null || !corners[index].equals(clickedPos)) {
             corners[index] = clickedPos;
             player.sendMessage(ChatColor.GREEN + cornerName + " corner set at: " + formatVector(clickedPos));
+
+            sendSelectionActionBar(player, corners, index, cornerName, clickedPos);
+
             resetExpiration(playerId);
         }
+    }
+
+    private void sendSelectionActionBar(Player player, Vector[] corners, int index, String cornerName, Vector clickedPos) {
+        Component actionBarMessage;
+
+        if (corners[0] != null && corners[1] != null) {
+            int dx = Math.abs(corners[1].getBlockX() - corners[0].getBlockX()) + 1;
+            int dy = Math.abs(corners[1].getBlockY() - corners[0].getBlockY()) + 1;
+            int dz = Math.abs(corners[1].getBlockZ() - corners[0].getBlockZ()) + 1;
+            long volume = (long) dx * dy * dz;
+
+            actionBarMessage = Component.text()
+                    .append(Component.text("✔ ", NamedTextColor.GREEN, TextDecoration.BOLD))
+                    .append(Component.text(cornerName + " Corner: ", NamedTextColor.YELLOW))
+                    .append(Component.text(formatVector(clickedPos), NamedTextColor.WHITE))
+                    .append(Component.text(" | ", NamedTextColor.DARK_GRAY))
+                    .append(Component.text("Volume: ", NamedTextColor.AQUA))
+                    .append(Component.text(dx + "×" + dy + "×" + dz, NamedTextColor.WHITE))
+                    .append(Component.text(" (", NamedTextColor.GRAY))
+                    .append(Component.text(String.format("%,d", volume), NamedTextColor.GREEN))
+                    .append(Component.text(" blocks)", NamedTextColor.GRAY))
+                    .build();
+        } else {
+            String otherCorner = index == 0 ? "Second" : "First";
+            actionBarMessage = Component.text()
+                    .append(Component.text("✔ ", NamedTextColor.GREEN, TextDecoration.BOLD))
+                    .append(Component.text(cornerName + " Corner: ", NamedTextColor.YELLOW))
+                    .append(Component.text(formatVector(clickedPos), NamedTextColor.WHITE))
+                    .append(Component.text(" | ", NamedTextColor.DARK_GRAY))
+                    .append(Component.text("Select " + otherCorner + " corner", NamedTextColor.GRAY, TextDecoration.ITALIC))
+                    .build();
+        }
+
+        plugin.adventure().player(player).sendActionBar(actionBarMessage);
     }
 
     public Vector[] getSelection(@NotNull Player player) {

@@ -8,6 +8,7 @@ import com.zitemaker.nms.BlockUpdate;
 import com.zitemaker.nms.NMSHandlerFactoryProvider;
 import com.zitemaker.placeholders.ArenaRegenExpansion;
 import com.zitemaker.utils.*;
+import net.kyori.adventure.platform.bukkit.BukkitAudiences;
 import org.bukkit.*;
 import org.bukkit.block.Banner;
 import org.bukkit.block.Block;
@@ -77,6 +78,8 @@ public class ArenaRegen extends JavaPlugin{
     private FileConfiguration schedulesConfig;
     private ArenaRegenExpansion placeholderExpansion;
     private PlayerMoveListener playerMoveListener;
+    private BukkitAudiences adventure;
+    private boolean isPaper;
 
     @Override
     public void onLoad() {
@@ -85,6 +88,15 @@ public class ArenaRegen extends JavaPlugin{
 
     @Override
     public void onEnable() {
+        try {
+            Class.forName("io.papermc.paper.event.player.AsyncChatEvent");
+            this.isPaper = true;
+        } catch (ClassNotFoundException e) {
+            this.isPaper = false;
+        }
+
+        this.adventure = BukkitAudiences.create(this);
+
         if (regeneratingArenas != null) {
             regeneratingArenas.clear();
         }
@@ -167,6 +179,11 @@ public class ArenaRegen extends JavaPlugin{
 
     @Override
     public void onDisable() {
+        if (this.adventure != null) {
+            this.adventure.close();
+            this.adventure = null;
+        }
+
         if (saveTaskId != -1) {
             Bukkit.getScheduler().cancelTask(saveTaskId);
             saveTaskId = -1;
@@ -378,6 +395,17 @@ public class ArenaRegen extends JavaPlugin{
 
     public PlayerMoveListener getPlayerMoveListener() {
         return playerMoveListener;
+    }
+
+    public BukkitAudiences adventure() {
+        if (this.adventure == null) {
+            throw new IllegalStateException("Tried to access Adventure when the plugin was disabled!");
+        }
+        return this.adventure;
+    }
+
+    public boolean isPaper() {
+        return this.isPaper;
     }
 
     public Map<String, String> getPendingRegenerations() {
