@@ -5,7 +5,7 @@ plugins {
 }
 
 group = 'com.zitemaker'
-version = '1.4.2-MODERN'
+version = '1.5-MODERN'
 description = 'ArenaRegen'
 
 java {
@@ -25,11 +25,12 @@ repositories {
 }
 
 dependencies {
-    paperweight.paperDevBundle '1.21.7-R0.1-SNAPSHOT'
+    paperweight.paperDevBundle '1.21.10-R0.1-SNAPSHOT'
 
     compileOnly 'io.papermc.paper:paper-api:1.21.7-R0.1-SNAPSHOT'
     compileOnly 'me.clip:placeholderapi:2.11.6'
-    compileOnly 'net.kyori:adventure-platform-bukkit:4.3.4'
+    implementation 'net.kyori:adventure-api:4.25.0'
+    implementation 'net.kyori:adventure-platform-bukkit:4.3.4'
     implementation 'org.jetbrains:annotations:26.0.1'
 }
 
@@ -43,6 +44,10 @@ tasks {
     shadowJar {
         archiveFileName = "ArenaRegen-${version}.jar"
         destinationDirectory = file('E:/Server/plugins')
+
+        relocate 'net.kyori.adventure.platform', 'com.zitemaker.libs.adventure.platform'
+
+        exclude 'org/jetbrains/annotations/**'
     }
 
     build {

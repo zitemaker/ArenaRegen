@@ -723,6 +723,7 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                 commandSender.sendMessage(ChatColor.GREEN + "/arenaregen delete <arena> - Delete an arena");
                 commandSender.sendMessage(ChatColor.GREEN + "/arenaregen resize <arena> - Resize an arena");
                 commandSender.sendMessage(ChatColor.GREEN + "/arenaregen regenerate <arena> - Regenerate an arena");
+                commandSender.sendMessage(ChatColor.GREEN + "/arenaregen here - Regenerate the arena you're standing in");
                 commandSender.sendMessage(ChatColor.GREEN + "/arenaregen setspawn <arena> - Set spawn for an arena");
                 commandSender.sendMessage(ChatColor.GREEN + "/arenaregen delspawn <arena> - Remove spawn from an arena");
                 commandSender.sendMessage(ChatColor.GREEN + "/arenaregen teleport <arena> - Teleport to an arena");
@@ -776,13 +777,13 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                     for (Map.Entry<String, RegionData> entry : plugin.getRegisteredRegions().entrySet()) {
                         String arenaName = entry.getKey();
                         RegionData regionData = entry.getValue();
-                        
+
                         if (regionData.isLocked() && !plugin.isArenaRegenerating(arenaName)) {
                             regionData.setLocked(false);
                             unlockedCount++;
                         }
                     }
-                    
+
                     if (unlockedCount > 0) {
                         commandSender.sendMessage(pluginPrefix + ChatColor.GREEN + " Unlocked " + unlockedCount + " arena(s).");
                     } else {
@@ -791,22 +792,81 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                 } else {
                     String arenaName = strings[1];
                     RegionData regionData = plugin.getRegisteredRegions().get(arenaName);
-                    
+
                     if (regionData == null) {
                         commandSender.sendMessage(pluginPrefix + ChatColor.RED + " Arena '" + arenaName + "' not found.");
                         return true;
                     }
-                    
+
                     if (!regionData.isLocked()) {
                         commandSender.sendMessage(pluginPrefix + ChatColor.YELLOW + " Arena '" + arenaName + "' is already unlocked.");
                         return true;
                     }
-                
-                    
+
+
                     regionData.setLocked(false);
                     commandSender.sendMessage(pluginPrefix + ChatColor.GREEN + " Arena '" + arenaName + "' has been unlocked.");
                 }
-                
+
+                return true;
+            }
+
+            case "here" -> {
+                if (!(commandSender instanceof Player player)) {
+                    commandSender.sendMessage(onlyForPlayers);
+                    return true;
+                }
+
+                if (!commandSender.hasPermission("arenaregen.regenerate")) {
+                    commandSender.sendMessage(pluginPrefix + " " + noPermission);
+                    return true;
+                }
+
+                Location playerLoc = player.getLocation();
+                String foundArena = null;
+
+                for (Map.Entry<String, RegionData> entry : plugin.getRegisteredRegions().entrySet()) {
+                    RegionData regionData = entry.getValue();
+
+                    if (!regionData.getWorldName().equals(playerLoc.getWorld().getName())) {
+                        continue;
+                    }
+
+                    int px = playerLoc.getBlockX();
+                    int py = playerLoc.getBlockY();
+                    int pz = playerLoc.getBlockZ();
+
+                    if (px >= regionData.getMinX() && px <= regionData.getMaxX() &&
+                        py >= regionData.getMinY() && py <= regionData.getMaxY() &&
+                        pz >= regionData.getMinZ() && pz <= regionData.getMaxZ()) {
+                        foundArena = entry.getKey();
+                        break;
+                    }
+                }
+
+                if (foundArena == null) {
+                    commandSender.sendMessage(pluginPrefix + ChatColor.RED + " You are not standing in any arena!");
+                    return true;
+                }
+
+                if (plugin.isScheduled(foundArena)) {
+                    long intervalTicks = plugin.getScheduledInterval(foundArena);
+                    String intervalString = formatTicksToTime(intervalTicks);
+                    String scheduledWarning = ChatColor.YELLOW + "Note: Arena '{arena_name}' is scheduled to regenerate every {interval}. Manual regeneration will not affect the schedule.";
+                    commandSender.sendMessage(scheduledWarning
+                            .replace("{arena_name}", foundArena)
+                            .replace("{interval}", intervalString));
+                }
+
+                if (plugin.confirmationPrompt) {
+                    plugin.getPendingRegenerations().put(commandSender.getName(), foundArena);
+                    String confirmPrompt = ChatColor.YELLOW + "Are you sure you want to regenerate the region '{arena_name}'? Type '/arenaregen regen confirm' to proceed.";
+                    commandSender.sendMessage(confirmPrompt.replace("{arena_name}", foundArena));
+                    Bukkit.getScheduler().runTaskLater(plugin, () -> plugin.getPendingRegenerations().remove(commandSender.getName()), 1200L);
+                } else {
+                    plugin.regenerateArena(foundArena, commandSender);
+                }
+
                 return true;
             }
 
@@ -972,7 +1032,7 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
     private List<String> handleTabComplete(String @NotNull [] args) {
         return switch (args.length) {
             case 1 -> filterSuggestions(List.of("create", "regenerate", "regen", "setspawn", "delspawn", "teleport", "tp",
-                    "list", "delete", "resize", "reload", "help", "wand", "selection", "schedule", "preview", "info", "unlock"), args[0]);
+                    "list", "delete", "resize", "reload", "help", "wand", "selection", "schedule", "preview", "info", "unlock", "here"), args[0]);
 
             case 2 -> {
                 if (args[0].equalsIgnoreCase("regenerate") || args[0].equalsIgnoreCase("regen")
