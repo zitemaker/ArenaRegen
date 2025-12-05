@@ -166,6 +166,7 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                     AtomicInteger blocksProcessed = new AtomicInteger(0);
                     List<Map.Entry<Location, Map<String, Object>>> entitiesToAdd = new ArrayList<>();
                     List<Map.Entry<Location, BlockData>> blocksToAdd = new ArrayList<>();
+
                     if (plugin.trackEntities) {
                         for (Entity entity : world.getEntities()) {
                             Location loc = entity.getLocation();
@@ -178,13 +179,14 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                                 }
                             }
                         }
-                        for (int x = minX; x <= maxX; x++) {
-                            for (int y = minY; y <= maxY; y++) {
-                                for (int z = minZ; z <= maxZ; z++) {
-                                    Location loc = new Location(world, x, y, z);
-                                    BlockData blockData = world.getBlockAt(x, y, z).getBlockData();
-                                    blocksToAdd.add(new AbstractMap.SimpleEntry<>(loc, blockData));
-                                }
+                    }
+
+                    for (int x = minX; x <= maxX; x++) {
+                        for (int y = minY; y <= maxY; y++) {
+                            for (int z = minZ; z <= maxZ; z++) {
+                                Location loc = new Location(world, x, y, z);
+                                BlockData blockData = world.getBlockAt(x, y, z).getBlockData();
+                                blocksToAdd.add(new AbstractMap.SimpleEntry<>(loc, blockData));
                             }
                         }
                     }
