@@ -36,5 +36,13 @@ regen:
     execute-commands: false # Execute commands of your choice
     commands: # The commands to be executed
       - "say %player% is inside the arena!"
-    teleport: false # Teleport the player, edit location in teleport-location
-    teleport-location: WORLD_SPAWN # WORLD_SPAWN or ARENA_SPAWN
+    teleport: false # Teleport the player to the location in teleport-location
+    teleport-location:
+      type: WORLD_SPAWN # WORLD_SPAWN, ARENA_SPAWN, CUSTOM
+      world: UNCHANGED  # Optional: Only used for CUSTOM type, "UNCHANGED" or "world_name"
+      coordinates:
+        x: "~+5"        # "~" player's current coordinate value, "~+10"
+        y: "64"
+        z: "~"
+        yaw: "~"    # optional "~" or ex: "25.0"
+        pitch: "~"  # optional "~" or ex: "10.0"

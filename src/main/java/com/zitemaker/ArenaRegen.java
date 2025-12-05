@@ -18,6 +18,7 @@ import org.bukkit.block.banner.Pattern;
 import org.bukkit.block.banner.PatternType;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.command.CommandSender;
+import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
@@ -25,7 +26,7 @@ import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
-import org.bukkit.plugin.Plugin;
+import org.jetbrains.annotations.Nullable;
 
 import java.io.File;
 import java.io.IOException;
@@ -64,7 +65,7 @@ public class ArenaRegen extends JavaPlugin{
     public boolean executeCommands;
     public List<String> commands;
     public boolean teleport;
-    public String teleportLocation;
+    public @Nullable ConfigurationSection teleportLocation;
     public String selectionTool;
     public String previewParticleString;
     public Particle previewParticle;
@@ -373,7 +374,7 @@ public class ArenaRegen extends JavaPlugin{
         this.executeCommands = getConfig().getBoolean("regen.players-inside-arena.execute-commands", true);
         this.commands = getConfig().getStringList("regen.players-inside-arena.commands");
         this.teleport = getConfig().getBoolean("regen.players-inside-arena.teleport", true);
-        this.teleportLocation = getConfig().getString("regen.players-inside-arena.teleport-location", "WORLD_SPAWN").toUpperCase();
+        this.teleportLocation = getConfig().getConfigurationSection("regen.players-inside-arena.teleport-location");
         this.selectionTool = getConfig().getString("general.selection-tool", "GOLDEN_HOE").toUpperCase();
         this.previewParticleString = getConfig().getString("general.preview-particle", "FLAME").toUpperCase();
         this.lockDuringRegeneration = getConfig().getBoolean("regen.lock-arenas", true);
@@ -766,16 +767,8 @@ public class ArenaRegen extends JavaPlugin{
                                 players.setHealth(0.0);
                             }
                             if (teleport) {
-                                if (teleportLocation.equals("WORLD_SPAWN")) {
-                                    players.teleport(world.getSpawnLocation());
-                                } else if (teleportLocation.equals("ARENA_SPAWN")) {
-                                    Location arenaSpawn = getArenaSpawn(arenaName);
-                                    if (arenaSpawn != null) {
-                                        players.teleport(arenaSpawn);
-                                    } else {
-                                        getLogger().info("Arena spawn for '" + arenaName + "' is not set.");
-                                    }
-                                }
+                                Location targetLocation = parseTeleportLocation(players, teleportLocation, regionData, arenaName);
+                                players.teleport(targetLocation);
                             }
                             if (executeCommands && !commands.isEmpty()) {
                                 for (String cmd : commands) {
@@ -1241,4 +1234,105 @@ public class ArenaRegen extends JavaPlugin{
             && region.getModifiedBlocks().isEmpty();
     }
 
+    public Location parseTeleportLocation(Player player, ConfigurationSection locSection, RegionData regionData, String arenaName) {
+        String type = Objects.requireNonNull(locSection.getString("type")).toUpperCase();
+        World world = player.getWorld();
+
+        switch (type) {
+            case "WORLD_SPAWN":
+                return world.getSpawnLocation();
+
+            case "ARENA_SPAWN":
+                Location arenaLoc = regionData.getSpawnLocation();
+                if (arenaLoc != null) return arenaLoc;
+                getLogger().warning("No arena spawn was found for " + arenaName);
+                return null;
+
+            case "CUSTOM":
+                String worldName = locSection.getString("world", "UNCHANGED");
+                if (!worldName.equalsIgnoreCase("UNCHANGED")) {
+                    World custom = Bukkit.getWorld(worldName);
+                    if (custom != null) world = custom;
+                    else getLogger().warning("CUSTOM world as teleport location is not a valid world!");
+                }
+                break;
+
+            default:
+                getLogger().warning("Unknown teleport location type: " + type + ". using WORLD_SPAWN");
+                return world.getSpawnLocation();
+        }
+
+        ConfigurationSection coords = locSection.getConfigurationSection("coordinates");
+        if (coords == null) {
+            getLogger().warning("Missing coordinates — using world spawn.");
+            return world.getSpawnLocation();
+        }
+
+        double x = parseCoordinate(coords.getString("x", "~"), player.getLocation().getX());
+        double y = parseCoordinate(coords.getString("y", "~"), player.getLocation().getY());
+        double z = parseCoordinate(coords.getString("z", "~"), player.getLocation().getZ());
+
+        Location target = new Location(world, x, y, z);
+
+        String yawStr = coords.getString("yaw", "~");
+        String pitchStr = coords.getString("pitch", "~");
+
+        target.setYaw((float) parseCoordinateSafe(yawStr, player.getLocation().getYaw()));
+        target.setPitch((float) parseCoordinateSafe(pitchStr, player.getLocation().getPitch()));
+
+        return target;
+    }
+
+    private double parseCoordinateSafe(String input, double base) {
+        if (input == null || input.trim().isEmpty()) return base;
+        return parseCoordinate(input, base);
+    }
+
+    private double parseCoordinate(String input, double base) {
+        input = input.trim().replace(" ", "");
+
+        if (input.equals("~")) {
+            return base;
+        }
+
+        if (input.startsWith("~")) {
+            String offset = input.substring(1).trim();
+            if (offset.isEmpty()) offset = "0";
+            return base + evalMath(offset);
+        }
+
+        return evalMath(input);
+    }
+
+    private double evalMath(String expr) {
+        expr = expr.trim();
+        if (expr.isEmpty()) return 0;
+
+        double result = 0;
+        StringBuilder current = new StringBuilder();
+        char lastOp = '+';
+
+        for (char c : expr.toCharArray()) {
+            if (c == '+' || c == '-') {
+                if (current.isEmpty()) {
+                    current.append(c);
+                    continue;
+                }
+                double val = Double.parseDouble(current.toString());
+                result = applyOp(result, val, lastOp);
+                lastOp = c;
+                current.setLength(0);
+            } else {
+                current.append(c);
+            }
+        }
+
+        if (current.isEmpty()) return result;
+        double finalVal = Double.parseDouble(current.toString());
+        return applyOp(result, finalVal, lastOp);
+    }
+
+    private double applyOp(double result, double val, char op) {
+        return (op == '-') ? result - val : result + val;
+    }
 }
