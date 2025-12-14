@@ -1,6 +1,8 @@
 package com.zitemaker.nms;
 
 import org.bukkit.Bukkit;
+import org.bukkit.plugin.Plugin;
+import org.bukkit.plugin.java.JavaPlugin;
 
 public class NMSHandlerFactoryProvider {
     private static NMSHandler instance;
@@ -10,10 +12,13 @@ public class NMSHandlerFactoryProvider {
         if (version.startsWith("1.20.5") || version.startsWith("1.20.6") || version.startsWith("1.21")) {
             try {
                 Class<?> nmsHandlerClass = Class.forName("com.zitemaker.nms.NMSHandler_1_21");
-                instance = (NMSHandler) nmsHandlerClass.getDeclaredConstructor().newInstance();
+                Plugin plugin = JavaPlugin.getPlugin(com.zitemaker.ArenaRegen.class);
+                java.lang.reflect.Constructor<?> constructor = nmsHandlerClass.getConstructor(Plugin.class);
+                instance = (NMSHandler) constructor.newInstance(plugin);
                 Bukkit.getLogger().info("[ArenaRegen] Using optimized NMS for version " + version);
             } catch (Exception e) {
-                Bukkit.getLogger().warning("[ArenaRegen] Failed to load NMS handler for version " + version + ": " + e.getMessage() + ". Falling back to Bukkit API.");
+                Bukkit.getLogger().warning("[ArenaRegen] Failed to load NMS handler for version " + version + ": "
+                        + e.getMessage() + ". Falling back to Bukkit API.");
                 instance = new BukkitNMSHandler();
             }
         } else {

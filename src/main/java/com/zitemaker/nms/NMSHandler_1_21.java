@@ -31,9 +31,9 @@ public class NMSHandler_1_21 implements NMSHandler {
 
     @Override
     public void setBlocks(World world, List<BlockUpdate> blockUpdates) {
-        if (blockUpdates == null || blockUpdates.isEmpty()) return;
+        if (blockUpdates == null || blockUpdates.isEmpty())
+            return;
 
-        // Ensure we're on the main thread for NMS operations
         if (!Bukkit.isPrimaryThread()) {
             Bukkit.getScheduler().runTask(plugin, () -> setBlocks(world, blockUpdates));
             return;
@@ -65,9 +65,9 @@ public class NMSHandler_1_21 implements NMSHandler {
 
     @Override
     public void relightChunks(World world, List<Chunk> chunks, List<BlockUpdate> blockUpdates) {
-        if (chunks == null || chunks.isEmpty()) return;
+        if (chunks == null || chunks.isEmpty())
+            return;
 
-        // Ensure we're on the main thread
         if (!Bukkit.isPrimaryThread()) {
             Bukkit.getScheduler().runTask(plugin, () -> relightChunks(world, chunks, blockUpdates));
             return;
@@ -83,8 +83,9 @@ public class NMSHandler_1_21 implements NMSHandler {
     }
 
     private void processChunksWithLighting(World world, List<ChunkPos> chunks, int index) {
-        if (index >= chunks.size()) return;
-    
+        if (index >= chunks.size())
+            return;
+
         int batchSize = Math.min(3, chunks.size() - index);
 
         Bukkit.getScheduler().runTask(plugin, () -> {
@@ -104,31 +105,36 @@ public class NMSHandler_1_21 implements NMSHandler {
                     try {
                         relightChunk(lightEngine, chunkPos);
                     } catch (Exception e) {
-                        LOGGER.warning("Failed to relight chunk at " + chunkPos.x + ", " + chunkPos.z + ": " + e.getMessage());
+                        LOGGER.warning(
+                                "Failed to relight chunk at " + chunkPos.x + ", " + chunkPos.z + ": " + e.getMessage());
                         try {
                             world.refreshChunk(chunkPos.x, chunkPos.z);
-                        } catch (Exception ignored) {}
+                        } catch (Exception ignored) {
+                        }
                     }
                 }
 
-                try {
-                    processLightUpdates(lightEngine);
-                } catch (Exception lightProcessException) {
-                    LOGGER.warning("Failed to process lighting updates for batch: " + lightProcessException.getMessage());
-                }
+                /*
+                 try {
+                 processLightUpdates(lightEngine);
+                 } catch (Exception lightProcessException) {
+                 LOGGER.warning("Failed to process lighting updates for batch: " +
+                 lightProcessException.getMessage());
+                 }
+                 */
 
                 for (int i = 0; i < batchSize; i++) {
                     ChunkPos chunkPos = chunks.get(index + i);
                     try {
                         world.refreshChunk(chunkPos.x, chunkPos.z);
-                    } catch (Exception ignored) {}
+                    } catch (Exception ignored) {
+                    }
                 }
 
                 if (index + batchSize < chunks.size()) {
                     Bukkit.getScheduler().runTaskLater(plugin,
-                        () -> processChunksWithLighting(world, chunks, index + batchSize),
-                        3L
-                    );
+                            () -> processChunksWithLighting(world, chunks, index + batchSize),
+                            3L);
                 }
             } catch (Throwable t) {
                 LOGGER.warning("Lighting engine failed, falling back to simple chunk refresh: " + t.getMessage());
@@ -136,14 +142,14 @@ public class NMSHandler_1_21 implements NMSHandler {
                     ChunkPos chunkPos = chunks.get(index + i);
                     try {
                         world.refreshChunk(chunkPos.x, chunkPos.z);
-                    } catch (Exception ignored) {}
+                    } catch (Exception ignored) {
+                    }
                 }
 
                 if (index + batchSize < chunks.size()) {
                     Bukkit.getScheduler().runTaskLater(plugin,
-                        () -> processChunksWithLighting(world, chunks, index + batchSize),
-                        3L
-                    );
+                            () -> processChunksWithLighting(world, chunks, index + batchSize),
+                            3L);
                 }
             }
         });
@@ -162,7 +168,7 @@ public class NMSHandler_1_21 implements NMSHandler {
 
             for (int sectionIndex = buildMinSection; sectionIndex < buildMaxSection; sectionIndex++) {
                 SectionPos sectionPos = SectionPos.of(chunkPos, sectionIndex);
-                
+
                 lightEngine.updateSectionStatus(sectionPos, false);
 
                 lightEngine.queueSectionData(LightLayer.BLOCK, sectionPos, null);
@@ -173,17 +179,20 @@ public class NMSHandler_1_21 implements NMSHandler {
         }
     }
 
-    private void processLightUpdates(LevelLightEngine lightEngine) {
-        try {
-            int maxUpdates = 100;
-            int processed = 0;
-            
-            while (lightEngine.hasLightWork() && processed < maxUpdates) {
-                lightEngine.runLightUpdates();
-                processed++;
-            }
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to process light updates: " + e.getMessage(), e);
-        }
-    }
+    /*
+     * private void processLightUpdates(LevelLightEngine lightEngine) {
+     * try {
+     * int maxUpdates = 100;
+     * int processed = 0;
+     * 
+     * while (lightEngine.hasLightWork() && processed < maxUpdates) {
+     * lightEngine.runLightUpdates();
+     * processed++;
+     * }
+     * } catch (Exception e) {
+     * throw new RuntimeException("Failed to process light updates: " +
+     * e.getMessage(), e);
+     * }
+     * }
+     */
 }
