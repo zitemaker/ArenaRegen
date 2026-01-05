@@ -5,7 +5,7 @@ plugins {
 }
 
 group = 'com.zitemaker'
-version = '1.5.2-MODERN'
+version = '1.6-MODERN'
 description = 'ArenaRegen'
 
 java {

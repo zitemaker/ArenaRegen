@@ -49,7 +49,7 @@ public class ArenaRegen extends JavaPlugin{
     public final Set<String> dirtyRegions = new HashSet<>();
     public final Set<String> regeneratingArenas = new HashSet<>();
 
-    // config stuff
+    
     public String prefix;
     public String regenType;
     public String regenSpeed;
@@ -196,6 +196,10 @@ public class ArenaRegen extends JavaPlugin{
         scheduledTasks.clear();
         saveSchedules();
         regeneratingArenas.clear();
+
+        
+        RegionData.clearBlockDataCache();
+
         logger.info(ARChatColor.RED + "ArenaRegen v" + getDescription().getVersion() + " has been disabled.");
     }
 
@@ -479,7 +483,7 @@ public class ArenaRegen extends JavaPlugin{
         scheduledTasks.put(arenaName, taskId);
         scheduledIntervals.put(arenaName, intervalTicks);
         taskStartTimes.put(arenaName, System.currentTimeMillis());
-        //getLogger().info("Scheduled regeneration for " + arenaName + " with interval " + intervalTicks + " ticks at " + taskStartTimes.get(arenaName));
+        
 
         saveSchedules();
 
@@ -695,9 +699,24 @@ public class ArenaRegen extends JavaPlugin{
 
     private void proceedWithRegeneration(String arenaName, CommandSender sender, RegionData regionData, World world) {
         try {
-            regionData.getSectionedBlockData().thenAccept(sectionedBlockData -> Bukkit.getScheduler().runTask(this, () -> {
+            regionData.getSectionedBlockData().thenApplyAsync(sectionedBlockData -> {
+                
+                if (sectionedBlockData.isEmpty()) {
+                    return null; 
+                }
+
+                List<String> sectionNames = new ArrayList<>(sectionedBlockData.keySet());
+                Map<String, List<Map.Entry<Location, BlockData>>> sectionBlockLists = new HashMap<>();
+                for (String sectionName : sectionNames) {
+                    Map<Location, BlockData> section = sectionedBlockData.get(sectionName);
+                    sectionBlockLists.put(sectionName, new ArrayList<>(section.entrySet()));
+                }
+
+                
+                return new Object[] { sectionNames, sectionBlockLists };
+            }).thenAccept(preparedData -> Bukkit.getScheduler().runTask(this, () -> {
                 try {
-                    if (sectionedBlockData.isEmpty()) {
+                    if (preparedData == null) {
                         synchronized (regeneratingArenas) {
                             regeneratingArenas.remove(arenaName);
                             logger.info("[ArenaRegen] Removed from regeneratingArenas (no sections): " + arenaName);
@@ -707,6 +726,12 @@ public class ArenaRegen extends JavaPlugin{
                         }
                         return;
                     }
+
+                    @SuppressWarnings("unchecked")
+                    List<String> sectionNames = (List<String>) preparedData[0];
+                    @SuppressWarnings("unchecked")
+                    Map<String, List<Map.Entry<Location, BlockData>>> sectionBlockLists =
+                            (Map<String, List<Map.Entry<Location, BlockData>>>) preparedData[1];
 
                     boolean wasLocked = regionData.isLocked();
                     if (lockDuringRegeneration && !wasLocked) {
@@ -718,33 +743,20 @@ public class ArenaRegen extends JavaPlugin{
                         logger.info("[ArenaRegen] Arena '" + arenaName + "' was already locked before regeneration");
                     }
 
-                    Location min = null;
-                    Location max = null;
-                    for (Map<Location, BlockData> section : sectionedBlockData.values()) {
-                        for (Location loc : section.keySet()) {
-                            if (min == null) {
-                                min = new Location(world, loc.getX(), loc.getY(), loc.getZ());
-                                max = new Location(world, loc.getX(), loc.getY(), loc.getZ());
-                            } else {
-                                min.setX(Math.min(min.getX(), loc.getX()));
-                                min.setY(Math.min(min.getY(), loc.getY()));
-                                min.setZ(Math.min(min.getZ(), loc.getZ()));
-                                max.setX(Math.max(max.getX(), loc.getX()));
-                                max.setY(Math.max(max.getY(), loc.getY()));
-                                max.setZ(Math.max(max.getZ(), loc.getZ()));
-                            }
-                        }
-                    }
-
-                    final Location finalMin = min;
-                    final Location finalMax = max;
+                    
+                    final int minX = regionData.getMinX();
+                    final int minY = regionData.getMinY();
+                    final int minZ = regionData.getMinZ();
+                    final int maxX = regionData.getMaxX();
+                    final int maxY = regionData.getMaxY();
+                    final int maxZ = regionData.getMaxZ();
 
                     List<Player> playersInside = new ArrayList<>();
                     for (Player p : world.getPlayers()) {
                         Location loc = p.getLocation();
-                        if (loc.getX() >= finalMin.getX() && loc.getX() <= finalMax.getX() &&
-                                loc.getY() >= finalMin.getY() && loc.getY() <= finalMax.getY() &&
-                                loc.getZ() >= finalMin.getZ() && loc.getZ() <= finalMax.getZ()) {
+                        if (loc.getX() >= minX && loc.getX() <= maxX &&
+                                loc.getY() >= minY && loc.getY() <= maxY &&
+                                loc.getZ() >= minZ && loc.getZ() <= maxZ) {
                             playersInside.add(p);
                         }
                     }
@@ -778,13 +790,6 @@ public class ArenaRegen extends JavaPlugin{
                         }
                     }
 
-                    int minX = regionData.getMinX();
-                    int minY = regionData.getMinY();
-                    int minZ = regionData.getMinZ();
-                    int maxX = regionData.getMaxX();
-                    int maxY = regionData.getMaxY();
-                    int maxZ = regionData.getMaxZ();
-
                     if (trackEntities) {
                         world.getEntities().stream()
                                 .filter(e -> {
@@ -801,29 +806,43 @@ public class ArenaRegen extends JavaPlugin{
                     if (sender != null) {
                         sender.sendMessage(prefix + ChatColor.YELLOW + " Regenerating region '" + arenaName + "', please wait...");
                     }
-                    int blocksPerTick = regenType.equals("PRESET") ? switch (regenSpeed.toUpperCase()) {
+
+                    
+                    int baseBlocksPerTick = regenType.equals("PRESET") ? switch (regenSpeed.toUpperCase()) {
                         case "SLOW" -> 1000;
                         case "NORMAL" -> 10000;
                         case "FAST" -> 40000;
                         case "VERYFAST" -> 100000;
-                        case "EXTREME" -> 4000000;
+                        case "EXTREME" -> 250000; 
                         default -> 10000;
-                    } : customRegenSpeed;
+                    } : Math.min(250000, customRegenSpeed); 
 
                     AtomicInteger sectionIndex = new AtomicInteger(0);
-                    List<String> sectionNames = new ArrayList<>(sectionedBlockData.keySet());
                     AtomicInteger totalBlocksReset = new AtomicInteger(0);
                     long startTime = System.currentTimeMillis();
-                    Set<Chunk> chunksToRefresh = new HashSet<>();
+                    Set<Long> chunkCoordsToRefresh = new HashSet<>(); 
                     Map<String, Integer> sectionProgress = new HashMap<>();
 
-                    Map<String, List<Map.Entry<Location, BlockData>>> sectionBlockLists = new HashMap<>();
-                    for (String sectionName : sectionNames) {
-                        Map<Location, BlockData> section = sectionedBlockData.get(sectionName);
-                        sectionBlockLists.put(sectionName, new ArrayList<>(section.entrySet()));
-                    }
+                    
+                    Map<Long, Chunk> chunkCache = new HashMap<>();
+
+                    
+                    final boolean usingPaper = isPaper;
 
                     Bukkit.getScheduler().runTaskTimer(this, task -> {
+                        
+                        int blocksPerTick = baseBlocksPerTick;
+                        if (usingPaper) {
+                            double currentTps = getServerTPS();
+                            if (currentTps > 0) { 
+                                if (currentTps < 15.0) {
+                                    blocksPerTick = baseBlocksPerTick / 4;
+                                } else if (currentTps < 18.0) {
+                                    blocksPerTick = baseBlocksPerTick / 2;
+                                }
+                            }
+                        }
+
                         int currentSection = sectionIndex.get();
                         if (currentSection >= sectionNames.size()) {
                             if (trackEntities) {
@@ -967,6 +986,19 @@ public class ArenaRegen extends JavaPlugin{
 
 
                             Bukkit.getScheduler().runTaskLater(this, () -> {
+                                
+                                Set<Chunk> chunksToRefresh = new HashSet<>();
+                                for (long packedCoord : chunkCoordsToRefresh) {
+                                    int chunkX = (int) (packedCoord >> 32);
+                                    int chunkZ = (int) packedCoord;
+                                    try {
+                                        Chunk chunk = world.getChunkAt(chunkX, chunkZ);
+                                        if (chunk.isLoaded()) {
+                                            chunksToRefresh.add(chunk);
+                                        }
+                                    } catch (Exception ignored) {}
+                                }
+
                                 Set<Chunk> extendedChunks = new HashSet<>(chunksToRefresh);
                                 for (Chunk chunk : chunksToRefresh) {
                                     for (int dx = -1; dx <= 1; dx++) {
@@ -1021,14 +1053,18 @@ public class ArenaRegen extends JavaPlugin{
                                 shouldUpdate = !currentData.equals(originalData);
                                 if (shouldUpdate) {
                                     updates.add(new BlockUpdate(block.getX(), block.getY(), block.getZ(), originalData));
-                                    chunksToRefresh.add(block.getChunk());
+                                    
+                                    int chunkX = block.getX() >> 4;
+                                    int chunkZ = block.getZ() >> 4;
+                                    chunkCoordsToRefresh.add(((long) chunkX << 32) | (chunkZ & 0xFFFFFFFFL));
                                     totalBlocksReset.incrementAndGet();
                                 }
                             } else {
                                 updates.add(new BlockUpdate((int) loc.getX(), (int) loc.getY(), (int) loc.getZ(), originalData));
                                 int chunkX = ((int) loc.getX()) >> 4;
                                 int chunkZ = ((int) loc.getZ()) >> 4;
-                                chunksToRefresh.add(world.getChunkAt(chunkX, chunkZ));
+                                
+                                chunkCoordsToRefresh.add(((long) chunkX << 32) | (chunkZ & 0xFFFFFFFFL));
                                 totalBlocksReset.incrementAndGet();
                             }
                             blockIndex++;
@@ -1334,5 +1370,21 @@ public class ArenaRegen extends JavaPlugin{
 
     private double applyOp(double result, double val, char op) {
         return (op == '-') ? result - val : result + val;
+    }
+
+    
+    private double getServerTPS() {
+        if (!isPaper) {
+            return -1;
+        }
+        try {
+            
+            java.lang.reflect.Method getTpsMethod = Bukkit.class.getMethod("getTPS");
+            double[] tps = (double[]) getTpsMethod.invoke(null);
+            return tps[0];
+        } catch (Exception e) {
+            
+            return -1;
+        }
     }
 }

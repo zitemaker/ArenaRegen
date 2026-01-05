@@ -51,31 +51,48 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
     private Material wandMaterial;
 
     @Override
-    public boolean onCommand(@NotNull CommandSender commandSender, @NotNull Command command, @NotNull String s, @NotNull String @NotNull [] strings) {
-
+    public boolean onCommand(@NotNull CommandSender commandSender, @NotNull Command command, @NotNull String s,
+            @NotNull String @NotNull [] strings) {
 
         FileConfiguration conf = plugin.getConfig();
         FileConfiguration msg = plugin.getMessagesConfig();
 
         String pluginPrefix = plugin.prefix;
 
-        String incorrectSyntax = ChatColor.translateAlternateColorCodes('&', msg.getString("messages.incorrect-syntax", "&cUnknown arguments. Type \"/arenaregen help\" to see usages"));
-        String noPermission = ChatColor.translateAlternateColorCodes('&', msg.getString("messages.no-permission", "&cYou do not have permission to run this command"));
-        String onlyForPlayers = ChatColor.translateAlternateColorCodes('&', msg.getString("messages.only-for-players", "&cOnly players can use this command"));
-        String regionExists = ChatColor.translateAlternateColorCodes('&', msg.getString("messages.region-exists", "&cA region with this name already exists."));
-        String invalidHeight = ChatColor.translateAlternateColorCodes('&', msg.getString("messages.invalid-height", "&cInvalid arena height! Must be between {minHeight} and {maxHeight} blocks."));
-        String regionSizeLimit = ChatColor.translateAlternateColorCodes('&', msg.getString("messages.region-size-limit", "&cArena must be within {arena_size_limit} blocks. You can change the size limit in config.yml"));
+        String incorrectSyntax = ChatColor.translateAlternateColorCodes('&', msg.getString("messages.incorrect-syntax",
+                "&cUnknown arguments. Type \"/arenaregen help\" to see usages"));
+        String noPermission = ChatColor.translateAlternateColorCodes('&',
+                msg.getString("messages.no-permission", "&cYou do not have permission to run this command"));
+        String onlyForPlayers = ChatColor.translateAlternateColorCodes('&',
+                msg.getString("messages.only-for-players", "&cOnly players can use this command"));
+        String regionExists = ChatColor.translateAlternateColorCodes('&',
+                msg.getString("messages.region-exists", "&cA region with this name already exists."));
+        String invalidHeight = ChatColor.translateAlternateColorCodes('&', msg.getString("messages.invalid-height",
+                "&cInvalid arena height! Must be between {minHeight} and {maxHeight} blocks."));
+        String regionSizeLimit = ChatColor.translateAlternateColorCodes('&', msg.getString("messages.region-size-limit",
+                "&cArena must be within {arena_size_limit} blocks. You can change the size limit in config.yml"));
         arenaSizeLimit = plugin.getConfig().getLong("general.arena-size-limit", 50000L);
-        String regionCreated = ChatColor.translateAlternateColorCodes('&', msg.getString("messages.region-created", "&aRegion '{arena_name}' has been successfully registered!"));
-        String regionDeleted = ChatColor.translateAlternateColorCodes('&', msg.getString("messages.region-deleted", "&aRegion '{arena_name}' has been successfully deleted!"));
-        String regionResized = ChatColor.translateAlternateColorCodes('&', msg.getString("messages.region-resized", "&aRegion '{arena_name}' has been successfully resized!"));
-        String arenaNotFound = ChatColor.translateAlternateColorCodes('&', msg.getString("messages.arena-not-found", "&cArena '{arena_name}' does not exist."));
-        String regenComplete = ChatColor.translateAlternateColorCodes('&', msg.getString("messages.regen-complete", "&aArena '{arena_name}' has been successfully regenerated!"));
-        String spawnSet = ChatColor.translateAlternateColorCodes('&', msg.getString("messages.spawn-set", "&aSpawn point for arena '{arena_name}' has been set!"));
-        String spawnDeleted = ChatColor.translateAlternateColorCodes('&', msg.getString("messages.spawn-deleted", "&aSpawn point for arena '{arena_name}' has been removed!"));
-        String teleportSuccess = ChatColor.translateAlternateColorCodes('&', msg.getString("messages.teleport-success", "&aTeleported to arena '{arena_name}'."));
-        String reloadSuccess = ChatColor.translateAlternateColorCodes('&', msg.getString("messages.reload-success", "&aConfiguration reloaded successfully!"));
-        String maxArenasReached = ChatColor.GOLD + "You have reached the maximum number of arenas that can be created in " + ChatColor.YELLOW + "ArenaRegen.";
+        String regionCreated = ChatColor.translateAlternateColorCodes('&',
+                msg.getString("messages.region-created", "&aRegion '{arena_name}' has been successfully registered!"));
+        String regionDeleted = ChatColor.translateAlternateColorCodes('&',
+                msg.getString("messages.region-deleted", "&aRegion '{arena_name}' has been successfully deleted!"));
+        String regionResized = ChatColor.translateAlternateColorCodes('&',
+                msg.getString("messages.region-resized", "&aRegion '{arena_name}' has been successfully resized!"));
+        String arenaNotFound = ChatColor.translateAlternateColorCodes('&',
+                msg.getString("messages.arena-not-found", "&cArena '{arena_name}' does not exist."));
+        String regenComplete = ChatColor.translateAlternateColorCodes('&',
+                msg.getString("messages.regen-complete", "&aArena '{arena_name}' has been successfully regenerated!"));
+        String spawnSet = ChatColor.translateAlternateColorCodes('&',
+                msg.getString("messages.spawn-set", "&aSpawn point for arena '{arena_name}' has been set!"));
+        String spawnDeleted = ChatColor.translateAlternateColorCodes('&',
+                msg.getString("messages.spawn-deleted", "&aSpawn point for arena '{arena_name}' has been removed!"));
+        String teleportSuccess = ChatColor.translateAlternateColorCodes('&',
+                msg.getString("messages.teleport-success", "&aTeleported to arena '{arena_name}'."));
+        String reloadSuccess = ChatColor.translateAlternateColorCodes('&',
+                msg.getString("messages.reload-success", "&aConfiguration reloaded successfully!"));
+        String maxArenasReached = ChatColor.GOLD
+                + "You have reached the maximum number of arenas that can be created in " + ChatColor.YELLOW
+                + "ArenaRegen.";
         String purchaseMessage = "Click here to purchase ArenaRegen+!";
 
         if (commandSender instanceof Player && !ArenaRegen.hasAnyPermissions((Player) commandSender)) {
@@ -100,7 +117,8 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                     return true;
                 }
                 if (strings.length != 2) {
-                    commandSender.sendMessage(pluginPrefix + " " + ChatColor.translateAlternateColorCodes('&', "&cUsage: /arenaregen create <arena>"));
+                    commandSender.sendMessage(pluginPrefix + " "
+                            + ChatColor.translateAlternateColorCodes('&', "&cUsage: /arenaregen create <arena>"));
                     return true;
                 }
 
@@ -114,14 +132,16 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                     TextComponent message = new TextComponent(purchaseMessage);
                     message.setColor(net.md_5.bungee.api.ChatColor.GREEN);
                     message.setBold(true);
-                    message.setClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, "https://www.spigotmc.org/resources/arenaregen-automatically-regenerate-your-pvp-arenas.124624/"));
+                    message.setClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL,
+                            "https://www.spigotmc.org/resources/arenaregen-automatically-regenerate-your-pvp-arenas.124624/"));
                     commandSender.spigot().sendMessage(message);
                     return true;
                 }
 
                 Vector[] selection = getSelection(player);
                 if (selection == null || selection[0] == null || selection[1] == null) {
-                    commandSender.sendMessage(pluginPrefix + ChatColor.RED + " You must select both corners using the selection tool first!");
+                    commandSender.sendMessage(pluginPrefix + ChatColor.RED
+                            + " You must select both corners using the selection tool first!");
                     return true;
                 }
 
@@ -134,7 +154,9 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                 int maxZ = Math.max(selection[0].getBlockZ(), selection[1].getBlockZ());
 
                 if (minY < world.getMinHeight() || maxY > world.getMaxHeight()) {
-                    commandSender.sendMessage(pluginPrefix + " " + invalidHeight.replace("{minHeight}", String.valueOf(world.getMinHeight())).replace("{maxHeight}", String.valueOf(world.getMaxHeight())));
+                    commandSender.sendMessage(pluginPrefix + " "
+                            + invalidHeight.replace("{minHeight}", String.valueOf(world.getMinHeight()))
+                                    .replace("{maxHeight}", String.valueOf(world.getMaxHeight())));
                     return true;
                 }
 
@@ -143,136 +165,123 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                 int depth = maxZ - minZ + 1;
                 long volume = (long) width * height * depth;
                 if (volume > plugin.arenaSize) {
-                    commandSender.sendMessage(pluginPrefix + " " + regionSizeLimit.replace("{arena_size_limit}", String.valueOf(plugin.arenaSize)));
+                    commandSender.sendMessage(pluginPrefix + " "
+                            + regionSizeLimit.replace("{arena_size_limit}", String.valueOf(plugin.arenaSize)));
                     return true;
                 }
 
                 if (plugin.isOverlapping(null, world.getName(), minX, minY, minZ, maxX, maxY, maxZ)) {
-                    commandSender.sendMessage(pluginPrefix + ChatColor.RED + " This arena would overlap with an existing arena. Please choose a different location.");
+                    commandSender.sendMessage(pluginPrefix + ChatColor.RED
+                            + " This arena would overlap with an existing arena. Please choose a different location.");
                     return true;
                 }
 
                 RegionData regionData = new RegionData(plugin);
-                regionData.setMetadata(player.getName(), System.currentTimeMillis(), world.getName(), Bukkit.getVersion(), minX, minY, minZ, width, height, depth);
-                
+                regionData.setMetadata(player.getName(), System.currentTimeMillis(), world.getName(),
+                        Bukkit.getVersion(), minX, minY, minZ, width, height, depth);
+
                 File datcFile = new File(new File(plugin.getDataFolder(), "arenas"), regionName + ".datc");
                 regionData.setDatcFile(datcFile);
-                
+
                 plugin.getRegisteredRegions().put(regionName, regionData);
+                long totalBlocks = (long) width * height * depth;
+                int blocksPerTick = Math.min(100000, Math.max(1000, plugin.analyzeSpeed / 20));
 
-                Bukkit.getScheduler().runTask(plugin, () -> {
-                    commandSender.sendMessage(pluginPrefix + ChatColor.YELLOW + " Analyzing and creating region '" + regionName + "', please wait...");
-                    int blocksPerTick = plugin.analyzeSpeed / 20;
-                    AtomicInteger blocksProcessed = new AtomicInteger(0);
-                    List<Map.Entry<Location, Map<String, Object>>> entitiesToAdd = new ArrayList<>();
-                    List<Map.Entry<Location, BlockData>> blocksToAdd = new ArrayList<>();
-
-                    if (plugin.trackEntities) {
-                        for (Entity entity : world.getEntities()) {
-                            Location loc = entity.getLocation();
-                            if (loc.getX() >= minX && loc.getX() <= maxX &&
-                                    loc.getY() >= minY && loc.getY() <= maxY &&
-                                    loc.getZ() >= minZ && loc.getZ() <= maxZ) {
-                                Map<String, Object> serialized = EntitySerializer.serializeEntity(entity);
-                                if (serialized != null) {
-                                    entitiesToAdd.add(new AbstractMap.SimpleEntry<>(loc, serialized));
-                                }
+                commandSender.sendMessage(pluginPrefix + ChatColor.YELLOW + " Analyzing and creating region '"
+                        + regionName + "', please wait...");
+                List<Map.Entry<Location, Map<String, Object>>> entitiesToAdd = new ArrayList<>();
+                if (plugin.trackEntities) {
+                    for (Entity entity : world.getEntities()) {
+                        Location loc = entity.getLocation();
+                        if (loc.getX() >= minX && loc.getX() <= maxX &&
+                                loc.getY() >= minY && loc.getY() <= maxY &&
+                                loc.getZ() >= minZ && loc.getZ() <= maxZ) {
+                            Map<String, Object> serialized = EntitySerializer.serializeEntity(entity);
+                            if (serialized != null) {
+                                entitiesToAdd.add(new AbstractMap.SimpleEntry<>(loc, serialized));
                             }
                         }
                     }
+                }
+                for (Map.Entry<Location, Map<String, Object>> entry : entitiesToAdd) {
+                    regionData.addEntity(entry.getKey(), entry.getValue());
+                }
+                AtomicInteger processedBlocks = new AtomicInteger(0);
+                int[] currentPos = { minX, minY, minZ };
+                final int fMinX = minX, fMinY = minY, fMinZ = minZ;
+                final int fMaxX = maxX, fMaxY = maxY, fMaxZ = maxZ;
 
-                    for (int x = minX; x <= maxX; x++) {
-                        for (int y = minY; y <= maxY; y++) {
-                            for (int z = minZ; z <= maxZ; z++) {
-                                Location loc = new Location(world, x, y, z);
-                                BlockData blockData = world.getBlockAt(x, y, z).getBlockData();
-                                blocksToAdd.add(new AbstractMap.SimpleEntry<>(loc, blockData));
-                            }
-                        }
-                    }
-                    Bukkit.getScheduler().runTask(plugin, () -> {
-                        for (Map.Entry<Location, Map<String, Object>> entry : entitiesToAdd) {
-                            regionData.addEntity(entry.getKey(), entry.getValue());
-                        }
-                        for (Map.Entry<Location, BlockData> entry : blocksToAdd) {
-                            regionData.addBlockToSection("temp", entry.getKey(), entry.getValue());
-                        }
-                        
-                        regionData.setBlockDataLoaded(true);
-                        
-                        regionData.getSectionedBlockData().thenAccept(sectionedBlockData -> Bukkit.getScheduler().runTask(plugin, () -> {
-                            int chunkMinX = minX >> 4;
-                            int chunkMinZ = minZ >> 4;
-                            int chunkMaxX = maxX >> 4;
-                            int chunkMaxZ = maxZ >> 4;
-                            int sectionId = 0;
+                new BukkitRunnable() {
+                    @Override
+                    public void run() {
+                        int blocksThisTick = 0;
 
-                            Map<Location, BlockData> tempSection = sectionedBlockData.get("temp");
-                            if (tempSection == null || tempSection.isEmpty()) {
-                                commandSender.sendMessage(pluginPrefix + ChatColor.RED + " Failed to create arena: No blocks were analyzed.");
-                                plugin.getRegisteredRegions().remove(regionName);
+                        while (blocksThisTick < blocksPerTick) {
+                            if (currentPos[0] > fMaxX) {
+                                cancel();
+
+                                regionData.setBlockDataLoaded(true);
+
+                                
+                                
+                                regionData.saveToDatc(datcFile)
+                                        .thenRun(() -> Bukkit.getScheduler().runTask(plugin, () -> {
+                                            plugin.markRegionDirty(regionName);
+                                            clearSelection(player);
+                                            if (plugin.getPlayerMoveListener() != null) {
+                                                plugin.getPlayerMoveListener().updateRegionBounds();
+                                            }
+                                            commandSender.sendMessage(regionCreated.replace("{arena_name}", regionName));
+                                        }))
+                                        .exceptionally(e -> {
+                                            Bukkit.getScheduler().runTask(plugin, () -> {
+                                                commandSender.sendMessage(pluginPrefix + ChatColor.RED
+                                                        + " Failed to save arena: " + e.getMessage());
+                                                plugin.getRegisteredRegions().remove(regionName);
+                                            });
+                                            return null;
+                                        });
                                 return;
                             }
 
-                            for (int chunkX = chunkMinX; chunkX <= chunkMaxX; chunkX++) {
-                                for (int chunkZ = chunkMinZ; chunkZ <= chunkMaxZ; chunkZ++) {
-                                    int xStart = Math.max(chunkX << 4, minX);
-                                    int zStart = Math.max(chunkZ << 4, minZ);
-                                    int xEnd = Math.min((chunkX << 4) + 15, maxX);
-                                    int zEnd = Math.min((chunkZ << 4) + 15, maxZ);
-                                    Map<Location, BlockData> sectionBlocks = new HashMap<>();
-                                    for (int x = xStart; x <= xEnd; x++) {
-                                        for (int y = minY; y <= maxY; y++) {
-                                            for (int z = zStart; z <= zEnd; z++) {
-                                                Location loc = new Location(world, x, y, z);
-                                                BlockData blockData = tempSection.get(loc);
-                                                if (blockData != null) {
-                                                    sectionBlocks.put(loc, blockData);
-                                                }
-                                            }
-                                        }
-                                    }
-                                    if (!sectionBlocks.isEmpty()) {
-                                        regionData.addSection("chunk_" + sectionId++, sectionBlocks);
-                                    }
+                            Location loc = new Location(world, currentPos[0], currentPos[1], currentPos[2]);
+                            BlockData blockData = world.getBlockAt(loc).getBlockData();
+                            regionData.addBlockToSection("temp", loc, blockData);
+
+                            blocksThisTick++;
+                            processedBlocks.incrementAndGet();
+
+                            currentPos[2]++;
+                            if (currentPos[2] > fMaxZ) {
+                                currentPos[2] = fMinZ;
+                                currentPos[1]++;
+                                if (currentPos[1] > fMaxY) {
+                                    currentPos[1] = fMinY;
+                                    currentPos[0]++;
                                 }
                             }
+                        }
 
-                            regionData.saveToDatc(datcFile).thenRun(() -> Bukkit.getScheduler().runTask(plugin, () -> {
-                                plugin.markRegionDirty(regionName);
-                                clearSelection(player);
-                                if (plugin.getPlayerMoveListener() != null) {
-                                    plugin.getPlayerMoveListener().updateRegionBounds();
-                                }
-                                commandSender.sendMessage(regionCreated.replace("{arena_name}", regionName));
-                            })).exceptionally(e -> {
-                                Bukkit.getScheduler().runTask(plugin, () -> {
-                                    commandSender.sendMessage(pluginPrefix + ChatColor.RED + " Failed to save arena: " + e.getMessage());
-                                    plugin.getRegisteredRegions().remove(regionName);
-                                });
-                                return null;
-                            });
-                        })).exceptionally(e -> {
-                            Bukkit.getScheduler().runTask(plugin, () -> {
-                                commandSender.sendMessage(pluginPrefix + ChatColor.RED + " Failed to process arena data: " + e.getMessage());
-                                plugin.getRegisteredRegions().remove(regionName);
-                            });
-                            return null;
-                        });
-                    });
-                });
+                        int processed = processedBlocks.get();
+                        if (processed % (blocksPerTick * 5) < blocksPerTick) {
+                            int percent = (int) ((processed * 100L) / totalBlocks);
+                            commandSender.sendMessage(
+                                    pluginPrefix + ChatColor.GRAY + " Creating progress: " + ChatColor.WHITE + percent
+                                            + "%" + ChatColor.GRAY + " (" + processed + "/" + totalBlocks + " blocks)");
+                        }
+                    }
+                }.runTaskTimer(plugin, 1L, 1L);
+
                 return true;
             }
 
             case "delete" -> {
                 String showUsage = ChatColor.translateAlternateColorCodes('&', "&cUsage: /arenaregen delete <arena>");
 
-
                 if (!commandSender.hasPermission("arenaregen.delete")) {
                     commandSender.sendMessage(noPermission);
                     return true;
                 }
-
 
                 if (strings.length != 2) {
                     commandSender.sendMessage(pluginPrefix + " " + showUsage);
@@ -281,17 +290,17 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
 
                 String regionName = strings[1];
 
-
                 if (!plugin.getRegisteredRegions().containsKey(regionName)) {
                     commandSender.sendMessage(pluginPrefix + " " + ChatColor.RED + "No region with this name exists.");
                     return true;
                 }
 
-
                 plugin.getPendingDeletions().put(commandSender.getName(), regionName);
-                commandSender.sendMessage(pluginPrefix + ChatColor.YELLOW + " Are you sure you want to delete the region '" + regionName + "'?");
+                commandSender.sendMessage(pluginPrefix + ChatColor.YELLOW
+                        + " Are you sure you want to delete the region '" + regionName + "'?");
                 commandSender.sendMessage(pluginPrefix + ChatColor.YELLOW + " Type '/arenaregen confirm' to proceed.");
-                Bukkit.getScheduler().runTaskLater(plugin, () -> plugin.getPendingDeletions().remove(commandSender.getName()), 1200L);
+                Bukkit.getScheduler().runTaskLater(plugin,
+                        () -> plugin.getPendingDeletions().remove(commandSender.getName()), 1200L);
 
                 return true;
             }
@@ -301,19 +310,18 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                 String senderName = commandSender.getName();
 
                 if (!plugin.getPendingDeletions().containsKey(senderName)) {
-                    commandSender.sendMessage(pluginPrefix + ChatColor.RED + " No pending region deletion found. Use '/arenaregen delete <name>' first.");
+                    commandSender.sendMessage(pluginPrefix + ChatColor.RED
+                            + " No pending region deletion found. Use '/arenaregen delete <name>' first.");
                     return true;
                 }
-
 
                 String confirmedRegion = plugin.getPendingDeletions().remove(senderName);
 
-
                 if (!plugin.getRegisteredRegions().containsKey(confirmedRegion)) {
-                    commandSender.sendMessage(pluginPrefix + ChatColor.RED + " The region '" + confirmedRegion + "' no longer exists.");
+                    commandSender.sendMessage(
+                            pluginPrefix + ChatColor.RED + " The region '" + confirmedRegion + "' no longer exists.");
                     return true;
                 }
-
 
                 RegionData regionData = plugin.getRegisteredRegions().get(confirmedRegion);
                 Bukkit.getScheduler().runTask(plugin, () -> {
@@ -355,7 +363,8 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
 
                 Vector[] selection = getSelection(player);
                 if (selection == null || selection[0] == null || selection[1] == null) {
-                    commandSender.sendMessage(pluginPrefix + ChatColor.RED + " You must select both corners using the selection tool first!");
+                    commandSender.sendMessage(pluginPrefix + ChatColor.RED
+                            + " You must select both corners using the selection tool first!");
                     return true;
                 }
 
@@ -380,41 +389,99 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                         minZ,
                         maxX - minX + 1,
                         maxY - minY + 1,
-                        maxZ - minZ + 1
-                );
+                        maxZ - minZ + 1);
                 regionData.setSpawnLocation(oldRegionData.getSpawnLocation());
-                commandSender.sendMessage(pluginPrefix + ChatColor.YELLOW + " Resizing region '" + regionName + "', please wait...");
+                commandSender.sendMessage(
+                        pluginPrefix + ChatColor.YELLOW + " Resizing region '" + regionName + "', please wait...");
                 regionData.clearRegion(regionName);
-                Bukkit.getScheduler().runTask(plugin, () -> {
-                    String sectionName = "default";
-                    for (int x = minX; x <= maxX; x++) {
-                        for (int y = minY; y <= maxY; y++) {
-                            for (int z = minZ; z <= maxZ; z++) {
-                                Location loc = new Location(world, x, y, z);
-                                BlockData blockData = world.getBlockAt(loc).getBlockData();
-                                regionData.addBlockToSection(sectionName, loc, blockData);
+
+                int width = maxX - minX + 1;
+                int height = maxY - minY + 1;
+                int depth = maxZ - minZ + 1;
+                long totalBlocks = (long) width * height * depth;
+                int blocksPerTick = Math.min(100000, Math.max(1000, plugin.analyzeSpeed / 20));
+
+                AtomicInteger processedBlocks = new AtomicInteger(0);
+                String sectionName = "default";
+
+                int[] currentPos = { minX, minY, minZ };
+                final int fMinX = minX, fMinY = minY, fMinZ = minZ;
+                final int fMaxX = maxX, fMaxY = maxY, fMaxZ = maxZ;
+
+                new BukkitRunnable() {
+                    @Override
+                    public void run() {
+                        int blocksThisTick = 0;
+
+                        while (blocksThisTick < blocksPerTick) {
+                            if (currentPos[0] > fMaxX) {
+                                cancel();
+
+                                File datcFile = new File(new File(plugin.getDataFolder(), "arenas"),
+                                        regionName + ".datc");
+                                regionData.setDatcFile(datcFile);
+                                regionData.setBlockDataLoaded(true);
+
+                                plugin.getRegisteredRegions().put(regionName, regionData);
+                                plugin.markRegionDirty(regionName);
+                                if (plugin.getPlayerMoveListener() != null) {
+                                    plugin.getPlayerMoveListener().updateRegionBounds();
+                                }
+
+                                regionData.saveToDatc(datcFile)
+                                        .thenRun(() -> Bukkit.getScheduler().runTask(plugin, () -> {
+                                            clearSelection(player);
+                                            commandSender.sendMessage(pluginPrefix + " "
+                                                    + regionResized.replace("{arena_name}", regionName));
+                                        })).exceptionally(e -> {
+                                            Bukkit.getScheduler().runTask(plugin, () -> {
+                                                commandSender.sendMessage(pluginPrefix + ChatColor.RED
+                                                        + " Failed to save resized arena: " + e.getMessage());
+                                            });
+                                            return null;
+                                        });
+                                return;
+                            }
+
+                            Location loc = new Location(world, currentPos[0], currentPos[1], currentPos[2]);
+                            BlockData blockData = world.getBlockAt(loc).getBlockData();
+                            regionData.addBlockToSection(sectionName, loc, blockData);
+
+                            blocksThisTick++;
+                            processedBlocks.incrementAndGet();
+                            currentPos[2]++;
+                            if (currentPos[2] > fMaxZ) {
+                                currentPos[2] = fMinZ;
+                                currentPos[1]++;
+                                if (currentPos[1] > fMaxY) {
+                                    currentPos[1] = fMinY;
+                                    currentPos[0]++;
+                                }
                             }
                         }
-                    }
 
-                    plugin.getRegisteredRegions().put(regionName, regionData);
-                    plugin.markRegionDirty(regionName);
-                    if (plugin.getPlayerMoveListener() != null) {
-                        plugin.getPlayerMoveListener().updateRegionBounds();
+                        int processed = processedBlocks.get();
+                        if (processed % (blocksPerTick * 5) < blocksPerTick) {
+                            int percent = (int) ((processed * 100L) / totalBlocks);
+                            commandSender.sendMessage(
+                                    pluginPrefix + ChatColor.GRAY + " Resizing progress: " + ChatColor.WHITE + percent
+                                            + "%" + ChatColor.GRAY + " (" + processed + "/" + totalBlocks + " blocks)");
+                        }
                     }
-                    Bukkit.getScheduler().runTaskAsynchronously(plugin, plugin::saveRegionsAsync);
-                    clearSelection(player);
-                    commandSender.sendMessage(pluginPrefix + " " + regionResized.replace("{arena_name}", regionName));
-                });
+                }.runTaskTimer(plugin, 1L, 1L);
 
                 return true;
             }
 
             case "regenerate", "regen" -> {
-                String showUsage = ChatColor.translateAlternateColorCodes('&', "&cUsage: /arenaregen regenerate <arena> [cancel]");
-                String confirmPrompt = ChatColor.YELLOW + "Are you sure you want to regenerate the region '{arena_name}'? Type '/arenaregen regen confirm' to proceed.";
-                String noPending = ChatColor.RED + "No pending region regeneration found. Use '/arenaregen regen <name>' first.";
-                String scheduledWarning = ChatColor.YELLOW + "Note: Arena '{arena_name}' is scheduled to regenerate every {interval}. Manual regeneration will not affect the schedule.";
+                String showUsage = ChatColor.translateAlternateColorCodes('&',
+                        "&cUsage: /arenaregen regenerate <arena> [cancel]");
+                String confirmPrompt = ChatColor.YELLOW
+                        + "Are you sure you want to regenerate the region '{arena_name}'? Type '/arenaregen regen confirm' to proceed.";
+                String noPending = ChatColor.RED
+                        + "No pending region regeneration found. Use '/arenaregen regen <name>' first.";
+                String scheduledWarning = ChatColor.YELLOW
+                        + "Note: Arena '{arena_name}' is scheduled to regenerate every {interval}. Manual regeneration will not affect the schedule.";
                 String scheduleCanceled = ChatColor.GREEN + "Canceled scheduled regeneration for '{arena_name}'.";
 
                 if (!commandSender.hasPermission("arenaregen.regenerate")) {
@@ -435,7 +502,8 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                         return true;
                     }
                     if (!plugin.isScheduled(input)) {
-                        commandSender.sendMessage(pluginPrefix + ChatColor.YELLOW + " No scheduled regeneration found for '" + input + "'.");
+                        commandSender.sendMessage(pluginPrefix + ChatColor.YELLOW
+                                + " No scheduled regeneration found for '" + input + "'.");
                         return true;
                     }
                     plugin.cancelScheduledRegeneration(input);
@@ -472,7 +540,8 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                         }
                         plugin.getPendingRegenerations().put(commandSender.getName(), input);
                         commandSender.sendMessage(confirmPrompt.replace("{arena_name}", input));
-                        Bukkit.getScheduler().runTaskLater(plugin, () -> plugin.getPendingRegenerations().remove(commandSender.getName()), 1200L);
+                        Bukkit.getScheduler().runTaskLater(plugin,
+                                () -> plugin.getPendingRegenerations().remove(commandSender.getName()), 1200L);
                         return true;
                     }
                 } else {
@@ -482,12 +551,17 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
             }
 
             case "schedule" -> {
-                String showUsage = ChatColor.translateAlternateColorCodes('&', "&cUsage: /arenaregen schedule <arena> [time (e.g., 50m, 1d, 1w)]");
-                String invalidTime = pluginPrefix + ChatColor.RED + " Invalid time format! Use a number followed by s (seconds), m (minutes), d (days), or w (weeks). Example: 50m";
+                String showUsage = ChatColor.translateAlternateColorCodes('&',
+                        "&cUsage: /arenaregen schedule <arena> [time (e.g., 50m, 1d, 1w)]");
+                String invalidTime = pluginPrefix + ChatColor.RED
+                        + " Invalid time format! Use a number followed by s (seconds), m (minutes), d (days), or w (weeks). Example: 50m";
                 String timeTooShort = pluginPrefix + ChatColor.RED + " The interval must be at least 10 seconds!";
-                String scheduledMessage = pluginPrefix + ChatColor.GREEN + " Scheduled regeneration for '{arena_name}' every {interval}.";
-                String canceledMessage = pluginPrefix + ChatColor.YELLOW + " Canceled scheduled regeneration for '{arena_name}'.";
-                String alreadyScheduled = pluginPrefix + ChatColor.YELLOW + " Arena '{arena_name}' is already scheduled to regenerate every {interval}. Use '/ar schedule {arena_name}' to cancel.";
+                String scheduledMessage = pluginPrefix + ChatColor.GREEN
+                        + " Scheduled regeneration for '{arena_name}' every {interval}.";
+                String canceledMessage = pluginPrefix + ChatColor.YELLOW
+                        + " Canceled scheduled regeneration for '{arena_name}'.";
+                String alreadyScheduled = pluginPrefix + ChatColor.YELLOW
+                        + " Arena '{arena_name}' is already scheduled to regenerate every {interval}. Use '/ar schedule {arena_name}' to cancel.";
 
                 if (!commandSender.hasPermission("arenaregen.regenerate")) {
                     commandSender.sendMessage(noPermission);
@@ -501,7 +575,7 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
 
                 String arenaName = strings[1];
                 if (!plugin.getRegisteredRegions().containsKey(arenaName)) {
-                    commandSender.sendMessage(pluginPrefix + " " +arenaNotFound.replace("{arena_name}", arenaName));
+                    commandSender.sendMessage(pluginPrefix + " " + arenaNotFound.replace("{arena_name}", arenaName));
                     return true;
                 }
 
@@ -510,7 +584,8 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                         plugin.cancelScheduledRegeneration(arenaName);
                         commandSender.sendMessage(canceledMessage.replace("{arena_name}", arenaName));
                     } else {
-                        commandSender.sendMessage(pluginPrefix + ChatColor.YELLOW + " No scheduled regeneration found for '" + arenaName + "'.");
+                        commandSender.sendMessage(pluginPrefix + ChatColor.YELLOW
+                                + " No scheduled regeneration found for '" + arenaName + "'.");
                     }
                     return true;
                 }
@@ -570,15 +645,18 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
 
                 RegionData regionData = plugin.getRegisteredRegions().get(targetArenaName);
                 if (regionData == null) {
-                    commandSender.sendMessage(pluginPrefix + ChatColor.RED + " Region '" + targetArenaName + "' does not exist.");
+                    commandSender.sendMessage(
+                            pluginPrefix + ChatColor.RED + " Region '" + targetArenaName + "' does not exist.");
                     return true;
                 }
 
                 Location previousSpawn = regionData.getSpawnLocation();
                 if (previousSpawn != null) {
-                    commandSender.sendMessage(pluginPrefix + ChatColor.YELLOW + " Spawn point for '" + targetArenaName + "' has been updated.");
+                    commandSender.sendMessage(pluginPrefix + ChatColor.YELLOW + " Spawn point for '" + targetArenaName
+                            + "' has been updated.");
                 } else {
-                    commandSender.sendMessage(pluginPrefix + ChatColor.GREEN + " Spawn point for '" + targetArenaName + "' has been set.");
+                    commandSender.sendMessage(pluginPrefix + ChatColor.GREEN + " Spawn point for '" + targetArenaName
+                            + "' has been set.");
                 }
 
                 Bukkit.getScheduler().runTask(plugin, () -> regionData.setSpawnLocation(location));
@@ -605,7 +683,8 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
 
                 RegionData regionData = plugin.getRegisteredRegions().get(targetArenaName);
                 if (regionData == null) {
-                    commandSender.sendMessage(pluginPrefix + ChatColor.RED + " Region '" + targetArenaName + "' does not exist.");
+                    commandSender.sendMessage(
+                            pluginPrefix + ChatColor.RED + " Region '" + targetArenaName + "' does not exist.");
                     return true;
                 }
 
@@ -617,7 +696,8 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
             }
 
             case "teleport", "tp" -> {
-                String showUsage = ChatColor.translateAlternateColorCodes('&', "&cUsage: /arenaregen teleport <player> <arena>");
+                String showUsage = ChatColor.translateAlternateColorCodes('&',
+                        "&cUsage: /arenaregen teleport <player> <arena>");
 
                 if (!commandSender.hasPermission("arenaregen.teleport")) {
                     commandSender.sendMessage(pluginPrefix + " " + noPermission);
@@ -635,19 +715,22 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
 
                 Player targetPlayer = Bukkit.getPlayerExact(playerName);
                 if (targetPlayer == null) {
-                    commandSender.sendMessage(pluginPrefix + ChatColor.RED + " Player '" + playerName + "' is not online.");
+                    commandSender
+                            .sendMessage(pluginPrefix + ChatColor.RED + " Player '" + playerName + "' is not online.");
                     return true;
                 }
 
                 RegionData regionData = plugin.getRegisteredRegions().get(targetArenaName);
                 if (regionData == null) {
-                    commandSender.sendMessage(pluginPrefix + ChatColor.RED + " Region '" + targetArenaName + "' does not exist.");
+                    commandSender.sendMessage(
+                            pluginPrefix + ChatColor.RED + " Region '" + targetArenaName + "' does not exist.");
                     return true;
                 }
 
                 Location spawnLocation = regionData.getSpawnLocation();
                 if (spawnLocation == null) {
-                    commandSender.sendMessage(pluginPrefix + ChatColor.RED + " Please set a spawn point for region '" + targetArenaName + "' first.");
+                    commandSender.sendMessage(pluginPrefix + ChatColor.RED + " Please set a spawn point for region '"
+                            + targetArenaName + "' first.");
                     return true;
                 }
 
@@ -725,17 +808,21 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                 commandSender.sendMessage(ChatColor.GREEN + "/arenaregen delete <arena> - Delete an arena");
                 commandSender.sendMessage(ChatColor.GREEN + "/arenaregen resize <arena> - Resize an arena");
                 commandSender.sendMessage(ChatColor.GREEN + "/arenaregen regenerate <arena> - Regenerate an arena");
-                commandSender.sendMessage(ChatColor.GREEN + "/arenaregen here - Regenerate the arena you're standing in");
+                commandSender
+                        .sendMessage(ChatColor.GREEN + "/arenaregen here - Regenerate the arena you're standing in");
                 commandSender.sendMessage(ChatColor.GREEN + "/arenaregen setspawn <arena> - Set spawn for an arena");
-                commandSender.sendMessage(ChatColor.GREEN + "/arenaregen delspawn <arena> - Remove spawn from an arena");
+                commandSender
+                        .sendMessage(ChatColor.GREEN + "/arenaregen delspawn <arena> - Remove spawn from an arena");
                 commandSender.sendMessage(ChatColor.GREEN + "/arenaregen teleport <arena> - Teleport to an arena");
                 commandSender.sendMessage(ChatColor.GREEN + "/arenaregen list - List all arenas");
                 commandSender.sendMessage(ChatColor.GREEN + "/arenaregen reload - Reload configuration");
                 commandSender.sendMessage(ChatColor.GREEN + "/arenaregen help - Show this command.");
                 commandSender.sendMessage(ChatColor.GREEN + "/arenaregen wand - Get the selection tool");
                 commandSender.sendMessage(ChatColor.GREEN + "/arenaregen schedule - Schedule a regeneration timer");
-                commandSender.sendMessage(ChatColor.GREEN + "/arenaregen preview - Preview the borders of an arena using particles");
-                commandSender.sendMessage(ChatColor.GREEN + "/arenaregen unlock [arena] - Unlock arena(s) that are stuck in locked state");
+                commandSender.sendMessage(
+                        ChatColor.GREEN + "/arenaregen preview - Preview the borders of an arena using particles");
+                commandSender.sendMessage(ChatColor.GREEN
+                        + "/arenaregen unlock [arena] - Unlock arena(s) that are stuck in locked state");
                 return true;
             }
 
@@ -787,27 +874,31 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                     }
 
                     if (unlockedCount > 0) {
-                        commandSender.sendMessage(pluginPrefix + ChatColor.GREEN + " Unlocked " + unlockedCount + " arena(s).");
+                        commandSender.sendMessage(
+                                pluginPrefix + ChatColor.GREEN + " Unlocked " + unlockedCount + " arena(s).");
                     } else {
-                        commandSender.sendMessage(pluginPrefix + ChatColor.YELLOW + " No locked arenas found that can be unlocked.");
+                        commandSender.sendMessage(
+                                pluginPrefix + ChatColor.YELLOW + " No locked arenas found that can be unlocked.");
                     }
                 } else {
                     String arenaName = strings[1];
                     RegionData regionData = plugin.getRegisteredRegions().get(arenaName);
 
                     if (regionData == null) {
-                        commandSender.sendMessage(pluginPrefix + ChatColor.RED + " Arena '" + arenaName + "' not found.");
+                        commandSender
+                                .sendMessage(pluginPrefix + ChatColor.RED + " Arena '" + arenaName + "' not found.");
                         return true;
                     }
 
                     if (!regionData.isLocked()) {
-                        commandSender.sendMessage(pluginPrefix + ChatColor.YELLOW + " Arena '" + arenaName + "' is already unlocked.");
+                        commandSender.sendMessage(
+                                pluginPrefix + ChatColor.YELLOW + " Arena '" + arenaName + "' is already unlocked.");
                         return true;
                     }
 
-
                     regionData.setLocked(false);
-                    commandSender.sendMessage(pluginPrefix + ChatColor.GREEN + " Arena '" + arenaName + "' has been unlocked.");
+                    commandSender.sendMessage(
+                            pluginPrefix + ChatColor.GREEN + " Arena '" + arenaName + "' has been unlocked.");
                 }
 
                 return true;
@@ -839,8 +930,8 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                     int pz = playerLoc.getBlockZ();
 
                     if (px >= regionData.getMinX() && px <= regionData.getMaxX() &&
-                        py >= regionData.getMinY() && py <= regionData.getMaxY() &&
-                        pz >= regionData.getMinZ() && pz <= regionData.getMaxZ()) {
+                            py >= regionData.getMinY() && py <= regionData.getMaxY() &&
+                            pz >= regionData.getMinZ() && pz <= regionData.getMaxZ()) {
                         foundArena = entry.getKey();
                         break;
                     }
@@ -854,7 +945,8 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                 if (plugin.isScheduled(foundArena)) {
                     long intervalTicks = plugin.getScheduledInterval(foundArena);
                     String intervalString = formatTicksToTime(intervalTicks);
-                    String scheduledWarning = ChatColor.YELLOW + "Note: Arena '{arena_name}' is scheduled to regenerate every {interval}. Manual regeneration will not affect the schedule.";
+                    String scheduledWarning = ChatColor.YELLOW
+                            + "Note: Arena '{arena_name}' is scheduled to regenerate every {interval}. Manual regeneration will not affect the schedule.";
                     commandSender.sendMessage(scheduledWarning
                             .replace("{arena_name}", foundArena)
                             .replace("{interval}", intervalString));
@@ -862,9 +954,11 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
 
                 if (plugin.confirmationPrompt) {
                     plugin.getPendingRegenerations().put(commandSender.getName(), foundArena);
-                    String confirmPrompt = ChatColor.YELLOW + "Are you sure you want to regenerate the region '{arena_name}'? Type '/arenaregen regen confirm' to proceed.";
+                    String confirmPrompt = ChatColor.YELLOW
+                            + "Are you sure you want to regenerate the region '{arena_name}'? Type '/arenaregen regen confirm' to proceed.";
                     commandSender.sendMessage(confirmPrompt.replace("{arena_name}", foundArena));
-                    Bukkit.getScheduler().runTaskLater(plugin, () -> plugin.getPendingRegenerations().remove(commandSender.getName()), 1200L);
+                    Bukkit.getScheduler().runTaskLater(plugin,
+                            () -> plugin.getPendingRegenerations().remove(commandSender.getName()), 1200L);
                 } else {
                     plugin.regenerateArena(foundArena, commandSender);
                 }
@@ -875,13 +969,13 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
             default -> {
                 if (commandSender instanceof Player player) {
                     player.sendMessage(incorrectSyntax);
-                } else plugin.getLogger().info(incorrectSyntax);
+                } else
+                    plugin.getLogger().info(incorrectSyntax);
             }
         }
 
         return true;
     }
-
 
     private boolean isRegionSizeValid(int minX, int maxX, int minY, int maxY, int minZ, int maxZ) {
         arenaSizeLimit = plugin.getConfig().getLong("general.arena-size-limit", 1000000L);
@@ -906,7 +1000,8 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
             World world = Bukkit.getWorld(regionData.getWorldName());
 
             if (world == null) {
-                sender.sendMessage(ChatColor.YELLOW + "- " + name + ": " + ChatColor.RED + "World " + regionData.getWorldName() + " not found.");
+                sender.sendMessage(ChatColor.YELLOW + "- " + name + ": " + ChatColor.RED + "World "
+                        + regionData.getWorldName() + " not found.");
                 continue;
             }
 
@@ -1004,7 +1099,8 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                     .append(ChatColor.GRAY)
                     .append("\n  Minecraft Version: ").append(ChatColor.WHITE).append(regionData.getMinecraftVersion())
                     .append(ChatColor.GRAY)
-                    .append("\n  File Format Version: ").append(ChatColor.WHITE).append(regionData.getFileFormatVersion())
+                    .append("\n  File Format Version: ").append(ChatColor.WHITE)
+                    .append(regionData.getFileFormatVersion())
                     .append(ChatColor.GRAY)
                     .append("\n  Dimensions: ").append(ChatColor.WHITE)
                     .append(regionData.getWidth()).append("x")
@@ -1027,14 +1123,17 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
     }
 
     @Override
-    public @Nullable List<String> onTabComplete(@NotNull CommandSender commandSender, @NotNull Command command, @NotNull String s, @NotNull String @NotNull [] strings) {
+    public @Nullable List<String> onTabComplete(@NotNull CommandSender commandSender, @NotNull Command command,
+            @NotNull String s, @NotNull String @NotNull [] strings) {
         return handleTabComplete(strings);
     }
 
     private List<String> handleTabComplete(String @NotNull [] args) {
         return switch (args.length) {
-            case 1 -> filterSuggestions(List.of("create", "regenerate", "regen", "setspawn", "delspawn", "teleport", "tp",
-                    "list", "delete", "resize", "reload", "help", "wand", "selection", "schedule", "preview", "info", "unlock", "here"), args[0]);
+            case 1 ->
+                filterSuggestions(List.of("create", "regenerate", "regen", "setspawn", "delspawn", "teleport", "tp",
+                        "list", "delete", "resize", "reload", "help", "wand", "selection", "schedule", "preview",
+                        "info", "unlock", "here"), args[0]);
 
             case 2 -> {
                 if (args[0].equalsIgnoreCase("regenerate") || args[0].equalsIgnoreCase("regen")
@@ -1043,7 +1142,7 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                         || args[0].equalsIgnoreCase("preview")
                         || args[0].equalsIgnoreCase("schedule")
                         || args[0].equalsIgnoreCase("info") || args[0].equalsIgnoreCase("information")
-                        || args[0].equalsIgnoreCase("unlock")){
+                        || args[0].equalsIgnoreCase("unlock")) {
                     yield listRegionsForTabComplete(args[1]);
                 } else if (args[0].equalsIgnoreCase("create")) {
                     yield filterSuggestions(List.of("ArenaName"), args[1]);
@@ -1105,7 +1204,7 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
         return filtered;
     }
 
-    // selection tool stuff
+    
     public void giveSelectionTool(@NotNull Player player) {
         updateWandMaterial();
 
@@ -1128,15 +1227,19 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
             lastConfigCheck = System.currentTimeMillis();
         }
 
-        if (event.getHand() != EquipmentSlot.HAND) return;
+        if (event.getHand() != EquipmentSlot.HAND)
+            return;
 
         Player player = event.getPlayer();
         ItemStack item = player.getInventory().getItemInMainHand();
 
-        if (item.getType() != wandMaterial || !player.hasPermission("arenaregen.select")) return;
-        if (event.getClickedBlock() == null) return;
+        if (item.getType() != wandMaterial || !player.hasPermission("arenaregen.select"))
+            return;
+        if (event.getClickedBlock() == null)
+            return;
 
-        if (!item.hasItemMeta() || !item.getItemMeta().getDisplayName().equals(ChatColor.GOLD + "Arena Selection Tool")) {
+        if (!item.hasItemMeta()
+                || !item.getItemMeta().getDisplayName().equals(ChatColor.GOLD + "Arena Selection Tool")) {
             return;
         }
 
@@ -1174,7 +1277,8 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
 
     private void handleCornerSelection(UUID playerId, Vector clickedPos, int index, String cornerName) {
         Player player = plugin.getServer().getPlayer(playerId);
-        if (player == null) return;
+        if (player == null)
+            return;
 
         Vector[] corners = selections.computeIfAbsent(playerId, k -> new Vector[2]);
 
@@ -1188,7 +1292,8 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
         }
     }
 
-    private void sendSelectionActionBar(Player player, Vector[] corners, int index, String cornerName, Vector clickedPos) {
+    private void sendSelectionActionBar(Player player, Vector[] corners, int index, String cornerName,
+            Vector clickedPos) {
         Component actionBarMessage;
 
         if (corners[0] != null && corners[1] != null) {
@@ -1215,7 +1320,8 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                     .append(Component.text(cornerName + " Corner: ", NamedTextColor.YELLOW))
                     .append(Component.text(formatVector(clickedPos), NamedTextColor.WHITE))
                     .append(Component.text(" | ", NamedTextColor.DARK_GRAY))
-                    .append(Component.text("Select " + otherCorner + " corner", NamedTextColor.GRAY, TextDecoration.ITALIC))
+                    .append(Component.text("Select " + otherCorner + " corner", NamedTextColor.GRAY,
+                            TextDecoration.ITALIC))
                     .build();
         }
 
@@ -1259,12 +1365,14 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
 
     private void cancelExpiration(UUID playerId) {
         BukkitRunnable task = expirationTasks.remove(playerId);
-        if (task != null) task.cancel();
+        if (task != null)
+            task.cancel();
     }
+
     private @NotNull String formatVector(@NotNull Vector vector) {
         return "(" + vector.getBlockX() + ", " + vector.getBlockY() + ", " + vector.getBlockZ() + ")";
     }
-    
+
     private String formatTicksToTime(long ticks) {
         if (ticks < 20 * 60) {
             return (ticks / 20) + " seconds";
@@ -1278,7 +1386,7 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
             return (ticks / (20 * 60 * 60 * 24 * 7)) + " weeks";
         }
     }
-    
+
     private long parseTimeToTicks(String timeInput) {
         if (timeInput == null || timeInput.isEmpty()) {
             throw new IllegalArgumentException("Time input cannot be empty");

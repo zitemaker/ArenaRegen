@@ -28,6 +28,41 @@ public class RegionData {
     private static final int GZIP_COMPRESSION_LEVEL = 6;
     private static final byte[] GZIP_MAGIC = new byte[] { (byte) 0x1F, (byte) 0x8B };
 
+    
+    
+    private static final Map<String, BlockData> BLOCK_DATA_CACHE = new ConcurrentHashMap<>();
+    private static final int MAX_CACHE_SIZE = 10000; 
+
+    
+    public static BlockData getCachedBlockData(String blockDataString) {
+        
+        BlockData cached = BLOCK_DATA_CACHE.get(blockDataString);
+        if (cached != null) {
+            return cached;
+        }
+
+        
+        BlockData blockData = Bukkit.createBlockData(blockDataString);
+
+        
+        if (BLOCK_DATA_CACHE.size() < MAX_CACHE_SIZE) {
+            BLOCK_DATA_CACHE.put(blockDataString, blockData);
+        }
+
+        return blockData;
+    }
+
+    
+    public static void clearBlockDataCache() {
+        BLOCK_DATA_CACHE.clear();
+        LOGGER.info("[ArenaRegen] BlockData cache cleared.");
+    }
+
+    
+    public static int getBlockDataCacheSize() {
+        return BLOCK_DATA_CACHE.size();
+    }
+
     private static final List<String> KNOWN_PATTERN_IDENTIFIERS = Arrays.asList(
             "base", "square_bottom_left", "square_bottom_right", "square_top_left", "square_top_right",
             "stripe_bottom", "stripe_top", "stripe_left", "stripe_right", "stripe_center", "stripe_middle",
@@ -87,50 +122,65 @@ public class RegionData {
 
     public void addBlockToSection(String section, Location location, BlockData blockData) {
         sectionedBlockData.computeIfAbsent(section, k -> new ConcurrentHashMap<>()).put(location, blockData);
-        World world = location.getWorld();
-        if (world != null) {
-            BlockState state = world.getBlockAt(location).getState();
-            if (state instanceof Banner) {
-                Banner banner = (Banner) state;
-                Map<String, Object> bannerData = new HashMap<>();
-                DyeColor baseColor = banner.getBaseColor();
-                bannerData.put("baseColor", baseColor != null ? baseColor.name() : "NONE");
-                List<Map<String, String>> patternDataList = new ArrayList<>();
-                for (Pattern pattern : banner.getPatterns()) {
-                    Map<String, String> patternData = new HashMap<>();
-                    DyeColor color = pattern.getColor();
-                    patternData.put("color", color.name());
-                    String patternIdentifier = resolvePatternIdentifier(pattern);
-                    patternData.put("type", patternIdentifier);
-                    patternDataList.add(patternData);
+
+        
+        
+        Material mat = blockData.getMaterial();
+        if (isBannerMaterial(mat) || isSignMaterial(mat)) {
+            World world = location.getWorld();
+            if (world != null) {
+                BlockState state = world.getBlockAt(location).getState();
+                if (state instanceof Banner) {
+                    Banner banner = (Banner) state;
+                    Map<String, Object> bannerData = new HashMap<>();
+                    DyeColor baseColor = banner.getBaseColor();
+                    bannerData.put("baseColor", baseColor != null ? baseColor.name() : "NONE");
+                    List<Map<String, String>> patternDataList = new ArrayList<>();
+                    for (Pattern pattern : banner.getPatterns()) {
+                        Map<String, String> patternData = new HashMap<>();
+                        DyeColor color = pattern.getColor();
+                        patternData.put("color", color.name());
+                        String patternIdentifier = resolvePatternIdentifier(pattern);
+                        patternData.put("type", patternIdentifier);
+                        patternDataList.add(patternData);
+                    }
+                    bannerData.put("patterns", patternDataList);
+                    PersistentDataContainer pdc = banner.getPersistentDataContainer();
+                    if (!pdc.isEmpty()) {
+                        Map<String, Object> pdcData = serializePdc(pdc);
+                        bannerData.put("persistentData", pdcData);
+                    }
+                    bannerStates.put(location.clone(), bannerData);
+                } else if (state instanceof Sign) {
+                    Sign sign = (Sign) state;
+                    Map<String, Object> signData = new HashMap<>();
+                    List<String> lines = new ArrayList<>();
+                    for (int i = 0; i < 4; i++) {
+                        lines.add(sign.getLine(i));
+                    }
+                    signData.put("lines", lines);
+                    DyeColor color = sign.getColor();
+                    signData.put("color", color != null ? color.name() : "BLACK");
+                    signData.put("glowing", sign.isGlowingText());
+                    PersistentDataContainer pdc = sign.getPersistentDataContainer();
+                    if (!pdc.isEmpty()) {
+                        Map<String, Object> pdcData = serializePdc(pdc);
+                        signData.put("persistentData", pdcData);
+                    }
+                    signStates.put(location.clone(), signData);
                 }
-                bannerData.put("patterns", patternDataList);
-                PersistentDataContainer pdc = banner.getPersistentDataContainer();
-                if (!pdc.isEmpty()) {
-                    Map<String, Object> pdcData = serializePdc(pdc);
-                    bannerData.put("persistentData", pdcData);
-                }
-                bannerStates.put(location.clone(), bannerData);
-            }
-            if (state instanceof Sign) {
-                Sign sign = (Sign) state;
-                Map<String, Object> signData = new HashMap<>();
-                List<String> lines = new ArrayList<>();
-                for (int i = 0; i < 4; i++) {
-                    lines.add(sign.getLine(i));
-                }
-                signData.put("lines", lines);
-                DyeColor color = sign.getColor();
-                signData.put("color", color != null ? color.name() : "BLACK");
-                signData.put("glowing", sign.isGlowingText());
-                PersistentDataContainer pdc = sign.getPersistentDataContainer();
-                if (!pdc.isEmpty()) {
-                    Map<String, Object> pdcData = serializePdc(pdc);
-                    signData.put("persistentData", pdcData);
-                }
-                signStates.put(location.clone(), signData);
             }
         }
+    }
+
+    private boolean isBannerMaterial(Material mat) {
+        String name = mat.name();
+        return name.endsWith("_BANNER") || name.endsWith("_WALL_BANNER");
+    }
+
+    private boolean isSignMaterial(Material mat) {
+        String name = mat.name();
+        return name.endsWith("_SIGN") || name.endsWith("_WALL_SIGN") || name.endsWith("_HANGING_SIGN") || name.endsWith("_WALL_HANGING_SIGN");
     }
 
     public void addSection(String sectionName, Map<Location, BlockData> blocks) {
@@ -144,7 +194,7 @@ public class RegionData {
             BlockData blockData = entry.getValue();
             if (blockData == null) {
                 LOGGER.warning("[ArenaRegen] Block data in section " + sectionName + " at " + location + " is null, replacing with air.");
-                blockData = Bukkit.createBlockData(Material.AIR);
+                blockData = getCachedBlockData("minecraft:air");
             }
             sectionBlocks.put(location, blockData);
             if (world != null) {
@@ -340,12 +390,13 @@ public class RegionData {
 
         long estimatedSize = (totalBlocks * 42) + (totalEntities * 124) + (totalModifiedBlocks * 42) + (totalBanners * 128) + (totalSigns * 64) + 1024;
 
+        
         if (estimatedSize < 500_000) {
-            return 4096;
+            return 8192;   
         } else if (estimatedSize < 5_000_000) {
-            return 16384;
+            return 65536;  
         } else {
-            return 32768;
+            return 262144; 
         }
     }
 
@@ -353,23 +404,24 @@ public class RegionData {
         CompletableFuture<Void> future = new CompletableFuture<>();
         long startTime = System.currentTimeMillis();
 
-        Map<String, Map<Location, BlockData>> sectionedBlockDataCopy = new ConcurrentHashMap<>();
-        for (Map.Entry<String, Map<Location, BlockData>> entry : sectionedBlockData.entrySet()) {
-            sectionedBlockDataCopy.put(entry.getKey(), new ConcurrentHashMap<>(entry.getValue()));
-        }
-        Map<Location, Map<String, Object>> entityDataMapCopy = new ConcurrentHashMap<>(entityDataMap);
-        Map<Location, BlockData> modifiedBlocksCopy = new ConcurrentHashMap<>(modifiedBlocks);
-        Map<Location, Map<String, Object>> bannerStatesCopy = new ConcurrentHashMap<>(bannerStates);
-        Map<Location, Map<String, Object>> signStatesCopy = new ConcurrentHashMap<>(signStates);
-
+        
+        
         int bufferSize = calculateBufferSize();
+
+        
+        int sectionCount = sectionedBlockData.size();
+        long totalBlocks = sectionedBlockData.values().stream().mapToLong(Map::size).sum();
+        int entityCount = entityDataMap.size();
+        int bannerCount = bannerStates.size();
+        int signCount = signStates.size();
+        int modifiedCount = modifiedBlocks.size();
 
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
             File backupFile = new File(datcFile.getParent(), datcFile.getName() + ".bak");
                 if (datcFile.exists()) {
                     if (!datcFile.renameTo(backupFile)) {
-                //LOGGER.warning("[ArenaRegen] Failed to create backup of " + datcFile.getName());
+                
                     }
             }
 
@@ -391,11 +443,12 @@ public class RegionData {
                 dos.writeBytes(header);
                 dos.writeByte('\n');
 
-                writeSections(dos, sectionedBlockDataCopy);
-                writeEntities(dos, entityDataMapCopy);
-                writeBanners(dos, bannerStatesCopy);
-                writeSigns(dos, signStatesCopy);
-                writeModifiedBlocks(dos, modifiedBlocksCopy);
+                
+                writeSections(dos, sectionedBlockData);
+                writeEntities(dos, entityDataMap);
+                writeBanners(dos, bannerStates);
+                writeSigns(dos, signStates);
+                writeModifiedBlocks(dos, modifiedBlocks);
                 dos.flush();
 
             } catch (IOException e) {
@@ -410,9 +463,9 @@ public class RegionData {
             long timeTaken = System.currentTimeMillis() - startTime;
             long fileSize = datcFile.length();
             LOGGER.info("[ArenaRegen] Saved RegionData to " + datcFile.getName() + ": " +
-                        sectionedBlockDataCopy.size() + " sections, " + sectionedBlockDataCopy.values().stream().mapToLong(Map::size).sum() + " total blocks, " +
-                        entityDataMapCopy.size() + " entities, " + bannerStatesCopy.size() + " banners, " + signStatesCopy.size() + " signs, " +
-                        modifiedBlocksCopy.size() + " modified blocks. " +
+                        sectionCount + " sections, " + totalBlocks + " total blocks, " +
+                        entityCount + " entities, " + bannerCount + " banners, " + signCount + " signs, " +
+                        modifiedCount + " modified blocks. " +
                     "File size: " + (fileSize / 1024) + " KB, Time: " + timeTaken + "ms");
 
             future.complete(null);
@@ -693,7 +746,8 @@ public class RegionData {
         this.datcFile = datcFile;
         CompletableFuture<Void> future = new CompletableFuture<>();
         long startTime = System.currentTimeMillis();
-        int bufferSize = datcFile.length() < 500_000 ? 4096 : (datcFile.length() < 5_000_000 ? 16384 : 32768);
+        
+        int bufferSize = datcFile.length() < 500_000 ? 8192 : (datcFile.length() < 5_000_000 ? 65536 : 262144);
 
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
@@ -779,8 +833,10 @@ public class RegionData {
 
                     long timeTaken = System.currentTimeMillis() - startTime;
                     long fileSize = datcFile.length();
+                    
+                    long totalBlocks = sectionedBlockData.values().stream().mapToLong(Map::size).sum();
                     LOGGER.info("[ArenaRegen] Loaded RegionData for file " + datcFile.getName() + ": " +
-                            sectionedBlockData.size() + " sections, " + getAllBlocks().join().size() + " total blocks, " +
+                            sectionedBlockData.size() + " sections, " + totalBlocks + " total blocks, " +
                             entityDataMap.size() + " entities, " + bannerStates.size() + " banners, " + signStates.size() + " signs, " +
                             modifiedBlocks.size() + " modified blocks. " +
                             "Locked: " + locked + ", File size: " + (fileSize / 1024) + " KB, Time: " + timeTaken + "ms");
@@ -846,11 +902,12 @@ public class RegionData {
 
                 Location loc = new Location(world, x, y, z);
                 try {
-                    BlockData blockData = Bukkit.createBlockData(blockDataStr);
+                    
+                    BlockData blockData = getCachedBlockData(blockDataStr);
                     blocks.put(loc, blockData);
                 } catch (IllegalArgumentException e) {
                     LOGGER.warning("[ArenaRegen] Invalid block data '" + blockDataStr + "' at " + loc + " in section " + sectionName + ": " + e.getMessage() + ", replacing with air.");
-                    blocks.put(loc, Bukkit.createBlockData(Material.AIR));
+                    blocks.put(loc, getCachedBlockData("minecraft:air"));
                 }
             }
             sectionedBlockData.put(sectionName, blocks);
@@ -1098,7 +1155,8 @@ public class RegionData {
 
             Location loc = new Location(world, x, y, z);
             try {
-                BlockData blockData = Bukkit.createBlockData(blockDataStr);
+                
+                BlockData blockData = getCachedBlockData(blockDataStr);
                 modifiedBlocks.put(loc, blockData);
             } catch (IllegalArgumentException e) {
                 LOGGER.warning("[ArenaRegen] Invalid block data '" + blockDataStr + "' for modified block at " + loc + ": " + e.getMessage() + ", skipping.");
