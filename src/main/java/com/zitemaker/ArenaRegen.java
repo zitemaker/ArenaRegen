@@ -36,7 +36,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 
-public class ArenaRegen extends JavaPlugin{
+public class ArenaRegen extends JavaPlugin {
 
     private File messagesFile;
     private FileConfiguration messagesConfig;
@@ -49,7 +49,6 @@ public class ArenaRegen extends JavaPlugin{
     public final Set<String> dirtyRegions = new HashSet<>();
     public final Set<String> regeneratingArenas = new HashSet<>();
 
-    
     public String prefix;
     public String regenType;
     public String regenSpeed;
@@ -84,7 +83,8 @@ public class ArenaRegen extends JavaPlugin{
 
     @Override
     public void onLoad() {
-        logger.info(ARChatColor.GREEN + "ArenaRegen.jar v" + getDescription().getVersion() + " has been loaded successfully");
+        logger.info(ARChatColor.GREEN + "ArenaRegen.jar v" + getDescription().getVersion()
+                + " has been loaded successfully");
     }
 
     @Override
@@ -115,13 +115,15 @@ public class ArenaRegen extends JavaPlugin{
         logger.info("");
 
         if (!Bukkit.getServer().getName().equalsIgnoreCase("Paper")) {
-            logger.info(ARChatColor.YELLOW + "    [Warning] ArenaRegen detected that this server is not running Paper.");
+            logger.info(
+                    ARChatColor.YELLOW + "    [Warning] ArenaRegen detected that this server is not running Paper.");
             logger.info(ARChatColor.YELLOW + "    Paper is recommended for better performance and compatibility.");
             logger.info(ARChatColor.YELLOW + "    Download Paper at https://papermc.io/downloads");
         }
 
         String serverVersion = Bukkit.getBukkitVersion().split("-")[0];
-        boolean isModernServer = serverVersion.startsWith("1.20.5") || serverVersion.startsWith("1.20.6") || serverVersion.startsWith("1.21");
+        boolean isModernServer = serverVersion.startsWith("1.20.5") || serverVersion.startsWith("1.20.6")
+                || serverVersion.startsWith("1.21");
         boolean hasNMSHandler = false;
 
         try {
@@ -131,15 +133,20 @@ public class ArenaRegen extends JavaPlugin{
         }
 
         if (isModernServer && !hasNMSHandler) {
-            logger.info(ARChatColor.RED + "    [Warning] This server (" + serverVersion + ") supports optimized NMS block updates.");
-            logger.info(ARChatColor.RED + "    However, this JAR does not include NMS support (likely the legacy build).");
-            logger.info(ARChatColor.YELLOW + "    For better performance, please use the modern JAR (built for 1.20.5–1.21.5).");
+            logger.info(ARChatColor.RED + "    [Warning] This server (" + serverVersion
+                    + ") supports optimized NMS block updates.");
+            logger.info(
+                    ARChatColor.RED + "    However, this JAR does not include NMS support (likely the legacy build).");
+            logger.info(ARChatColor.YELLOW
+                    + "    For better performance, please use the modern JAR (built for 1.20.5–1.21.5).");
         } else if (!isModernServer && hasNMSHandler) {
-            logger.info(ARChatColor.RED + "    [Warning] This server (" + serverVersion + ") is better suited for the legacy JAR.");
-            logger.info(ARChatColor.RED + "    This JAR includes NMS support (likely the modern build), which may cause compatibility issues.");
-            logger.info(ARChatColor.YELLOW + "    For better compatibility, please use the legacy JAR (built for 1.18–1.20.4).");
+            logger.info(ARChatColor.RED + "    [Warning] This server (" + serverVersion
+                    + ") is better suited for the legacy JAR.");
+            logger.info(ARChatColor.RED
+                    + "    This JAR includes NMS support (likely the modern build), which may cause compatibility issues.");
+            logger.info(ARChatColor.YELLOW
+                    + "    For better compatibility, please use the legacy JAR (built for 1.18–1.20.4).");
         }
-
 
         reloadPluginConfig();
         loadMessagesFile();
@@ -158,11 +165,14 @@ public class ArenaRegen extends JavaPlugin{
                 boolean mkdirs = arenasDir.mkdirs();
             }
             if (!arenasDir.canRead() || !arenasDir.canWrite()) {
-                logger.info(ARChatColor.RED + "ERROR: The arenas directory (" + arenasDir.getPath() + ") is not readable or writable!");
-                logger.info(ARChatColor.RED + "Please check file permissions to ensure the server process has read/write access.");
+                logger.info(ARChatColor.RED + "ERROR: The arenas directory (" + arenasDir.getPath()
+                        + ") is not readable or writable!");
+                logger.info(ARChatColor.RED
+                        + "Please check file permissions to ensure the server process has read/write access.");
             }
 
-            saveTaskId = Bukkit.getScheduler().runTaskTimerAsynchronously(this, this::saveRegionsAsync, 0L, 4000L).getTaskId();
+            saveTaskId = Bukkit.getScheduler().runTaskTimerAsynchronously(this, this::saveRegionsAsync, 0L, 4000L)
+                    .getTaskId();
             rescheduleTasks();
             logger.info("Plugin fully enabled.");
         }).exceptionally(e -> {
@@ -197,12 +207,10 @@ public class ArenaRegen extends JavaPlugin{
         saveSchedules();
         regeneratingArenas.clear();
 
-        
         RegionData.clearBlockDataCache();
 
         logger.info(ARChatColor.RED + "ArenaRegen v" + getDescription().getVersion() + " has been disabled.");
     }
-
 
     private CompletableFuture<Void> loadRegionsAsync() {
         File arenasDir = new File(getDataFolder(), "arenas");
@@ -213,7 +221,8 @@ public class ArenaRegen extends JavaPlugin{
 
         if (!arenasDir.canRead()) {
             logger.info(ARChatColor.RED + "ERROR: Cannot read from arenas directory (" + arenasDir.getPath() + ")!");
-            logger.info(ARChatColor.RED + "Please check file permissions to ensure the server process has read access.");
+            logger.info(
+                    ARChatColor.RED + "Please check file permissions to ensure the server process has read access.");
             return CompletableFuture.completedFuture(null);
         }
 
@@ -239,10 +248,13 @@ public class ArenaRegen extends JavaPlugin{
                         logger.info(ARChatColor.GREEN + "Loaded arena '" + regionName + "' successfully.");
                     })
                     .exceptionally(e -> {
-                        logger.info(ARChatColor.RED + "Failed to load arena '" + regionName + "' from " + file.getName() + ": " + e.getMessage());
-                        logger.info(ARChatColor.YELLOW + "Skipping '" + regionName + "'. You may need to delete or fix the file.");
+                        logger.info(ARChatColor.RED + "Failed to load arena '" + regionName + "' from " + file.getName()
+                                + ": " + e.getMessage());
+                        logger.info(ARChatColor.YELLOW + "Skipping '" + regionName
+                                + "'. You may need to delete or fix the file.");
                         errorSummary.append(ARChatColor.RED)
-                                .append(" - Arena '").append(regionName).append("': ").append(e.getMessage()).append("\n");
+                                .append(" - Arena '").append(regionName).append("': ").append(e.getMessage())
+                                .append("\n");
                         return null;
                     });
 
@@ -261,7 +273,8 @@ public class ArenaRegen extends JavaPlugin{
                         logger.info(errorSummary.toString());
                         for (Player player : Bukkit.getOnlinePlayers()) {
                             if (player.isOp()) {
-                                player.sendMessage(prefix + " " + ARChatColor.RED + "Failed to load some arenas on startup! Check the server logs for details.");
+                                player.sendMessage(prefix + " " + ARChatColor.RED
+                                        + "Failed to load some arenas on startup! Check the server logs for details.");
                             }
                         }
                     }
@@ -273,20 +286,23 @@ public class ArenaRegen extends JavaPlugin{
         for (Map.Entry<String, RegionData> entry : registeredRegions.entrySet()) {
             String arenaName = entry.getKey();
             RegionData regionData = entry.getValue();
-            
+
             if (regionData.isLocked()) {
                 if (!regeneratingArenas.contains(arenaName)) {
                     regionData.setLocked(false);
                     unlockedCount++;
-                    logger.info(ARChatColor.YELLOW + "Unlocked arena '" + arenaName + "' during startup (was locked but not regenerating).");
+                    logger.info(ARChatColor.YELLOW + "Unlocked arena '" + arenaName
+                            + "' during startup (was locked but not regenerating).");
                 } else {
-                    logger.info(ARChatColor.YELLOW + "Keeping arena '" + arenaName + "' locked during startup (currently regenerating).");
+                    logger.info(ARChatColor.YELLOW + "Keeping arena '" + arenaName
+                            + "' locked during startup (currently regenerating).");
                 }
             }
         }
-        
+
         if (unlockedCount > 0) {
-            logger.info(ARChatColor.GREEN + "Unlocked " + unlockedCount + " arena(s) after server restart to prevent access issues.");
+            logger.info(ARChatColor.GREEN + "Unlocked " + unlockedCount
+                    + " arena(s) after server restart to prevent access issues.");
         }
     }
 
@@ -296,7 +312,8 @@ public class ArenaRegen extends JavaPlugin{
 
         if (!arenasDir.canWrite()) {
             logger.info(ARChatColor.RED + "ERROR: Cannot write to arenas directory (" + arenasDir.getPath() + ")!");
-            logger.info(ARChatColor.RED + "Please check file permissions to ensure the server process has write access.");
+            logger.info(
+                    ARChatColor.RED + "Please check file permissions to ensure the server process has write access.");
             return;
         }
 
@@ -333,9 +350,11 @@ public class ArenaRegen extends JavaPlugin{
                         logger.info("Saved region '" + regionName + "' to " + datcFile.getPath());
                     })
                     .exceptionally(e -> {
-                        logger.info("Failed to save region '" + regionName + "' to " + datcFile.getPath() + ": " + e.getMessage());
+                        logger.info("Failed to save region '" + regionName + "' to " + datcFile.getPath() + ": "
+                                + e.getMessage());
                         errorSummary.append(ARChatColor.RED)
-                                .append(" - Region '").append(regionName).append("': ").append(e.getMessage()).append("\n");
+                                .append(" - Region '").append(regionName).append("': ").append(e.getMessage())
+                                .append("\n");
                         return null;
                     });
             saveFutures.add(saveFuture);
@@ -344,14 +363,16 @@ public class ArenaRegen extends JavaPlugin{
         CompletableFuture.allOf(saveFutures.toArray(new CompletableFuture[0]))
                 .thenRun(() -> {
                     int totalSaved = savedRegions.get();
-                    console.sendMessage("Successfully saved " + totalSaved + " out of " + regionsToProcess.size() + " dirty regions.");
+                    console.sendMessage("Successfully saved " + totalSaved + " out of " + regionsToProcess.size()
+                            + " dirty regions.");
 
                     if (totalSaved < regionsToProcess.size()) {
                         console.sendMessage(ARChatColor.RED + "Errors occurred while saving the following regions:");
                         console.sendMessage(errorSummary.toString());
                         for (Player player : Bukkit.getOnlinePlayers()) {
                             if (player.isOp()) {
-                                player.sendMessage(prefix + " " + ARChatColor.RED + "Failed to save some arenas! Check the server logs for details.");
+                                player.sendMessage(prefix + " " + ARChatColor.RED
+                                        + "Failed to save some arenas! Check the server logs for details.");
                             }
                         }
                     } else {
@@ -364,7 +385,8 @@ public class ArenaRegen extends JavaPlugin{
     }
 
     public void loadConfigValues() {
-        this.prefix = ChatColor.translateAlternateColorCodes('&', getConfig().getString("prefix", "&e[&2ArenaRegen&e]"));
+        this.prefix = ChatColor.translateAlternateColorCodes('&',
+                getConfig().getString("prefix", "&e[&2ArenaRegen&e]"));
         this.regenType = getConfig().getString("regen.regen-speed-type", "PRESET").toUpperCase();
         this.regenSpeed = getConfig().getString("regen.regen-speed", "FAST").toUpperCase();
         this.customRegenSpeed = getConfig().getInt("regen.custom-regen-speed", 10000);
@@ -432,8 +454,7 @@ public class ArenaRegen extends JavaPlugin{
             "arenaregen.reload",
             "arenaregen.help",
             "arenaregen.select",
-            "arenaregen.unlock"
-    );
+            "arenaregen.unlock");
 
     public static boolean hasAnyPermissions(Player player) {
         for (String permission : ARENAREGEN_PERMISSIONS) {
@@ -483,7 +504,6 @@ public class ArenaRegen extends JavaPlugin{
         scheduledTasks.put(arenaName, taskId);
         scheduledIntervals.put(arenaName, intervalTicks);
         taskStartTimes.put(arenaName, System.currentTimeMillis());
-        
 
         saveSchedules();
 
@@ -527,13 +547,16 @@ public class ArenaRegen extends JavaPlugin{
         schedulesConfig = YamlConfiguration.loadConfiguration(schedulesFile);
 
         if (schedulesConfig.contains("schedules")) {
-            for (String arenaName : Objects.requireNonNull(schedulesConfig.getConfigurationSection("schedules")).getKeys(false)) {
+            for (String arenaName : Objects.requireNonNull(schedulesConfig.getConfigurationSection("schedules"))
+                    .getKeys(false)) {
                 long intervalTicks = schedulesConfig.getLong("schedules." + arenaName + ".interval");
                 if (intervalTicks >= 200) {
                     scheduledIntervals.put(arenaName, intervalTicks);
-                    long startTime = schedulesConfig.getLong("schedules." + arenaName + ".startTime", System.currentTimeMillis());
+                    long startTime = schedulesConfig.getLong("schedules." + arenaName + ".startTime",
+                            System.currentTimeMillis());
                     taskStartTimes.put(arenaName, startTime);
-                    getLogger().info("Loaded schedule for " + arenaName + ": interval=" + intervalTicks + ", startTime=" + startTime);
+                    getLogger().info("Loaded schedule for " + arenaName + ": interval=" + intervalTicks + ", startTime="
+                            + startTime);
                 }
             }
         }
@@ -559,11 +582,13 @@ public class ArenaRegen extends JavaPlugin{
             long intervalTicks = entry.getValue();
             if (registeredRegions.containsKey(arenaName)) {
                 Runnable regenerateTask = createRegenerateTask(arenaName);
-                int taskId = Bukkit.getScheduler().runTaskTimer(this, regenerateTask, intervalTicks, intervalTicks).getTaskId();
+                int taskId = Bukkit.getScheduler().runTaskTimer(this, regenerateTask, intervalTicks, intervalTicks)
+                        .getTaskId();
                 scheduledTasks.put(arenaName, taskId);
                 if (!taskStartTimes.containsKey(arenaName)) {
                     taskStartTimes.put(arenaName, System.currentTimeMillis());
-                    getLogger().info("Set start time for " + arenaName + " to " + taskStartTimes.get(arenaName) + " during reschedule");
+                    getLogger().info("Set start time for " + arenaName + " to " + taskStartTimes.get(arenaName)
+                            + " during reschedule");
                 }
             } else {
                 scheduledIntervals.remove(arenaName);
@@ -573,8 +598,6 @@ public class ArenaRegen extends JavaPlugin{
         saveSchedules();
     }
 
-
-
     public void regenerateArena(String arenaName, CommandSender sender) {
         regenerateArena(arenaName, sender, 0);
     }
@@ -583,7 +606,8 @@ public class ArenaRegen extends JavaPlugin{
         synchronized (regeneratingArenas) {
             if (regeneratingArenas.contains(arenaName)) {
                 if (sender != null) {
-                    sender.sendMessage(prefix + ChatColor.RED + " Arena '" + arenaName + "' is already being regenerated. Please wait until the current regeneration is complete.");
+                    sender.sendMessage(prefix + ChatColor.RED + " Arena '" + arenaName
+                            + "' is already being regenerated. Please wait until the current regeneration is complete.");
                 }
                 return;
             }
@@ -610,22 +634,25 @@ public class ArenaRegen extends JavaPlugin{
                 logger.info("[ArenaRegen] Removed from regeneratingArenas (world not loaded): " + arenaName);
             }
             if (sender != null) {
-                sender.sendMessage(prefix + ChatColor.RED + " World '" + regionData.getWorldName() + "' is not loaded. Cannot regenerate arena.");
+                sender.sendMessage(prefix + ChatColor.RED + " World '" + regionData.getWorldName()
+                        + "' is not loaded. Cannot regenerate arena.");
             }
             return;
         }
 
         if (!regionData.isBlockDataLoaded()) {
             if (sender != null) {
-                sender.sendMessage(prefix + ChatColor.YELLOW + " Arena region data not loaded yet, loading... Please wait.");
+                sender.sendMessage(
+                        prefix + ChatColor.YELLOW + " Arena region data not loaded yet, loading... Please wait.");
             }
-            
+
             logger.info("[ArenaRegen] Block data not loaded for arena '" + arenaName + "', starting load process...");
-            logger.info("[ArenaRegen] Arena file: " + (regionData.getDatcFile() != null ? regionData.getDatcFile().getAbsolutePath() : "null"));
+            logger.info("[ArenaRegen] Arena file: "
+                    + (regionData.getDatcFile() != null ? regionData.getDatcFile().getAbsolutePath() : "null"));
             logger.info("[ArenaRegen] World name: " + regionData.getWorldName());
-            
+
             CompletableFuture<Void> loadFuture = regionData.ensureBlockDataLoaded();
-            
+
             CompletableFuture<Void> timeoutFuture = CompletableFuture.runAsync(() -> {
                 try {
                     Thread.sleep(15000);
@@ -633,64 +660,76 @@ public class ArenaRegen extends JavaPlugin{
                     Thread.currentThread().interrupt();
                 }
             });
-            
-            CompletableFuture.anyOf(loadFuture, timeoutFuture).thenAccept(result -> Bukkit.getScheduler().runTask(this, () -> {
-                synchronized (regeneratingArenas) {
-                    if (!regeneratingArenas.contains(arenaName)) {
-                        logger.info("[ArenaRegen] Arena '" + arenaName + "' no longer in regenerating state, aborting");
-                        return;
-                    }
-                }
 
-                if (result == timeoutFuture) {
-                    synchronized (regeneratingArenas) {
-                        regeneratingArenas.remove(arenaName);
-                        logger.info("[ArenaRegen] Removed from regeneratingArenas (timeout): " + arenaName);
-                    }
-                    if (sender != null) {
-                        sender.sendMessage(prefix + ChatColor.RED + " Failed to load arena data: timeout after 15 seconds. Please try again.");
-                    }
-                    return;
-                }
-
-                logger.info("[ArenaRegen] Load future completed for arena '" + arenaName + "', checking if data is loaded...");
-                if (!regionData.isBlockDataLoaded()) {
-                    synchronized (regeneratingArenas) {
-                        regeneratingArenas.remove(arenaName);
-                        logger.info("[ArenaRegen] Removed from regeneratingArenas (data still not loaded): " + arenaName);
-                    }
-                    if (sender != null) {
-                        sender.sendMessage(prefix + ChatColor.RED + " Failed to load arena data. The arena file may be corrupted.");
-                    }
-                    return;
-                }
-
-                logger.info("[ArenaRegen] Block data successfully loaded for arena '" + arenaName + "', proceeding with regeneration");
-                proceedWithRegeneration(arenaName, sender, regionData, world);
-            })).exceptionally(e -> {
-                Bukkit.getScheduler().runTask(this, () -> {
-                    synchronized (regeneratingArenas) {
-                        regeneratingArenas.remove(arenaName);
-                        logger.info("[ArenaRegen] Removed from regeneratingArenas (exception): " + arenaName);
-                    }
-                    
-                    logger.info("[ArenaRegen] Exception during block data loading for arena '" + arenaName + "': " + e.getMessage());
-                    for (StackTraceElement element : e.getStackTrace()) {
-                        getLogger().warning("    at " + element);
-                    }
-                    
-                    if (retryCount < 3) {
-                        logger.info("[ArenaRegen] Retrying regeneration for '" + arenaName + "' (attempt " + (retryCount + 1) + "/3)");
-                        Bukkit.getScheduler().runTaskLater(this, () -> regenerateArena(arenaName, sender, retryCount + 1), 20L);
-                    } else {
-                        logger.info("[ArenaRegen] Failed to load region data for arena '" + arenaName + "' after " + retryCount + " attempts: " + e.getMessage());
-                        if (sender != null) {
-                            sender.sendMessage(prefix + ChatColor.RED + " Failed to load arena data after several attempts. This arena may be corrupted or missing. Please contact an admin or try recreating the arena.");
+            CompletableFuture.anyOf(loadFuture, timeoutFuture)
+                    .thenAccept(result -> Bukkit.getScheduler().runTask(this, () -> {
+                        synchronized (regeneratingArenas) {
+                            if (!regeneratingArenas.contains(arenaName)) {
+                                logger.info("[ArenaRegen] Arena '" + arenaName
+                                        + "' no longer in regenerating state, aborting");
+                                return;
+                            }
                         }
-                    }
-                });
-                return null;
-            });
+
+                        if (result == timeoutFuture) {
+                            synchronized (regeneratingArenas) {
+                                regeneratingArenas.remove(arenaName);
+                                logger.info("[ArenaRegen] Removed from regeneratingArenas (timeout): " + arenaName);
+                            }
+                            if (sender != null) {
+                                sender.sendMessage(prefix + ChatColor.RED
+                                        + " Failed to load arena data: timeout after 15 seconds. Please try again.");
+                            }
+                            return;
+                        }
+
+                        logger.info("[ArenaRegen] Load future completed for arena '" + arenaName
+                                + "', checking if data is loaded...");
+                        if (!regionData.isBlockDataLoaded()) {
+                            synchronized (regeneratingArenas) {
+                                regeneratingArenas.remove(arenaName);
+                                logger.info("[ArenaRegen] Removed from regeneratingArenas (data still not loaded): "
+                                        + arenaName);
+                            }
+                            if (sender != null) {
+                                sender.sendMessage(prefix + ChatColor.RED
+                                        + " Failed to load arena data. The arena file may be corrupted.");
+                            }
+                            return;
+                        }
+
+                        logger.info("[ArenaRegen] Block data successfully loaded for arena '" + arenaName
+                                + "', proceeding with regeneration");
+                        proceedWithRegeneration(arenaName, sender, regionData, world);
+                    })).exceptionally(e -> {
+                        Bukkit.getScheduler().runTask(this, () -> {
+                            synchronized (regeneratingArenas) {
+                                regeneratingArenas.remove(arenaName);
+                                logger.info("[ArenaRegen] Removed from regeneratingArenas (exception): " + arenaName);
+                            }
+
+                            logger.info("[ArenaRegen] Exception during block data loading for arena '" + arenaName
+                                    + "': " + e.getMessage());
+                            for (StackTraceElement element : e.getStackTrace()) {
+                                getLogger().warning("    at " + element);
+                            }
+
+                            if (retryCount < 3) {
+                                logger.info("[ArenaRegen] Retrying regeneration for '" + arenaName + "' (attempt "
+                                        + (retryCount + 1) + "/3)");
+                                Bukkit.getScheduler().runTaskLater(this,
+                                        () -> regenerateArena(arenaName, sender, retryCount + 1), 20L);
+                            } else {
+                                logger.info("[ArenaRegen] Failed to load region data for arena '" + arenaName
+                                        + "' after " + retryCount + " attempts: " + e.getMessage());
+                                if (sender != null) {
+                                    sender.sendMessage(prefix + ChatColor.RED
+                                            + " Failed to load arena data after several attempts. This arena may be corrupted or missing. Please contact an admin or try recreating the arena.");
+                                }
+                            }
+                        });
+                        return null;
+                    });
             return;
         }
 
@@ -700,9 +739,9 @@ public class ArenaRegen extends JavaPlugin{
     private void proceedWithRegeneration(String arenaName, CommandSender sender, RegionData regionData, World world) {
         try {
             regionData.getSectionedBlockData().thenApplyAsync(sectionedBlockData -> {
-                
+
                 if (sectionedBlockData.isEmpty()) {
-                    return null; 
+                    return null;
                 }
 
                 List<String> sectionNames = new ArrayList<>(sectionedBlockData.keySet());
@@ -712,7 +751,6 @@ public class ArenaRegen extends JavaPlugin{
                     sectionBlockLists.put(sectionName, new ArrayList<>(section.entrySet()));
                 }
 
-                
                 return new Object[] { sectionNames, sectionBlockLists };
             }).thenAccept(preparedData -> Bukkit.getScheduler().runTask(this, () -> {
                 try {
@@ -722,7 +760,8 @@ public class ArenaRegen extends JavaPlugin{
                             logger.info("[ArenaRegen] Removed from regeneratingArenas (no sections): " + arenaName);
                         }
                         if (sender != null) {
-                            sender.sendMessage(prefix + ChatColor.RED + " No sections found for region '" + arenaName + "'.");
+                            sender.sendMessage(
+                                    prefix + ChatColor.RED + " No sections found for region '" + arenaName + "'.");
                         }
                         return;
                     }
@@ -730,20 +769,20 @@ public class ArenaRegen extends JavaPlugin{
                     @SuppressWarnings("unchecked")
                     List<String> sectionNames = (List<String>) preparedData[0];
                     @SuppressWarnings("unchecked")
-                    Map<String, List<Map.Entry<Location, BlockData>>> sectionBlockLists =
-                            (Map<String, List<Map.Entry<Location, BlockData>>>) preparedData[1];
+                    Map<String, List<Map.Entry<Location, BlockData>>> sectionBlockLists = (Map<String, List<Map.Entry<Location, BlockData>>>) preparedData[1];
 
                     boolean wasLocked = regionData.isLocked();
                     if (lockDuringRegeneration && !wasLocked) {
                         regionData.setLocked(true);
-                        logger.info("[ArenaRegen] Locked arena '" + arenaName + "' for regeneration (lock-arenas config: " + lockDuringRegeneration + ")");
+                        logger.info("[ArenaRegen] Locked arena '" + arenaName
+                                + "' for regeneration (lock-arenas config: " + lockDuringRegeneration + ")");
                     } else if (!lockDuringRegeneration) {
-                        logger.info("[ArenaRegen] Arena locking is disabled in config for '" + arenaName + "' (lock-arenas: " + lockDuringRegeneration + ")");
+                        logger.info("[ArenaRegen] Arena locking is disabled in config for '" + arenaName
+                                + "' (lock-arenas: " + lockDuringRegeneration + ")");
                     } else {
                         logger.info("[ArenaRegen] Arena '" + arenaName + "' was already locked before regeneration");
                     }
 
-                    
                     final int minX = regionData.getMinX();
                     final int minY = regionData.getMinY();
                     final int minZ = regionData.getMinZ();
@@ -765,11 +804,14 @@ public class ArenaRegen extends JavaPlugin{
                         if (cancelRegen) {
                             synchronized (regeneratingArenas) {
                                 regeneratingArenas.remove(arenaName);
-                                logger.info("[ArenaRegen] Removed from regeneratingArenas (players inside): " + arenaName);
+                                logger.info(
+                                        "[ArenaRegen] Removed from regeneratingArenas (players inside): " + arenaName);
                             }
-                            logger.info(ChatColor.RED + "Regeneration of '" + arenaName + "' canceled due to players inside the arena.");
+                            logger.info(ChatColor.RED + "Regeneration of '" + arenaName
+                                    + "' canceled due to players inside the arena.");
                             if (sender != null) {
-                                sender.sendMessage(prefix + ChatColor.RED + " Regeneration canceled due to players inside the arena.");
+                                sender.sendMessage(prefix + ChatColor.RED
+                                        + " Regeneration canceled due to players inside the arena.");
                             }
                             return;
                         }
@@ -779,12 +821,14 @@ public class ArenaRegen extends JavaPlugin{
                                 players.setHealth(0.0);
                             }
                             if (teleport) {
-                                Location targetLocation = parseTeleportLocation(players, teleportLocation, regionData, arenaName);
+                                Location targetLocation = parseTeleportLocation(players, teleportLocation, regionData,
+                                        arenaName);
                                 players.teleport(targetLocation);
                             }
                             if (executeCommands && !commands.isEmpty()) {
                                 for (String cmd : commands) {
-                                    Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd.replace("%player%", players.getName()));
+                                    Bukkit.dispatchCommand(Bukkit.getConsoleSender(),
+                                            cmd.replace("%player%", players.getName()));
                                 }
                             }
                         }
@@ -799,42 +843,41 @@ public class ArenaRegen extends JavaPlugin{
                                             loc.getZ() >= minZ && loc.getZ() <= maxZ;
                                 })
                                 .forEach(e -> {
-                                    if (!(e instanceof Player)) e.remove();
+                                    if (!(e instanceof Player))
+                                        e.remove();
                                 });
                     }
 
                     if (sender != null) {
-                        sender.sendMessage(prefix + ChatColor.YELLOW + " Regenerating region '" + arenaName + "', please wait...");
+                        sender.sendMessage(
+                                prefix + ChatColor.YELLOW + " Regenerating region '" + arenaName + "', please wait...");
                     }
 
-                    
                     int baseBlocksPerTick = regenType.equals("PRESET") ? switch (regenSpeed.toUpperCase()) {
                         case "SLOW" -> 1000;
                         case "NORMAL" -> 10000;
                         case "FAST" -> 40000;
                         case "VERYFAST" -> 100000;
-                        case "EXTREME" -> 250000; 
+                        case "EXTREME" -> 4000000;
                         default -> 10000;
-                    } : Math.min(250000, customRegenSpeed); 
+                    } : customRegenSpeed;
 
                     AtomicInteger sectionIndex = new AtomicInteger(0);
                     AtomicInteger totalBlocksReset = new AtomicInteger(0);
                     long startTime = System.currentTimeMillis();
-                    Set<Long> chunkCoordsToRefresh = new HashSet<>(); 
+                    Set<Long> chunkCoordsToRefresh = new HashSet<>();
                     Map<String, Integer> sectionProgress = new HashMap<>();
 
-                    
                     Map<Long, Chunk> chunkCache = new HashMap<>();
 
-                    
                     final boolean usingPaper = isPaper;
 
                     Bukkit.getScheduler().runTaskTimer(this, task -> {
-                        
+
                         int blocksPerTick = baseBlocksPerTick;
                         if (usingPaper) {
                             double currentTps = getServerTPS();
-                            if (currentTps > 0) { 
+                            if (currentTps > 0) {
                                 if (currentTps < 15.0) {
                                     blocksPerTick = baseBlocksPerTick / 4;
                                 } else if (currentTps < 18.0) {
@@ -853,7 +896,8 @@ public class ArenaRegen extends JavaPlugin{
                                     try {
                                         EntitySerializer.deserializeEntity(serializedEntity, loc);
                                     } catch (Exception e) {
-                                        getLogger().warning("Failed to restore entity at " + loc + ": " + e.getMessage());
+                                        getLogger()
+                                                .warning("Failed to restore entity at " + loc + ": " + e.getMessage());
                                     }
                                 }
                             }
@@ -867,19 +911,23 @@ public class ArenaRegen extends JavaPlugin{
                                     BlockState state = world.getBlockAt(loc).getState();
                                     if (state instanceof Banner banner) {
                                         String baseColorStr = (String) bannerData.get("baseColor");
-                                        DyeColor baseColor = baseColorStr.equals("NONE") ? null : DyeColor.valueOf(baseColorStr);
+                                        DyeColor baseColor = baseColorStr.equals("NONE") ? null
+                                                : DyeColor.valueOf(baseColorStr);
                                         banner.setBaseColor(Objects.requireNonNull(baseColor));
 
-                                        List<Map<String, String>> patternDataList = (List<Map<String, String>>) bannerData.get("patterns");
+                                        List<Map<String, String>> patternDataList = (List<Map<String, String>>) bannerData
+                                                .get("patterns");
                                         if (patternDataList != null && !patternDataList.isEmpty()) {
                                             List<Pattern> patterns = new ArrayList<>();
                                             for (Map<String, String> patternData : patternDataList) {
                                                 DyeColor color = DyeColor.valueOf(patternData.get("color"));
                                                 String typeStr = patternData.get("type");
                                                 NamespacedKey key = new NamespacedKey("minecraft", typeStr);
-                                                PatternType patternType = Bukkit.getRegistry(PatternType.class).get(key);
+                                                PatternType patternType = Bukkit.getRegistry(PatternType.class)
+                                                        .get(key);
                                                 if (patternType == null) {
-                                                    getLogger().warning("Invalid pattern type '" + typeStr + "' for banner at " + loc + ", defaulting to base.");
+                                                    getLogger().warning("Invalid pattern type '" + typeStr
+                                                            + "' for banner at " + loc + ", defaulting to base.");
                                                     patternType = PatternType.BASE;
                                                 }
                                                 patterns.add(new Pattern(color, patternType));
@@ -887,13 +935,15 @@ public class ArenaRegen extends JavaPlugin{
                                             banner.setPatterns(patterns);
                                         }
 
-                                        Map<String, Object> pdcData = (Map<String, Object>) bannerData.get("persistentData");
+                                        Map<String, Object> pdcData = (Map<String, Object>) bannerData
+                                                .get("persistentData");
                                         if (pdcData != null && !pdcData.isEmpty()) {
                                             PersistentDataContainer pdc = banner.getPersistentDataContainer();
                                             for (Map.Entry<String, Object> pdcEntry : pdcData.entrySet()) {
                                                 NamespacedKey key = NamespacedKey.fromString(pdcEntry.getKey());
                                                 if (key == null) {
-                                                    getLogger().warning("Invalid NamespacedKey '" + pdcEntry.getKey() + "' for banner at " + loc + ", skipping PDC entry.");
+                                                    getLogger().warning("Invalid NamespacedKey '" + pdcEntry.getKey()
+                                                            + "' for banner at " + loc + ", skipping PDC entry.");
                                                     continue;
                                                 }
                                                 Object value = pdcEntry.getValue();
@@ -908,14 +958,16 @@ public class ArenaRegen extends JavaPlugin{
                                                 } else if (value instanceof Long l) {
                                                     pdc.set(key, PersistentDataType.LONG, l);
                                                 } else {
-                                                    getLogger().warning("Unsupported PDC value type for key " + key + " at " + loc + ", skipping.");
+                                                    getLogger().warning("Unsupported PDC value type for key " + key
+                                                            + " at " + loc + ", skipping.");
                                                 }
                                             }
                                         }
 
                                         banner.update();
                                     } else {
-                                        getLogger().warning("Block at " + loc + " is not a banner, cannot restore banner state.");
+                                        getLogger().warning(
+                                                "Block at " + loc + " is not a banner, cannot restore banner state.");
                                     }
                                 } catch (Exception e) {
                                     getLogger().warning("Failed to restore banner at " + loc + ": " + e.getMessage());
@@ -942,20 +994,23 @@ public class ArenaRegen extends JavaPlugin{
                                         try {
                                             color = DyeColor.valueOf(colorStr);
                                         } catch (IllegalArgumentException e) {
-                                            getLogger().warning("Invalid color '" + colorStr + "' for sign at " + loc + ", defaulting to BLACK.");
+                                            getLogger().warning("Invalid color '" + colorStr + "' for sign at " + loc
+                                                    + ", defaulting to BLACK.");
                                         }
                                         sign.setColor(color);
 
                                         boolean glowing = (boolean) signData.getOrDefault("glowing", false);
                                         sign.setGlowingText(glowing);
 
-                                        Map<String, Object> pdcData = (Map<String, Object>) signData.get("persistentData");
+                                        Map<String, Object> pdcData = (Map<String, Object>) signData
+                                                .get("persistentData");
                                         if (pdcData != null && !pdcData.isEmpty()) {
                                             PersistentDataContainer pdc = sign.getPersistentDataContainer();
                                             for (Map.Entry<String, Object> pdcEntry : pdcData.entrySet()) {
                                                 NamespacedKey key = NamespacedKey.fromString(pdcEntry.getKey());
                                                 if (key == null) {
-                                                    getLogger().warning("Invalid NamespacedKey '" + pdcEntry.getKey() + "' for sign at " + loc + ", skipping PDC entry.");
+                                                    getLogger().warning("Invalid NamespacedKey '" + pdcEntry.getKey()
+                                                            + "' for sign at " + loc + ", skipping PDC entry.");
                                                     continue;
                                                 }
                                                 Object value = pdcEntry.getValue();
@@ -970,23 +1025,24 @@ public class ArenaRegen extends JavaPlugin{
                                                 } else if (value instanceof Long l) {
                                                     pdc.set(key, PersistentDataType.LONG, l);
                                                 } else {
-                                                    getLogger().warning("Unsupported PDC value type for key " + key + " at " + loc + ", skipping.");
+                                                    getLogger().warning("Unsupported PDC value type for key " + key
+                                                            + " at " + loc + ", skipping.");
                                                 }
                                             }
                                         }
 
                                         sign.update();
                                     } else {
-                                        getLogger().warning("Block at " + loc + " is not a sign, cannot restore sign state.");
+                                        getLogger().warning(
+                                                "Block at " + loc + " is not a sign, cannot restore sign state.");
                                     }
                                 } catch (Exception e) {
                                     getLogger().warning("Failed to restore sign at " + loc + ": " + e.getMessage());
                                 }
                             }
 
-
                             Bukkit.getScheduler().runTaskLater(this, () -> {
-                                
+
                                 Set<Chunk> chunksToRefresh = new HashSet<>();
                                 for (long packedCoord : chunkCoordsToRefresh) {
                                     int chunkX = (int) (packedCoord >> 32);
@@ -996,16 +1052,19 @@ public class ArenaRegen extends JavaPlugin{
                                         if (chunk.isLoaded()) {
                                             chunksToRefresh.add(chunk);
                                         }
-                                    } catch (Exception ignored) {}
+                                    } catch (Exception ignored) {
+                                    }
                                 }
 
                                 Set<Chunk> extendedChunks = new HashSet<>(chunksToRefresh);
                                 for (Chunk chunk : chunksToRefresh) {
                                     for (int dx = -1; dx <= 1; dx++) {
                                         for (int dz = -1; dz <= 1; dz++) {
-                                            if (dx == 0 && dz == 0) continue;
+                                            if (dx == 0 && dz == 0)
+                                                continue;
                                             try {
-                                                Chunk neighborChunk = world.getChunkAt(chunk.getX() + dx, chunk.getZ() + dz);
+                                                Chunk neighborChunk = world.getChunkAt(chunk.getX() + dx,
+                                                        chunk.getZ() + dz);
                                                 if (neighborChunk.isLoaded()) {
                                                     extendedChunks.add(neighborChunk);
                                                 }
@@ -1014,13 +1073,16 @@ public class ArenaRegen extends JavaPlugin{
                                         }
                                     }
                                 }
-                                NMSHandlerFactoryProvider.getNMSHandler().relightChunks(world, new ArrayList<>(extendedChunks), new ArrayList<>());
-                            }, 40L); 
+                                NMSHandlerFactoryProvider.getNMSHandler().relightChunks(world,
+                                        new ArrayList<>(extendedChunks), new ArrayList<>());
+                            }, 40L);
 
                             long timeTaken = System.currentTimeMillis() - startTime;
                             if (sender != null) {
-                                sender.sendMessage(prefix + ChatColor.GREEN + " Regeneration of '" + arenaName + "' complete! " +
-                                        ChatColor.GRAY + " (" + totalBlocksReset.get() + " blocks reset in " + (timeTaken / 1000.0) + "s)");
+                                sender.sendMessage(
+                                        prefix + ChatColor.GREEN + " Regeneration of '" + arenaName + "' complete! " +
+                                                ChatColor.GRAY + " (" + totalBlocksReset.get() + " blocks reset in "
+                                                + (timeTaken / 1000.0) + "s)");
                             }
                             synchronized (regeneratingArenas) {
                                 regeneratingArenas.remove(arenaName);
@@ -1029,7 +1091,8 @@ public class ArenaRegen extends JavaPlugin{
                             task.cancel();
                             if (regionData.isLocked()) {
                                 regionData.setLocked(false);
-                                logger.info("[ArenaRegen] Unlocked arena '" + arenaName + "' after regeneration completed");
+                                logger.info(
+                                        "[ArenaRegen] Unlocked arena '" + arenaName + "' after regeneration completed");
                             }
                             return;
                         }
@@ -1052,31 +1115,32 @@ public class ArenaRegen extends JavaPlugin{
                                 BlockData currentData = block.getBlockData();
                                 shouldUpdate = !currentData.equals(originalData);
                                 if (shouldUpdate) {
-                                    updates.add(new BlockUpdate(block.getX(), block.getY(), block.getZ(), originalData));
-                                    
+                                    updates.add(
+                                            new BlockUpdate(block.getX(), block.getY(), block.getZ(), originalData));
+
                                     int chunkX = block.getX() >> 4;
                                     int chunkZ = block.getZ() >> 4;
                                     chunkCoordsToRefresh.add(((long) chunkX << 32) | (chunkZ & 0xFFFFFFFFL));
                                     totalBlocksReset.incrementAndGet();
                                 }
                             } else {
-                                updates.add(new BlockUpdate((int) loc.getX(), (int) loc.getY(), (int) loc.getZ(), originalData));
+                                updates.add(new BlockUpdate((int) loc.getX(), (int) loc.getY(), (int) loc.getZ(),
+                                        originalData));
                                 int chunkX = ((int) loc.getX()) >> 4;
                                 int chunkZ = ((int) loc.getZ()) >> 4;
-                                
+
                                 chunkCoordsToRefresh.add(((long) chunkX << 32) | (chunkZ & 0xFFFFFFFFL));
                                 totalBlocksReset.incrementAndGet();
                             }
                             blockIndex++;
                         }
 
-
-
                         if (!updates.isEmpty()) {
                             try {
                                 NMSHandlerFactoryProvider.getNMSHandler().setBlocks(world, updates);
                             } catch (Exception e) {
-                                logger.info(ChatColor.RED + "Failed to set blocks in section " + sectionName + ": " + e.getMessage());
+                                logger.info(ChatColor.RED + "Failed to set blocks in section " + sectionName + ": "
+                                        + e.getMessage());
                             }
                         }
 
@@ -1120,14 +1184,16 @@ public class ArenaRegen extends JavaPlugin{
 
     public Location getArenaSpawn(String arenaName) {
         RegionData regionData = getRegisteredRegions().get(arenaName);
-        if (regionData == null) return null;
+        if (regionData == null)
+            return null;
         return regionData.getSpawnLocation();
     }
 
     private Runnable createRegenerateTask(String arenaName) {
         return () -> {
             if (!registeredRegions.containsKey(arenaName)) {
-                logger.info(ChatColor.RED + "Scheduled regeneration failed: Arena '" + arenaName + "' no longer exists.");
+                logger.info(
+                        ChatColor.RED + "Scheduled regeneration failed: Arena '" + arenaName + "' no longer exists.");
                 cancelScheduledRegeneration(arenaName);
                 return;
             }
@@ -1169,11 +1235,13 @@ public class ArenaRegen extends JavaPlugin{
 
         Location spawn = regionData.getSpawnLocation();
         if (spawn == null) {
-            sender.sendMessage(prefix + ChatColor.YELLOW + " No spawn location set for '" + arenaName + "'. Showing boundaries only.");
+            sender.sendMessage(prefix + ChatColor.YELLOW + " No spawn location set for '" + arenaName
+                    + "'. Showing boundaries only.");
         }
 
         sender.sendMessage(prefix + ChatColor.YELLOW + " Previewing arena '" + arenaName + "' for 15 seconds...");
-        sender.sendMessage(prefix + ChatColor.GRAY + " Tip: Ensure your particle settings are set to 'All' or 'Decreased' in video settings to see particles.");
+        sender.sendMessage(prefix + ChatColor.GRAY
+                + " Tip: Ensure your particle settings are set to 'All' or 'Decreased' in video settings to see particles.");
 
         new BukkitRunnable() {
             int ticks = 0;
@@ -1190,31 +1258,45 @@ public class ArenaRegen extends JavaPlugin{
                 if (previewParticle == Particle.DUST) {
                     particleData = new Particle.DustOptions(Color.RED, 1.5f);
                 } else if (previewParticle == Particle.DUST_COLOR_TRANSITION) {
-                    logger.info(ChatColor.YELLOW + "[ArenaRegen] Particle DUST_COLOR_TRANSITION is not supported in this version. Falling back to FLAME.");
+                    logger.info(ChatColor.YELLOW
+                            + "[ArenaRegen] Particle DUST_COLOR_TRANSITION is not supported in this version. Falling back to FLAME.");
                     previewParticle = Particle.FLAME;
                 }
 
                 for (int x = minX - 1; x <= maxX + 1; x += 1) {
-                    world.spawnParticle(previewParticle, x + 0.5, (minY - 1) + 0.5, (minZ - 1) + 0.5, 3, 0, 0, 0, 0, particleData);
-                    world.spawnParticle(previewParticle, x + 0.5, (minY - 1) + 0.5, (maxZ + 1) + 0.5, 3, 0, 0, 0, 0, particleData);
-                    world.spawnParticle(previewParticle, x + 0.5, (maxY + 1) + 0.5, (minZ - 1) + 0.5, 3, 0, 0, 0, 0, particleData);
-                    world.spawnParticle(previewParticle, x + 0.5, (maxY + 1) + 0.5, (maxZ + 1) + 0.5, 3, 0, 0, 0, 0, particleData);
+                    world.spawnParticle(previewParticle, x + 0.5, (minY - 1) + 0.5, (minZ - 1) + 0.5, 3, 0, 0, 0, 0,
+                            particleData);
+                    world.spawnParticle(previewParticle, x + 0.5, (minY - 1) + 0.5, (maxZ + 1) + 0.5, 3, 0, 0, 0, 0,
+                            particleData);
+                    world.spawnParticle(previewParticle, x + 0.5, (maxY + 1) + 0.5, (minZ - 1) + 0.5, 3, 0, 0, 0, 0,
+                            particleData);
+                    world.spawnParticle(previewParticle, x + 0.5, (maxY + 1) + 0.5, (maxZ + 1) + 0.5, 3, 0, 0, 0, 0,
+                            particleData);
                 }
                 for (int z = minZ - 1; z <= maxZ + 1; z += 1) {
-                    world.spawnParticle(previewParticle, (minX - 1) + 0.5, (minY - 1) + 0.5, z + 0.5, 3, 0, 0, 0, 0, particleData);
-                    world.spawnParticle(previewParticle, (maxX + 1) + 0.5, (minY - 1) + 0.5, z + 0.5, 3, 0, 0, 0, 0, particleData);
-                    world.spawnParticle(previewParticle, (minX - 1) + 0.5, (maxY + 1) + 0.5, z + 0.5, 3, 0, 0, 0, 0, particleData);
-                    world.spawnParticle(previewParticle, (maxX + 1) + 0.5, (maxY + 1) + 0.5, z + 0.5, 3, 0, 0, 0, 0, particleData);
+                    world.spawnParticle(previewParticle, (minX - 1) + 0.5, (minY - 1) + 0.5, z + 0.5, 3, 0, 0, 0, 0,
+                            particleData);
+                    world.spawnParticle(previewParticle, (maxX + 1) + 0.5, (minY - 1) + 0.5, z + 0.5, 3, 0, 0, 0, 0,
+                            particleData);
+                    world.spawnParticle(previewParticle, (minX - 1) + 0.5, (maxY + 1) + 0.5, z + 0.5, 3, 0, 0, 0, 0,
+                            particleData);
+                    world.spawnParticle(previewParticle, (maxX + 1) + 0.5, (maxY + 1) + 0.5, z + 0.5, 3, 0, 0, 0, 0,
+                            particleData);
                 }
                 for (int y = minY - 1; y <= maxY + 1; y += 1) {
-                    world.spawnParticle(previewParticle, (minX - 1) + 0.5, y + 0.5, (minZ - 1) + 0.5, 3, 0, 0, 0, 0, particleData);
-                    world.spawnParticle(previewParticle, (maxX + 1) + 0.5, y + 0.5, (minZ - 1) + 0.5, 3, 0, 0, 0, 0, particleData);
-                    world.spawnParticle(previewParticle, (minX - 1) + 0.5, y + 0.5, (maxZ + 1) + 0.5, 3, 0, 0, 0, 0, particleData);
-                    world.spawnParticle(previewParticle, (maxX + 1) + 0.5, y + 0.5, (maxZ + 1) + 0.5, 3, 0, 0, 0, 0, particleData);
+                    world.spawnParticle(previewParticle, (minX - 1) + 0.5, y + 0.5, (minZ - 1) + 0.5, 3, 0, 0, 0, 0,
+                            particleData);
+                    world.spawnParticle(previewParticle, (maxX + 1) + 0.5, y + 0.5, (minZ - 1) + 0.5, 3, 0, 0, 0, 0,
+                            particleData);
+                    world.spawnParticle(previewParticle, (minX - 1) + 0.5, y + 0.5, (maxZ + 1) + 0.5, 3, 0, 0, 0, 0,
+                            particleData);
+                    world.spawnParticle(previewParticle, (maxX + 1) + 0.5, y + 0.5, (maxZ + 1) + 0.5, 3, 0, 0, 0, 0,
+                            particleData);
                 }
 
                 if (spawn != null) {
-                    world.spawnParticle(Particle.HAPPY_VILLAGER, spawn.getX(), spawn.getY() + 1, spawn.getZ(), 10, 0.5, 0.5, 0.5, 0, null);
+                    world.spawnParticle(Particle.HAPPY_VILLAGER, spawn.getX(), spawn.getY() + 1, spawn.getZ(), 10, 0.5,
+                            0.5, 0.5, 0, null);
                 }
 
                 ticks += 2;
@@ -1230,7 +1312,8 @@ public class ArenaRegen extends JavaPlugin{
                 previewParticle = Particle.FLAME;
             }
         } catch (IllegalArgumentException e) {
-            logger.info(ARChatColor.YELLOW + "Invalid particle type '" + previewParticleString + "' in config. Falling back to FLAME.");
+            logger.info(ARChatColor.YELLOW + "Invalid particle type '" + previewParticleString
+                    + "' in config. Falling back to FLAME.");
             previewParticle = Particle.FLAME;
         }
     }
@@ -1239,7 +1322,8 @@ public class ArenaRegen extends JavaPlugin{
         return regeneratingArenas.contains(arenaName);
     }
 
-    public boolean isOverlapping(String excludeRegionName, String worldName, int minX, int minY, int minZ, int maxX, int maxY, int maxZ) {
+    public boolean isOverlapping(String excludeRegionName, String worldName, int minX, int minY, int minZ, int maxX,
+            int maxY, int maxZ) {
         for (Map.Entry<String, RegionData> entry : registeredRegions.entrySet()) {
             String regionName = entry.getKey();
             if (regionName.equals(excludeRegionName)) {
@@ -1252,25 +1336,26 @@ public class ArenaRegen extends JavaPlugin{
             }
 
             if (minX <= region.getMaxX() && maxX >= region.getMinX() &&
-                minY <= region.getMaxY() && maxY >= region.getMinY() &&
-                minZ <= region.getMaxZ() && maxZ >= region.getMinZ()) {
+                    minY <= region.getMaxY() && maxY >= region.getMinY() &&
+                    minZ <= region.getMaxZ() && maxZ >= region.getMinZ()) {
                 return true;
             }
         }
         return false;
     }
 
-
     private boolean isRegionEmpty(RegionData region) {
-        if (region == null) return true;
+        if (region == null)
+            return true;
         return region.sectionedBlockData.isEmpty()
-            && region.getEntityDataMap().isEmpty()
-            && region.getBannerStates().isEmpty()
-            && region.getSignStates().isEmpty()
-            && region.getModifiedBlocks().isEmpty();
+                && region.getEntityDataMap().isEmpty()
+                && region.getBannerStates().isEmpty()
+                && region.getSignStates().isEmpty()
+                && region.getModifiedBlocks().isEmpty();
     }
 
-    public Location parseTeleportLocation(Player player, ConfigurationSection locSection, RegionData regionData, String arenaName) {
+    public Location parseTeleportLocation(Player player, ConfigurationSection locSection, RegionData regionData,
+            String arenaName) {
         String type = Objects.requireNonNull(locSection.getString("type")).toUpperCase();
         World world = player.getWorld();
 
@@ -1280,7 +1365,8 @@ public class ArenaRegen extends JavaPlugin{
 
             case "ARENA_SPAWN":
                 Location arenaLoc = regionData.getSpawnLocation();
-                if (arenaLoc != null) return arenaLoc;
+                if (arenaLoc != null)
+                    return arenaLoc;
                 getLogger().warning("No arena spawn was found for " + arenaName);
                 return null;
 
@@ -1288,8 +1374,10 @@ public class ArenaRegen extends JavaPlugin{
                 String worldName = locSection.getString("world", "UNCHANGED");
                 if (!worldName.equalsIgnoreCase("UNCHANGED")) {
                     World custom = Bukkit.getWorld(worldName);
-                    if (custom != null) world = custom;
-                    else getLogger().warning("CUSTOM world as teleport location is not a valid world!");
+                    if (custom != null)
+                        world = custom;
+                    else
+                        getLogger().warning("CUSTOM world as teleport location is not a valid world!");
                 }
                 break;
 
@@ -1320,7 +1408,8 @@ public class ArenaRegen extends JavaPlugin{
     }
 
     private double parseCoordinateSafe(String input, double base) {
-        if (input == null || input.trim().isEmpty()) return base;
+        if (input == null || input.trim().isEmpty())
+            return base;
         return parseCoordinate(input, base);
     }
 
@@ -1333,7 +1422,8 @@ public class ArenaRegen extends JavaPlugin{
 
         if (input.startsWith("~")) {
             String offset = input.substring(1).trim();
-            if (offset.isEmpty()) offset = "0";
+            if (offset.isEmpty())
+                offset = "0";
             return base + evalMath(offset);
         }
 
@@ -1342,7 +1432,8 @@ public class ArenaRegen extends JavaPlugin{
 
     private double evalMath(String expr) {
         expr = expr.trim();
-        if (expr.isEmpty()) return 0;
+        if (expr.isEmpty())
+            return 0;
 
         double result = 0;
         StringBuilder current = new StringBuilder();
@@ -1363,7 +1454,8 @@ public class ArenaRegen extends JavaPlugin{
             }
         }
 
-        if (current.isEmpty()) return result;
+        if (current.isEmpty())
+            return result;
         double finalVal = Double.parseDouble(current.toString());
         return applyOp(result, finalVal, lastOp);
     }
@@ -1372,18 +1464,17 @@ public class ArenaRegen extends JavaPlugin{
         return (op == '-') ? result - val : result + val;
     }
 
-    
     private double getServerTPS() {
         if (!isPaper) {
             return -1;
         }
         try {
-            
+
             java.lang.reflect.Method getTpsMethod = Bukkit.class.getMethod("getTPS");
             double[] tps = (double[]) getTpsMethod.invoke(null);
             return tps[0];
         } catch (Exception e) {
-            
+
             return -1;
         }
     }
