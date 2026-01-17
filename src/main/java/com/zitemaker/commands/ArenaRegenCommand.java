@@ -7,6 +7,8 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.md_5.bungee.api.chat.ClickEvent;
+import net.md_5.bungee.api.chat.ComponentBuilder;
+import net.md_5.bungee.api.chat.HoverEvent;
 import net.md_5.bungee.api.chat.TextComponent;
 import org.bukkit.*;
 import org.bukkit.block.data.BlockData;
@@ -45,6 +47,45 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
 
     public ArenaRegenCommand(ArenaRegen plugin) {
         this.plugin = plugin;
+        this.helpPages = new HashMap<>();
+        initializeHelpPages();
+    }
+
+    private static final String PREFIX = "§9§l"; 
+    private static final String COMMAND = "§b"; 
+    private static final String DESCRIPTION = "§7"; 
+    private static final String HEADER = "§3§l"; 
+    private static final String FOOTER = "§8"; 
+
+    private final Map<Integer, String[]> helpPages;
+
+    private void initializeHelpPages() {
+        helpPages.put(1, new String[] {
+                "Arena Creation & Management:",
+                "/arenaregen create <arena> - Create a new arena",
+                "/arenaregen delete <arena> - Delete an arena",
+                "/arenaregen resize <arena> - Resize an arena",
+                "/arenaregen list - List all arenas",
+                "/arenaregen wand - Get the selection tool"
+        });
+
+        helpPages.put(2, new String[] {
+                "Regeneration & Spawns:",
+                "/arenaregen regenerate <arena> - Regenerate an arena",
+                "/arenaregen here - Regenerate the arena you're standing in",
+                "/arenaregen schedule - Schedule a regeneration timer",
+                "/arenaregen setspawn <arena> - Set spawn for an arena",
+                "/arenaregen delspawn <arena> - Remove spawn from an arena",
+                "/arenaregen teleport <arena> - Teleport to an arena"
+        });
+
+        helpPages.put(3, new String[] {
+                "Utility & Settings:",
+                "/arenaregen preview <arena> - Preview the borders of an arena",
+                "/arenaregen unlock [arena] - Unlock arena(s) that are stuck",
+                "/arenaregen reload - Reload configuration",
+                "/arenaregen help - Show this command"
+        });
     }
 
     public long arenaSizeLimit;
@@ -222,8 +263,6 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
 
                                 regionData.setBlockDataLoaded(true);
 
-                                
-                                
                                 regionData.saveToDatc(datcFile)
                                         .thenRun(() -> Bukkit.getScheduler().runTask(plugin, () -> {
                                             plugin.markRegionDirty(regionName);
@@ -231,7 +270,8 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                                             if (plugin.getPlayerMoveListener() != null) {
                                                 plugin.getPlayerMoveListener().updateRegionBounds();
                                             }
-                                            commandSender.sendMessage(regionCreated.replace("{arena_name}", regionName));
+                                            commandSender
+                                                    .sendMessage(regionCreated.replace("{arena_name}", regionName));
                                         }))
                                         .exceptionally(e -> {
                                             Bukkit.getScheduler().runTask(plugin, () -> {
@@ -803,26 +843,12 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                     return true;
                 }
 
-                commandSender.sendMessage(ChatColor.GOLD + "=== ArenaRegen Commands ===");
-                commandSender.sendMessage(ChatColor.GREEN + "/arenaregen create <arena> - Create a new arena");
-                commandSender.sendMessage(ChatColor.GREEN + "/arenaregen delete <arena> - Delete an arena");
-                commandSender.sendMessage(ChatColor.GREEN + "/arenaregen resize <arena> - Resize an arena");
-                commandSender.sendMessage(ChatColor.GREEN + "/arenaregen regenerate <arena> - Regenerate an arena");
-                commandSender
-                        .sendMessage(ChatColor.GREEN + "/arenaregen here - Regenerate the arena you're standing in");
-                commandSender.sendMessage(ChatColor.GREEN + "/arenaregen setspawn <arena> - Set spawn for an arena");
-                commandSender
-                        .sendMessage(ChatColor.GREEN + "/arenaregen delspawn <arena> - Remove spawn from an arena");
-                commandSender.sendMessage(ChatColor.GREEN + "/arenaregen teleport <arena> - Teleport to an arena");
-                commandSender.sendMessage(ChatColor.GREEN + "/arenaregen list - List all arenas");
-                commandSender.sendMessage(ChatColor.GREEN + "/arenaregen reload - Reload configuration");
-                commandSender.sendMessage(ChatColor.GREEN + "/arenaregen help - Show this command.");
-                commandSender.sendMessage(ChatColor.GREEN + "/arenaregen wand - Get the selection tool");
-                commandSender.sendMessage(ChatColor.GREEN + "/arenaregen schedule - Schedule a regeneration timer");
-                commandSender.sendMessage(
-                        ChatColor.GREEN + "/arenaregen preview - Preview the borders of an arena using particles");
-                commandSender.sendMessage(ChatColor.GREEN
-                        + "/arenaregen unlock [arena] - Unlock arena(s) that are stuck in locked state");
+                int page = determineRequestedPage(strings.length > 1 ? new String[] { strings[1] } : new String[] {});
+                if (!isValidPage(page)) {
+                    commandSender.sendMessage(FOOTER + "Invalid page number. Available pages: 1-" + helpPages.size());
+                    return true;
+                }
+                displayHelpPage(commandSender, page);
                 return true;
             }
 
@@ -1204,7 +1230,6 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
         return filtered;
     }
 
-    
     public void giveSelectionTool(@NotNull Player player) {
         updateWandMaterial();
 
@@ -1412,5 +1437,68 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
             case "w" -> number * 20 * 60 * 60 * 24 * 7;
             default -> throw new IllegalArgumentException("Invalid time unit");
         };
+    }
+
+    private int determineRequestedPage(String[] args) {
+        if (args.length > 0) {
+            try {
+                return Integer.parseInt(args[0]);
+            } catch (NumberFormatException ignored) {
+                return 1;
+            }
+        }
+        return 1;
+    }
+
+    private boolean isValidPage(int page) {
+        return page > 0 && page <= helpPages.size();
+    }
+
+    private void displayHelpPage(CommandSender sender, int page) {
+        sender.sendMessage(HEADER + "➤ ArenaRegen Help " +
+                PREFIX + "(" + page + "/" + helpPages.size() + ") " + FOOTER + "»»»");
+
+        for (String line : helpPages.get(page)) {
+            if (line.contains(":")) {
+                sender.sendMessage(HEADER + "◆ " + line);
+            } else {
+                String[] parts = line.split(" - ", 2);
+                if (parts.length >= 2) {
+                    sender.sendMessage(COMMAND + parts[0] + DESCRIPTION + " - " + parts[1]);
+                } else {
+                    sender.sendMessage(COMMAND + parts[0]);
+                }
+            }
+        }
+
+        sender.sendMessage(FOOTER + "════════════════════════════════");
+
+        sendNavigationButtons(sender, page);
+    }
+
+    private void sendNavigationButtons(CommandSender sender, int page) {
+        TextComponent navButtons = new TextComponent(PREFIX + "« ");
+
+        if (page > 1) {
+            TextComponent prevButton = new TextComponent("§a⬅ Previous");
+            prevButton.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT,
+                    new ComponentBuilder("§7Click to view previous help page").create()));
+            prevButton.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND,
+                    "/arenaregen help " + (page - 1)));
+            navButtons.addExtra(prevButton);
+        }
+
+        if (page < helpPages.size()) {
+            if (page > 1)
+                navButtons.addExtra(" §7| ");
+            TextComponent nextButton = new TextComponent("§aNext ➡");
+            nextButton.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT,
+                    new ComponentBuilder("§7Click to view next help page").create()));
+            nextButton.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND,
+                    "/arenaregen help " + (page + 1)));
+            navButtons.addExtra(nextButton);
+        }
+
+        sender.spigot().sendMessage(navButtons);
     }
 }
