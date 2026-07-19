@@ -22,8 +22,29 @@ Fight. Destroy. Regenerate. Repeat!
 
 **WE DO NOT SUPPORT FORGE / FABRIC**
 
-- Java 17+ ([Get Adoptium](https://adoptium.net/))
-- Minecraft 1.18.0 - 1.21.4
+Pick **one** JAR for your server. Do not install both.
+
+| JAR | Servers | Java | Build |
+|-----|---------|------|-------|
+| **ArenaRegen-1.7.0-MODERN.jar** | Paper **26.2** (optimized NMS) | **25+** | Gradle |
+| **ArenaRegen-1.7.0-LEGACY.jar** | Spigot/Paper **1.18 – 1.21.x** (Bukkit API) | **17+** | Maven |
+
+### Which JAR should I use?
+
+- Running **Paper 26.2** → use **MODERN**
+- Running **1.18 – 1.21** (or Spigot without Paper NMS) → use **LEGACY**
+
+### Build either JAR
+
+```bash
+# Modern (Paper 26.2) — requires JDK 25
+./gradlew build
+# → E:/Server/plugins/ArenaRegen-1.7.0-MODERN.jar  (or build/libs)
+
+# Legacy (1.18–1.21) — requires JDK 17+
+mvn -B clean package
+# → target/ArenaRegen-1.7.0-LEGACY.jar
+```
 
 ## :link: Links
 

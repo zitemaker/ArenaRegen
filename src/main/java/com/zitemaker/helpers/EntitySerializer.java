@@ -44,20 +44,36 @@ public final class EntitySerializer {
 
     private static Attribute getMaxHealthAttribute() {
         if (maxHealthAttribute == null) {
+            // Dual-build safe: modern uses Attribute.MAX_HEALTH / registry; legacy uses GENERIC_MAX_HEALTH.
             try {
-                maxHealthAttribute = Attribute.valueOf("GENERIC_MAX_HEALTH");
-            } catch (Exception e) {
+                java.lang.reflect.Field field = Attribute.class.getField("MAX_HEALTH");
+                maxHealthAttribute = (Attribute) field.get(null);
+            } catch (Throwable ignored) {
+            }
+            if (maxHealthAttribute == null) {
                 try {
-                    for (Attribute attr : Attribute.values()) {
-                        if (attr.getKey().getKey().equals("generic.max_health")) {
-                            maxHealthAttribute = attr;
-                            break;
-                        }
-                    }
-                } catch (Exception ex) {
-                    LOGGER.severe("Could not determine max health attribute. Entity health may not be preserved.");
-                    maxHealthAttribute = null;
+                    maxHealthAttribute = Attribute.valueOf("GENERIC_MAX_HEALTH");
+                } catch (Throwable ignored) {
                 }
+            }
+            if (maxHealthAttribute == null) {
+                try {
+                    maxHealthAttribute = Attribute.valueOf("MAX_HEALTH");
+                } catch (Throwable ignored) {
+                }
+            }
+            if (maxHealthAttribute == null) {
+                try {
+                    Attribute registryAttr = Registry.ATTRIBUTE.get(NamespacedKey.minecraft("max_health"));
+                    if (registryAttr == null) {
+                        registryAttr = Registry.ATTRIBUTE.get(NamespacedKey.minecraft("generic.max_health"));
+                    }
+                    maxHealthAttribute = registryAttr;
+                } catch (Throwable ignored) {
+                }
+            }
+            if (maxHealthAttribute == null) {
+                LOGGER.severe("Could not determine max health attribute. Entity health may not be preserved.");
             }
         }
         return maxHealthAttribute;
@@ -400,7 +416,8 @@ public final class EntitySerializer {
         AbstractArrow arrow = (AbstractArrow) entity;
         data.put("damage", arrow.getDamage());
         data.put("isCritical", arrow.isCritical());
-        data.put("knockbackStrength", arrow.getKnockbackStrength());
+        // Knockback is weapon-owned in 1.21+ / 26.x; persist pierce level instead
+        data.put("pierceLevel", arrow.getPierceLevel());
     }
 
     private static void deserializeArrow(Entity entity, Map<String, Object> data) {
@@ -411,8 +428,8 @@ public final class EntitySerializer {
         if (data.containsKey("isCritical")) {
             arrow.setCritical(getBoolean(data, "isCritical", false));
         }
-        if (data.containsKey("knockbackStrength")) {
-            arrow.setKnockbackStrength(getInt(data, "knockbackStrength", 0));
+        if (data.containsKey("pierceLevel")) {
+            arrow.setPierceLevel(getInt(data, "pierceLevel", 0));
         }
     }
 
@@ -464,27 +481,45 @@ public final class EntitySerializer {
         data.put("level", villager.getVillagerLevel());
     }
 
+    private static Villager.Profession resolveVillagerProfession(String prof) {
+        try {
+            Villager.Profession profession = Registry.VILLAGER_PROFESSION.get(NamespacedKey.minecraft(prof.toLowerCase()));
+            if (profession != null) {
+                return profession;
+            }
+        } catch (Throwable ignored) {
+        }
+        try {
+            return Villager.Profession.valueOf(prof.toUpperCase());
+        } catch (Throwable e) {
+            LOGGER.warning("Invalid profession: " + prof);
+            return null;
+        }
+    }
+
+    private static Villager.Type resolveVillagerType(String type) {
+        try {
+            Villager.Type villagerType = Registry.VILLAGER_TYPE.get(NamespacedKey.minecraft(type.toLowerCase()));
+            if (villagerType != null) {
+                return villagerType;
+            }
+        } catch (Throwable ignored) {
+        }
+        try {
+            return Villager.Type.valueOf(type.toUpperCase());
+        } catch (Throwable e) {
+            LOGGER.warning("Invalid villager type: " + type);
+            return null;
+        }
+    }
+
     private static void deserializeVillager(Entity entity, Map<String, Object> data) {
         Villager villager = (Villager) entity;
         Optional.ofNullable((String) data.get("profession"))
-                .map(prof -> {
-                    try {
-                        return Villager.Profession.valueOf(prof);
-                    } catch (IllegalArgumentException e) {
-                        LOGGER.warning("Invalid profession: " + prof);
-                        return null;
-                    }
-                })
+                .map(EntitySerializer::resolveVillagerProfession)
                 .ifPresent(villager::setProfession);
         Optional.ofNullable((String) data.get("villagerType"))
-                .map(type -> {
-                    try {
-                        return Villager.Type.valueOf(type);
-                    } catch (IllegalArgumentException e) {
-                        LOGGER.warning("Invalid villager type: " + type);
-                        return null;
-                    }
-                })
+                .map(EntitySerializer::resolveVillagerType)
                 .ifPresent(villager::setVillagerType);
         Optional.ofNullable(data.get("level"))
                 .ifPresent(level -> villager.setVillagerLevel(getInt(data, "level", 1)));

@@ -1,16 +1,16 @@
 plugins {
     id 'java'
-    id 'io.papermc.paperweight.userdev' version '2.0.0-beta.17'
-    id 'com.gradleup.shadow' version '8.3.2'
+    id 'io.papermc.paperweight.userdev' version '2.0.0-beta.21'
+    id 'com.gradleup.shadow' version '9.6.0'
 }
 
 group = 'com.zitemaker'
-version = '1.6.2-MODERN'
+version = '1.7.0-MODERN'
 description = 'ArenaRegen'
 
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
+        languageVersion = JavaLanguageVersion.of(25)
     }
 }
 
@@ -20,28 +20,44 @@ repositories {
     maven { url = 'https://hub.spigotmc.org/nexus/content/repositories/snapshots/' }
     maven { url = 'https://oss.sonatype.org/content/groups/public/' }
     maven { url = 'https://repo.maven.apache.org/maven2/' }
-    maven { url = 'https://repo.extendedclip.com/releases/'
-    }
+    maven { url = 'https://repo.extendedclip.com/releases/' }
 }
 
 dependencies {
-    paperweight.paperDevBundle '1.21.10-R0.1-SNAPSHOT'
+    // Dev bundle includes Paper API + Mojang-mapped server internals (NMS)
+    paperweight.paperDevBundle '26.2.build.+'
 
-    compileOnly 'io.papermc.paper:paper-api:1.21.7-R0.1-SNAPSHOT'
     compileOnly 'me.clip:placeholderapi:2.11.6'
     implementation 'net.kyori:adventure-api:4.25.0'
     implementation 'net.kyori:adventure-text-serializer-ansi:4.17.0'
     implementation 'net.kyori:adventure-platform-bukkit:4.3.4'
-    implementation 'org.jetbrains:annotations:26.0.1'
+    implementation 'org.jetbrains:annotations:26.0.2'
 
-    testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
+    testImplementation platform('org.junit:junit-bom:5.11.4')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
+
+// 26.1+ ships unobfuscated; reobfuscation is unsupported and not needed.
+// Main production artifact is the shadow (Mojang-mapped) JAR.
 
 tasks {
     compileJava {
         options.encoding = 'UTF-8'
-        options.release = 21
+        options.release = 25
         options.compilerArgs << '-parameters'
+    }
+
+    processResources {
+        def modernPluginVersion = version
+        def modernApiVersion = '26.2'
+        filteringCharset = 'UTF-8'
+        filesMatching('plugin.yml') {
+            expand([
+                    pluginVersion: modernPluginVersion,
+                    apiVersion   : modernApiVersion
+            ])
+        }
     }
 
     shadowJar {

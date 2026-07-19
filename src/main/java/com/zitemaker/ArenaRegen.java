@@ -84,7 +84,7 @@ public class ArenaRegen extends JavaPlugin {
 
     @Override
     public void onLoad() {
-        logger.info(ARChatColor.GREEN + "ArenaRegen.jar v" + getDescription().getVersion()
+        logger.info(ARChatColor.GREEN + "ArenaRegen.jar v" + pluginVersion()
                 + " has been loaded successfully");
     }
 
@@ -109,7 +109,7 @@ public class ArenaRegen extends JavaPlugin {
         logger.info(ARChatColor.GOLD + "    |  Free Version |");
         logger.info(ARChatColor.GOLD + "    +===============+");
         logger.info("");
-        logger.info(ARChatColor.GREEN + "    ArenaRegen v" + getDescription().getVersion() + " has been enabled.");
+        logger.info(ARChatColor.GREEN + "    ArenaRegen v" + pluginVersion() + " has been enabled.");
         logger.info("");
         logger.info(ARChatColor.AQUA + "    Purchase ArenaRegen+ for more features!");
         logger.info(ARChatColor.GREEN + "    " + getPurchaseLink());
@@ -123,8 +123,7 @@ public class ArenaRegen extends JavaPlugin {
         }
 
         String serverVersion = Bukkit.getBukkitVersion().split("-")[0];
-        boolean isModernServer = serverVersion.startsWith("1.20.5") || serverVersion.startsWith("1.20.6")
-                || serverVersion.startsWith("1.21");
+        boolean isModernServer = com.zitemaker.nms.NMSHandlerFactoryProvider.supportsOptimizedNms(serverVersion);
         boolean hasNMSHandler = false;
 
         try {
@@ -139,7 +138,7 @@ public class ArenaRegen extends JavaPlugin {
             logger.info(
                     ARChatColor.RED + "    However, this JAR does not include NMS support (likely the legacy build).");
             logger.info(ARChatColor.YELLOW
-                    + "    For better performance, please use the modern JAR (built for 1.20.5–1.21.5).");
+                    + "    For better performance, please use the modern JAR (built for 1.20.5–26.2).");
         } else if (!isModernServer && hasNMSHandler) {
             logger.info(ARChatColor.RED + "    [Warning] This server (" + serverVersion
                     + ") is better suited for the legacy JAR.");
@@ -210,7 +209,23 @@ public class ArenaRegen extends JavaPlugin {
 
         RegionData.clearBlockDataCache();
 
-        logger.info(ARChatColor.RED + "ArenaRegen v" + getDescription().getVersion() + " has been disabled.");
+        logger.info(ARChatColor.RED + "ArenaRegen v" + pluginVersion() + " has been disabled.");
+    }
+
+    /**
+     * Shared helper for modern (Paper) and legacy (Spigot) builds.
+     * Uses reflection so legacy compiles against Spigot-API without PluginMeta.
+     */
+    private String pluginVersion() {
+        try {
+            Object meta = getClass().getMethod("getPluginMeta").invoke(this);
+            Object version = meta.getClass().getMethod("getVersion").invoke(meta);
+            if (version != null) {
+                return version.toString();
+            }
+        } catch (Throwable ignored) {
+        }
+        return getDescription().getVersion();
     }
 
     private CompletableFuture<Void> loadRegionsAsync() {

@@ -1,3 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
@@ -5,18 +6,23 @@
 
     <groupId>com.zitemaker</groupId>
     <artifactId>ArenaRegen</artifactId>
-    <version>1.6.2-LEGACY</version>
+    <version>1.7.0-LEGACY</version>
     <packaging>jar</packaging>
 
     <name>ArenaRegen</name>
+    <description>Legacy build for Minecraft 1.18–1.21 (Bukkit API, no Paper NMS)</description>
 
     <properties>
         <maven.compiler.release>17</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <!-- Injected into plugin.yml via resource filtering -->
+        <pluginVersion>${project.version}</pluginVersion>
+        <apiVersion>1.18</apiVersion>
     </properties>
 
     <build>
         <defaultGoal>clean package</defaultGoal>
+        <finalName>ArenaRegen-${project.version}</finalName>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -25,6 +31,7 @@
                 <configuration>
                     <release>${maven.compiler.release}</release>
                     <excludes>
+                        <!-- Paperweight / Mojang-mapped NMS is modern-only -->
                         <exclude>com/zitemaker/nms/NMSHandler_1_21.java</exclude>
                     </excludes>
                 </configuration>
@@ -40,6 +47,7 @@
                             <goal>shade</goal>
                         </goals>
                         <configuration>
+                            <createDependencyReducedPom>false</createDependencyReducedPom>
                             <relocations>
                                 <relocation>
                                     <pattern>net.kyori</pattern>
@@ -72,7 +80,6 @@
         </resources>
     </build>
     <repositories>
-
         <repository>
             <id>spigotmc-repo</id>
             <url>https://hub.spigotmc.org/nexus/content/repositories/snapshots/</url>
@@ -87,7 +94,6 @@
         </repository>
     </repositories>
     <dependencies>
-
         <dependency>
             <groupId>org.spigotmc</groupId>
             <artifactId>spigot-api</artifactId>
@@ -106,31 +112,26 @@
             <version>2.11.6</version>
             <scope>provided</scope>
         </dependency>
-
         <dependency>
             <groupId>net.kyori</groupId>
             <artifactId>adventure-api</artifactId>
             <version>4.25.0</version>
         </dependency>
-
         <dependency>
             <groupId>net.kyori</groupId>
             <artifactId>adventure-platform-bukkit</artifactId>
             <version>4.3.4</version>
         </dependency>
-
         <dependency>
             <groupId>net.kyori</groupId>
             <artifactId>adventure-text-minimessage</artifactId>
             <version>4.25.0</version>
         </dependency>
-
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
             <version>5.11.4</version>
             <scope>test</scope>
         </dependency>
-
     </dependencies>
 </project>

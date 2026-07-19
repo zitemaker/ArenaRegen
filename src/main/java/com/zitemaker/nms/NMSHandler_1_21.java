@@ -48,7 +48,7 @@ public class NMSHandler_1_21 implements NMSHandler {
                 final int y = update.getY();
                 final int z = update.getZ();
 
-                final long chunkKey = ChunkPos.asLong(x >> 4, z >> 4);
+                final long chunkKey = ChunkPos.pack(x >> 4, z >> 4);
                 final LevelChunk chunk = chunkCache.computeIfAbsent(chunkKey,
                         key -> craftWorld.getHandle().getChunk(x >> 4, z >> 4));
 
@@ -106,9 +106,9 @@ public class NMSHandler_1_21 implements NMSHandler {
                         relightChunk(lightEngine, chunkPos);
                     } catch (Exception e) {
                         LOGGER.warning(
-                                "Failed to relight chunk at " + chunkPos.x + ", " + chunkPos.z + ": " + e.getMessage());
+                                "Failed to relight chunk at " + chunkPos.x() + ", " + chunkPos.z() + ": " + e.getMessage());
                         try {
-                            world.refreshChunk(chunkPos.x, chunkPos.z);
+                            world.refreshChunk(chunkPos.x(), chunkPos.z());
                         } catch (Exception ignored) {
                         }
                     }
@@ -126,7 +126,7 @@ public class NMSHandler_1_21 implements NMSHandler {
                 for (int i = 0; i < batchSize; i++) {
                     ChunkPos chunkPos = chunks.get(index + i);
                     try {
-                        world.refreshChunk(chunkPos.x, chunkPos.z);
+                        world.refreshChunk(chunkPos.x(), chunkPos.z());
                     } catch (Exception ignored) {
                     }
                 }
@@ -141,7 +141,7 @@ public class NMSHandler_1_21 implements NMSHandler {
                 for (int i = 0; i < batchSize; i++) {
                     ChunkPos chunkPos = chunks.get(index + i);
                     try {
-                        world.refreshChunk(chunkPos.x, chunkPos.z);
+                        world.refreshChunk(chunkPos.x(), chunkPos.z());
                     } catch (Exception ignored) {
                     }
                 }
