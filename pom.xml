@@ -15,7 +15,6 @@
     <properties>
         <maven.compiler.release>17</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <!-- Injected into plugin.yml via resource filtering -->
         <pluginVersion>${project.version}</pluginVersion>
         <apiVersion>1.18</apiVersion>
     </properties>
@@ -31,7 +30,6 @@
                 <configuration>
                     <release>${maven.compiler.release}</release>
                     <excludes>
-                        <!-- Paperweight / Mojang-mapped NMS is modern-only -->
                         <exclude>com/zitemaker/nms/NMSHandler_1_21.java</exclude>
                     </excludes>
                 </configuration>

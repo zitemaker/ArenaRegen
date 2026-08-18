@@ -97,7 +97,12 @@ public class ArenaRegen extends JavaPlugin {
             this.isPaper = false;
         }
 
-        this.adventure = BukkitAudiences.create(this);
+        try {
+            this.adventure = BukkitAudiences.create(this);
+        } catch (Throwable t) {
+            this.adventure = null;
+            logger.info("[ArenaRegen] BukkitAudiences platform wrapper not available. Using Paper/Bukkit native action bar messaging.");
+        }
 
         if (regeneratingArenas != null) {
             regeneratingArenas.clear();
@@ -440,11 +445,36 @@ public class ArenaRegen extends JavaPlugin {
         return playerMoveListener;
     }
 
-    public BukkitAudiences adventure() {
-        if (this.adventure == null) {
-            throw new IllegalStateException("Tried to access Adventure when the plugin was disabled!");
-        }
+    public @Nullable BukkitAudiences adventure() {
         return this.adventure;
+    }
+
+    public void sendActionBar(Player player, net.kyori.adventure.text.Component message) {
+        if (player == null || message == null) {
+            return;
+        }
+
+        if (this.adventure != null) {
+            try {
+                this.adventure.player(player).sendActionBar(message);
+                return;
+            } catch (Throwable ignored) {
+            }
+        }
+
+        try {
+            java.lang.reflect.Method method = player.getClass().getMethod("sendActionBar", net.kyori.adventure.text.Component.class);
+            method.invoke(player, message);
+            return;
+        } catch (Throwable ignored) {
+        }
+
+        try {
+            String legacyText = net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer.legacyAmpersand().serialize(message);
+            player.spigot().sendMessage(net.md_5.bungee.api.ChatMessageType.ACTION_BAR,
+                    net.md_5.bungee.api.chat.TextComponent.fromLegacyText(legacyText));
+        } catch (Throwable ignored) {
+        }
     }
 
     public boolean isPaper() {

@@ -24,7 +24,6 @@ repositories {
 }
 
 dependencies {
-    // Dev bundle includes Paper API + Mojang-mapped server internals (NMS)
     paperweight.paperDevBundle '26.2.build.+'
 
     compileOnly 'me.clip:placeholderapi:2.11.6'
@@ -38,8 +37,6 @@ dependencies {
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
-// 26.1+ ships unobfuscated; reobfuscation is unsupported and not needed.
-// Main production artifact is the shadow (Mojang-mapped) JAR.
 
 tasks {
     compileJava {
@@ -50,7 +47,7 @@ tasks {
 
     processResources {
         def modernPluginVersion = version
-        def modernApiVersion = '26.2'
+        def modernApiVersion = '1.21'
         filteringCharset = 'UTF-8'
         filesMatching('plugin.yml') {
             expand([

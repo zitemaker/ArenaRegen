@@ -1406,7 +1406,7 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                     .build();
         }
 
-        plugin.adventure().player(player).sendActionBar(actionBarMessage);
+        plugin.sendActionBar(player, actionBarMessage);
     }
 
     public Vector[] getSelection(@NotNull Player player) {
