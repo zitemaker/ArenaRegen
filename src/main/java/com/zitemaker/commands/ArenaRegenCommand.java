@@ -242,7 +242,7 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
 
                 plugin.getRegisteredRegions().put(regionName, regionData);
                 long totalBlocks = (long) width * height * depth;
-                int blocksPerTick = Math.min(100000, Math.max(1000, plugin.analyzeSpeed / 20));
+                int blocksPerTick = Math.min(100000, Math.max(1, plugin.analyzeSpeed / 20));
 
                 commandSender.sendMessage(pluginPrefix + ChatColor.YELLOW + " Analyzing and creating region '"
                         + regionName + "', please wait...");
@@ -269,6 +269,8 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                 final int fMaxX = maxX, fMaxY = maxY, fMaxZ = maxZ;
 
                 new BukkitRunnable() {
+                    private int nextProgressPercent = 10;
+
                     @Override
                     public void run() {
                         int blocksThisTick = 0;
@@ -319,11 +321,12 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                         }
 
                         int processed = processedBlocks.get();
-                        if (processed % (blocksPerTick * 5) < blocksPerTick) {
-                            int percent = (int) ((processed * 100L) / totalBlocks);
+                        int percent = (int) ((processed * 100L) / totalBlocks);
+                        if (percent >= nextProgressPercent) {
                             commandSender.sendMessage(
                                     pluginPrefix + ChatColor.GRAY + " Creating progress: " + ChatColor.WHITE + percent
                                             + "%" + ChatColor.GRAY + " (" + processed + "/" + totalBlocks + " blocks)");
+                            nextProgressPercent = percent + 10;
                         }
                     }
                 }.runTaskTimer(plugin, 1L, 1L);
@@ -492,7 +495,7 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                 int height = maxY - minY + 1;
                 int depth = maxZ - minZ + 1;
                 long totalBlocks = (long) width * height * depth;
-                int blocksPerTick = Math.min(100000, Math.max(1000, plugin.analyzeSpeed / 20));
+                int blocksPerTick = Math.min(100000, Math.max(1, plugin.analyzeSpeed / 20));
 
                 AtomicInteger processedBlocks = new AtomicInteger(0);
                 String sectionName = "default";
@@ -502,6 +505,8 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                 final int fMaxX = maxX, fMaxY = maxY, fMaxZ = maxZ;
 
                 new BukkitRunnable() {
+                    private int nextProgressPercent = 10;
+
                     @Override
                     public void run() {
                         int blocksThisTick = 0;
@@ -554,11 +559,12 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                         }
 
                         int processed = processedBlocks.get();
-                        if (processed % (blocksPerTick * 5) < blocksPerTick) {
-                            int percent = (int) ((processed * 100L) / totalBlocks);
+                        int percent = (int) ((processed * 100L) / totalBlocks);
+                        if (percent >= nextProgressPercent) {
                             commandSender.sendMessage(
                                     pluginPrefix + ChatColor.GRAY + " Resizing progress: " + ChatColor.WHITE + percent
                                             + "%" + ChatColor.GRAY + " (" + processed + "/" + totalBlocks + " blocks)");
+                            nextProgressPercent = percent + 10;
                         }
                     }
                 }.runTaskTimer(plugin, 1L, 1L);

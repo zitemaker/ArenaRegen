@@ -1,11 +1,11 @@
 plugins {
     id 'java'
-    id 'io.papermc.paperweight.userdev' version '2.0.0-beta.21'
+    id 'io.papermc.paperweight.userdev' version '2.0.0-beta.23'
     id 'com.gradleup.shadow' version '9.6.0'
 }
 
 group = 'com.zitemaker'
-version = '1.7.0-MODERN'
+version = '1.7.1'
 description = 'ArenaRegen'
 
 java {
@@ -20,11 +20,15 @@ repositories {
     maven { url = 'https://hub.spigotmc.org/nexus/content/repositories/snapshots/' }
     maven { url = 'https://oss.sonatype.org/content/groups/public/' }
     maven { url = 'https://repo.maven.apache.org/maven2/' }
+    maven { url = 'https://libraries.minecraft.net/' }
     maven { url = 'https://repo.extendedclip.com/releases/' }
 }
 
 dependencies {
     paperweight.paperDevBundle '26.2.build.+'
+    // The 26.2 dev bundle leaves these types off the compile classpath.
+    compileOnly 'io.papermc.paper:paper-api:26.2.build.+'
+    compileOnly 'com.mojang:datafixerupper:10.0.21'
 
     compileOnly 'me.clip:placeholderapi:2.11.6'
     implementation 'net.kyori:adventure-api:4.25.0'
@@ -39,6 +43,10 @@ dependencies {
 
 
 tasks {
+    jar {
+        enabled = false
+    }
+
     compileJava {
         options.encoding = 'UTF-8'
         options.release = 25
@@ -58,7 +66,7 @@ tasks {
     }
 
     shadowJar {
-        archiveFileName = "ArenaRegen-${version}.jar"
+        archiveFileName = "ArenaRegen-${version}-MODERN.jar"
         destinationDirectory = layout.buildDirectory.dir('libs').get().asFile
 
         relocate 'net.kyori.adventure.platform', 'com.zitemaker.libs.adventure.platform'
