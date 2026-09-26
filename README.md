@@ -56,7 +56,7 @@ mvn -B clean package
 
 ## 📥 How to install? / Installation / Setup
 
-You can [read on our official documentation](https://zitemakers-organization.gitbook.io/arenaregen) how to
+You can [read on our official documentation](https://falcona.gitbook.io/arenaregen) how to
 install ArenaRegen. Make sure to follow all steps before reporting issues!
 
 ## 🌈 Community
