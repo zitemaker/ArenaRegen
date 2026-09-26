@@ -26,8 +26,8 @@ Pick **one** JAR for your server. Do not install both.
 
 | JAR | Servers | Java | Build |
 |-----|---------|------|-------|
-| **ArenaRegen-1.7.1-MODERN.jar** | Paper **26.2** (optimized NMS) | **25+** | Gradle |
-| **ArenaRegen-1.7.1-LEGACY.jar** | Spigot/Paper **1.18 – 1.21.x** (Bukkit API) | **17+** | Maven |
+| **ArenaRegen-1.7.2-MODERN.jar** | Paper **26.2** (optimized NMS) | **25+** | Gradle |
+| **ArenaRegen-1.7.2-LEGACY.jar** | Spigot/Paper **1.18 – 1.21.x** (Bukkit API) | **17+** | Maven |
 
 ### Which JAR should I use?
 
@@ -39,11 +39,11 @@ Pick **one** JAR for your server. Do not install both.
 ```bash
 # Modern (Paper 26.2) — requires JDK 25
 ./gradlew build
-# → build/libs/ArenaRegen-1.7.1-MODERN.jar
+# → build/libs/ArenaRegen-1.7.2-MODERN.jar
 
 # Legacy (1.18–1.21) — requires JDK 17+
 mvn -B clean package
-# → target/ArenaRegen-1.7.1-LEGACY.jar
+# → target/ArenaRegen-1.7.2-LEGACY.jar
 ```
 
 ## :link: Links

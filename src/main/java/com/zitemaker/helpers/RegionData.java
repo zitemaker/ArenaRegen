@@ -23,7 +23,7 @@ import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
 public class RegionData {
-    private static final Logger LOGGER = JavaPlugin.getPlugin(ArenaRegen.class).getLogger();
+    private static final Logger LOGGER = Logger.getLogger("ArenaRegen");
     private static final String FILE_FORMAT_VERSION = "4";
     private static final int GZIP_COMPRESSION_LEVEL = 6;
     private static final byte[] GZIP_MAGIC = new byte[] { (byte) 0x1F, (byte) 0x8B };
@@ -742,9 +742,15 @@ public class RegionData {
         }
     }
 
-    public CompletableFuture<Void> loadFromDatc(File datcFile) {
+    public synchronized CompletableFuture<Void> loadFromDatc(File datcFile) {
+        if (blockDataLoadFuture != null && !blockDataLoadFuture.isDone()) {
+            return blockDataLoadFuture;
+        }
         this.datcFile = datcFile;
+        this.loadFailed = false;
+        this.isLoading = true;
         CompletableFuture<Void> future = new CompletableFuture<>();
+        this.blockDataLoadFuture = future;
         long startTime = System.currentTimeMillis();
         
         int bufferSize = datcFile.length() < 500_000 ? 8192 : (datcFile.length() < 5_000_000 ? 65536 : 262144);
@@ -844,7 +850,10 @@ public class RegionData {
                     future.complete(null);
                 }
             } catch (Exception e) {
+                this.loadFailed = true;
                 future.completeExceptionally(e);
+            } finally {
+                this.isLoading = false;
             }
         });
 
@@ -1197,7 +1206,6 @@ public class RegionData {
 
                 World world = Bukkit.getWorld(worldName);
                 if (world == null) {
-                    loadFailed = true;
                     throw new RuntimeException("World '" + worldName + "' not found for region in " + datcFile.getName());
                 }
             }
@@ -1273,5 +1281,19 @@ public class RegionData {
     
     public void setBlockDataLoaded(boolean loaded) {
         this.isBlockDataLoaded = loaded;
+    }
+
+    public boolean isLoadFailed() {
+        return loadFailed;
+    }
+
+    public void setLoadFailed(boolean loadFailed) {
+        this.loadFailed = loadFailed;
+    }
+
+    public synchronized void resetLoadState() {
+        this.loadFailed = false;
+        this.isLoading = false;
+        this.blockDataLoadFuture = null;
     }
 }

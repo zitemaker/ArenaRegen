@@ -5,7 +5,7 @@ plugins {
 }
 
 group = 'com.zitemaker'
-version = '1.7.1'
+version = '1.7.2'
 description = 'ArenaRegen'
 
 java {
@@ -38,6 +38,7 @@ dependencies {
 
     testImplementation platform('org.junit:junit-bom:5.11.4')
     testImplementation 'org.junit.jupiter:junit-jupiter'
+    testImplementation 'io.papermc.paper:paper-api:26.2.build.+'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 

@@ -1,0 +1,34 @@
+{
+  "productId": "ArenaRegen",
+  "version": "1.7.2",
+  "source": "fbe5de492fe18cf2a280ba7bfa986c6711e9c8b1",
+  "jars": [
+    {
+      "fileName": "ArenaRegen-1.7.2-LEGACY.jar",
+      "sha256": "a846f3b1160320bf457a9c9e88e87c0249004edd2d89ca8f806f50793f00f39c"
+    },
+    {
+      "fileName": "ArenaRegen-1.7.2-MODERN.jar",
+      "sha256": "776ccc4c802aafccbaeafdebd6921d8a30f7afd22736b46757bbd2985c8aef94"
+    }
+  ],
+  "build": {
+    "status": "passed",
+    "command": "mvn clean package && ./gradlew clean shadowJar",
+    "result": "Both legacy (1.18-1.21) and modern (Paper 26.2) JARs built successfully"
+  },
+  "tests": {
+    "status": "passed",
+    "command": "mvn test && ./gradlew test --rerun",
+    "result": "All 4 unit tests passed across Maven and Gradle test runners"
+  },
+  "review": {
+    "status": "passed",
+    "reviewer": "independent research subagent (5b3963b7-7a56-470b-9a91-db6a1f87b57c)",
+    "result": "Approved after re-inspecting all 5 required fixes and cleanups"
+  },
+  "docs": {
+    "status": "passed",
+    "result": "Updated README.md, Docs/update-arenaregen-01.md, and generated release notes"
+  }
+}

@@ -4,7 +4,7 @@ main: com.zitemaker.ArenaRegen
 api-version: '${apiVersion}'
 description: A plugin that registers and regenerates regions using coordinates.
 author: Zitemaker Studios
-softdepend: ["PlaceholderAPI"]
+softdepend: ["PlaceholderAPI", "Multiverse-Core"]
 commands:
   arenaregen:
     description: The base command.
@@ -46,7 +46,7 @@ permissions:
     description: Allows the player to teleport to region spawns.
     default: op
   arenaregen.reload:
-    description: Allows the player to reload the plugin.
+    description: Allows the player to reload the plugin and reload arenas.
     default: op
   arenaregen.help:
     description: Allows the player to view available commands.

@@ -85,6 +85,7 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                 "/arenaregen preview <arena> - Preview the borders of an arena",
                 "/arenaregen unlock [arena] - Unlock arena(s) that are stuck",
                 "/arenaregen reload - Reload configuration",
+                "/arenaregen reloadarenas - Reload all arena files from disk",
                 "/arenaregen help - Show this command"
         });
     }
@@ -877,6 +878,16 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
                 return true;
             }
 
+            case "reloadarenas" -> {
+                if (!commandSender.hasPermission("arenaregen.reload")) {
+                    commandSender.sendMessage(pluginPrefix + " " + noPermission);
+                    return true;
+                }
+
+                plugin.reloadArenas(commandSender);
+                return true;
+            }
+
             case "preview" -> {
                 String showUsage = ChatColor.translateAlternateColorCodes('&', "&cUsage: /arenaregen preview <arena>");
 
@@ -1082,11 +1093,30 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
             String name = entry.getKey();
             RegionData regionData = entry.getValue();
 
-            World world = Bukkit.getWorld(regionData.getWorldName());
+            if (regionData.isLoadFailed()) {
+                sender.sendMessage(ChatColor.YELLOW + "- " + name + ": " + ChatColor.RED
+                        + "Failed to load arena file (corrupt or unreadable).");
+                continue;
+            }
+
+            String worldName = regionData.getWorldName();
+            if (worldName == null) {
+                sender.sendMessage(ChatColor.YELLOW + "- " + name + ": " + ChatColor.RED
+                        + "World name not defined.");
+                continue;
+            }
+
+            World world = Bukkit.getWorld(worldName);
 
             if (world == null) {
-                sender.sendMessage(ChatColor.YELLOW + "- " + name + ": " + ChatColor.RED + "World "
-                        + regionData.getWorldName() + " not found.");
+                sender.sendMessage(ChatColor.YELLOW + "- " + name + ": " + ChatColor.RED + "World '"
+                        + worldName + "' not found.");
+                continue;
+            }
+
+            if (!regionData.isBlockDataLoaded()) {
+                sender.sendMessage(ChatColor.YELLOW + "- " + name + ": " + ChatColor.GOLD + "World '"
+                        + worldName + "' available, block data deferred. (Use /ar reloadarenas)");
                 continue;
             }
 
@@ -1135,10 +1165,21 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
             return;
         }
 
-        World world = Bukkit.getWorld(regionData.getWorldName());
+        if (regionData.isLoadFailed()) {
+            sender.sendMessage(ChatColor.RED + "Arena '" + regionName + "' failed to load block data (corrupt or unreadable).");
+            return;
+        }
+
+        String worldName = regionData.getWorldName();
+        if (worldName == null) {
+            sender.sendMessage(ChatColor.RED + "Arena '" + regionName + "' has no world configured.");
+            return;
+        }
+
+        World world = Bukkit.getWorld(worldName);
 
         if (world == null) {
-            sender.sendMessage(ChatColor.RED + "World '" + regionData.getWorldName() + "' not found");
+            sender.sendMessage(ChatColor.RED + "World '" + worldName + "' not found");
             return;
         }
 
@@ -1217,7 +1258,7 @@ public class ArenaRegenCommand implements TabExecutor, Listener {
         return switch (args.length) {
             case 1 ->
                 filterSuggestions(List.of("create", "regenerate", "regen", "setspawn", "delspawn", "teleport", "tp",
-                        "list", "delete", "rename", "resize", "reload", "help", "wand", "selection", "schedule", "preview",
+                        "list", "delete", "rename", "resize", "reload", "reloadarenas", "help", "wand", "selection", "schedule", "preview",
                         "info", "unlock", "here"), args[0]);
 
             case 2 -> {

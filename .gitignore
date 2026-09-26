@@ -1,22 +1,27 @@
-<<<<<<< HEAD
 # User-specific stuff
 .idea/
-
 *.iml
 *.ipr
 *.iws
 
-# IntelliJ
+# Build and IDE outputs
+target/
+build/
 out/
+bin/
+output/
+helpers/
+.gradle/
+.cursor/
+.history/
+.vscode/
 
 # Compiled class file
 *.class
 
 # Log file
 *.log
-
-# BlueJ files
-*.ctxt
+hs_err_pid*
 
 # Package Files #
 *.jar
@@ -27,107 +32,18 @@ out/
 *.tar.gz
 *.rar
 
-# virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
-hs_err_pid*
-
-*~
-
-# temporary files which can be created if a process still has a handle open of a deleted file
-.fuse_hidden*
-
-# KDE directory preferences
-.directory
-
-# Linux trash folder which might appear on any partition or disk
-.Trash-*
-
-# .nfs files are created when an open file is removed but is still being accessed
-.nfs*
-
-# General
-.DS_Store
-.AppleDouble
-.LSOverride
-
-# Icon must end with two \r
-Icon
-
-# Thumbnails
-._*
-
-# Files that might appear in the root of a volume
-.DocumentRevisions-V100
-.fseventsd
-.Spotlight-V100
-.TemporaryItems
-.Trashes
-.VolumeIcon.icns
-.com.apple.timemachine.donotpresent
-
-# Directories potentially created on remote AFP share
-.AppleDB
-.AppleDesktop
-Network Trash Folder
-Temporary Items
-.apdisk
-
-# Windows thumbnail cache files
-Thumbs.db
-Thumbs.db:encryptable
-ehthumbs.db
-ehthumbs_vista.db
-
-# Dump file
-*.stackdump
-
-# Folder config file
-[Dd]esktop.ini
-
-# Recycle Bin used on file shares
-$RECYCLE.BIN/
-
-# Windows Installer files
-*.cab
-*.msi
-*.msix
-*.msm
-*.msp
-
-# Windows shortcuts
-*.lnk
-
-target/
-
+# Maven
 pom.xml.tag
 pom.xml.releaseBackup
 pom.xml.versionsBackup
 pom.xml.next
-
 release.properties
 dependency-reduced-pom.xml
 buildNumber.properties
 .mvn/timing.properties
-.mvn/wrapper/maven-wrapper.jar
 .flattened-pom.xml
 
-# Common working directory
-run/
-=======
-target/
-!.mvn/wrapper/maven-wrapper.jar
-!**/src/main/**/target/
-!**/src/test/**/target/
-
-### IntelliJ IDEA ###
-.idea/modules.xml
-.idea/jarRepositories.xml
-.idea/compiler.xml
-.idea/libraries/
-*.iws
-*.iml
-*.ipr
-
-### Eclipse ###
+# Eclipse
 .apt_generated
 .classpath
 .factorypath
@@ -136,21 +52,21 @@ target/
 .springBeans
 .sts4-cache
 
-### NetBeans ###
+# NetBeans
 /nbproject/private/
 /nbbuild/
 /dist/
 /nbdist/
 /.nb-gradle/
-build/
-!**/src/main/**/build/
-!**/src/test/**/build/
 
-### VS Code ###
-.vscode/
-
-### Mac OS ###
+# OS Specific
 .DS_Store
->>>>>>> 4687e7a46a14d713716be11409eb2bab73c488ec
+Thumbs.db
+ehthumbs.db
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.lnk
 
+# Common working directory
+run/
 .kluster

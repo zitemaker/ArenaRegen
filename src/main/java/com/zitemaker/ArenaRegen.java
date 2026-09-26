@@ -153,6 +153,8 @@ public class ArenaRegen extends JavaPlugin {
                     + "    For better compatibility, please use the legacy JAR (built for 1.18–1.20.4).");
         }
 
+        Bukkit.getPluginManager().registerEvents(new com.zitemaker.listeners.WorldLoadListener(this), this);
+
         reloadPluginConfig();
         loadMessagesFile();
         saveMessagesFile();
@@ -179,6 +181,7 @@ public class ArenaRegen extends JavaPlugin {
             saveTaskId = Bukkit.getScheduler().runTaskTimerAsynchronously(this, this::saveRegionsAsync, 0L, 4000L)
                     .getTaskId();
             rescheduleTasks();
+            scheduleDeferredArenaLoading();
             logger.info("Plugin fully enabled.");
         }).exceptionally(e -> {
             logger.info("Failed to load regions during enable: " + e.getMessage());
@@ -233,42 +236,100 @@ public class ArenaRegen extends JavaPlugin {
         return getDescription().getVersion();
     }
 
-    private CompletableFuture<Void> loadRegionsAsync() {
+    public static class LoadResult {
+        private final int loaded;
+        private final int deferred;
+        private final int failed;
+
+        public LoadResult(int loaded, int deferred, int failed) {
+            this.loaded = loaded;
+            this.deferred = deferred;
+            this.failed = failed;
+        }
+
+        public int getLoaded() {
+            return loaded;
+        }
+
+        public int getDeferred() {
+            return deferred;
+        }
+
+        public int getFailed() {
+            return failed;
+        }
+    }
+
+    public CompletableFuture<LoadResult> loadRegionsAsync() {
         File arenasDir = new File(getDataFolder(), "arenas");
         if (!arenasDir.exists()) {
             boolean mkdirs = arenasDir.mkdirs();
-            return CompletableFuture.completedFuture(null);
+            return CompletableFuture.completedFuture(new LoadResult(0, 0, 0));
         }
 
         if (!arenasDir.canRead()) {
             logger.info(ARChatColor.RED + "ERROR: Cannot read from arenas directory (" + arenasDir.getPath() + ")!");
             logger.info(
                     ARChatColor.RED + "Please check file permissions to ensure the server process has read access.");
-            return CompletableFuture.completedFuture(null);
+            return CompletableFuture.completedFuture(new LoadResult(0, 0, 0));
         }
 
         File[] files = arenasDir.listFiles((dir, name) -> name.endsWith(".datc"));
         if (files == null || files.length == 0) {
             logger.info(ARChatColor.YELLOW + "No arenas found in " + arenasDir.getPath() + ".");
-            return CompletableFuture.completedFuture(null);
+            Set<String> toRemove = new HashSet<>();
+            for (String name : registeredRegions.keySet()) {
+                if (!regeneratingArenas.contains(name)) {
+                    toRemove.add(name);
+                }
+            }
+            toRemove.forEach(registeredRegions::remove);
+            return CompletableFuture.completedFuture(new LoadResult(0, 0, 0));
+        }
+
+        Set<String> filesOnDisk = new HashSet<>();
+        for (File file : files) {
+            filesOnDisk.add(file.getName().replace(".datc", ""));
+        }
+
+        for (String existingName : new HashSet<>(registeredRegions.keySet())) {
+            if (!filesOnDisk.contains(existingName) && !regeneratingArenas.contains(existingName)) {
+                registeredRegions.remove(existingName);
+            }
         }
 
         List<CompletableFuture<Void>> loadFutures = new ArrayList<>();
         AtomicInteger loadedRegions = new AtomicInteger(0);
+        AtomicInteger deferredRegions = new AtomicInteger(0);
+        AtomicInteger failedRegions = new AtomicInteger(0);
         StringBuilder errorSummary = new StringBuilder();
 
         for (File file : files) {
             String regionName = file.getName().replace(".datc", "");
+
+            if (regeneratingArenas.contains(regionName)) {
+                logger.info(ARChatColor.YELLOW + "Skipping reload for arena '" + regionName + "' (currently regenerating).");
+                continue;
+            }
+
             RegionData regionData = new RegionData(this);
             regionData.setDatcFile(file);
 
             CompletableFuture<Void> loadFuture = regionData.loadFromDatc(file)
                     .thenRun(() -> {
                         registeredRegions.put(regionName, regionData);
-                        loadedRegions.incrementAndGet();
-                        logger.info(ARChatColor.GREEN + "Loaded arena '" + regionName + "' successfully.");
+                        if (regionData.isBlockDataLoaded()) {
+                            loadedRegions.incrementAndGet();
+                            logger.info(ARChatColor.GREEN + "Loaded arena '" + regionName + "' successfully.");
+                        } else {
+                            deferredRegions.incrementAndGet();
+                            logger.info(ARChatColor.YELLOW + "Deferred arena '" + regionName + "' (world '"
+                                    + regionData.getWorldName() + "' not loaded).");
+                        }
                     })
                     .exceptionally(e -> {
+                        failedRegions.incrementAndGet();
+                        registeredRegions.put(regionName, regionData);
                         logger.info(ARChatColor.RED + "Failed to load arena '" + regionName + "' from " + file.getName()
                                 + ": " + e.getMessage());
                         logger.info(ARChatColor.YELLOW + "Skipping '" + regionName
@@ -283,23 +344,149 @@ public class ArenaRegen extends JavaPlugin {
         }
 
         return CompletableFuture.allOf(loadFutures.toArray(new CompletableFuture[0]))
-                .thenRun(() -> {
+                .thenApply(v -> {
                     int totalLoaded = loadedRegions.get();
-                    logger.info("Successfully loaded " + totalLoaded + " out of " + files.length + " arenas.");
+                    int totalDeferred = deferredRegions.get();
+                    int totalFailed = failedRegions.get();
+                    logger.info("Successfully loaded " + totalLoaded + " arenas (" + totalDeferred + " deferred, "
+                            + totalFailed + " failed) out of " + files.length + " files.");
 
                     unlockAllArenas();
 
-                    if (totalLoaded < files.length) {
+                    if (playerMoveListener != null) {
+                        playerMoveListener.updateRegionBounds();
+                    }
+
+                    if (totalFailed > 0) {
                         logger.info(ARChatColor.RED + "Errors occurred while loading the following arenas:");
                         logger.info(errorSummary.toString());
                         for (Player player : Bukkit.getOnlinePlayers()) {
                             if (player.isOp()) {
                                 player.sendMessage(prefix + " " + ARChatColor.RED
-                                        + "Failed to load some arenas on startup! Check the server logs for details.");
+                                        + "Failed to load some arenas! Check the server logs for details.");
                             }
                         }
                     }
+
+                    return new LoadResult(totalLoaded, totalDeferred, totalFailed);
                 });
+    }
+
+    public void scheduleDeferredArenaLoading() {
+        Bukkit.getScheduler().runTaskLater(this, this::retryDeferredArenas, 100L);
+        Bukkit.getScheduler().runTaskLater(this, this::retryDeferredArenas, 400L);
+    }
+
+    public void retryDeferredArenas() {
+        boolean hasDeferred = false;
+        for (RegionData regionData : registeredRegions.values()) {
+            if (!regionData.isBlockDataLoaded()) {
+                hasDeferred = true;
+                break;
+            }
+        }
+        if (!hasDeferred) {
+            return;
+        }
+
+        for (Map.Entry<String, RegionData> entry : registeredRegions.entrySet()) {
+            String arenaName = entry.getKey();
+            RegionData regionData = entry.getValue();
+            if (!regionData.isBlockDataLoaded() && regionData.getWorldName() != null) {
+                World world = Bukkit.getWorld(regionData.getWorldName());
+                if (world != null && regionData.getDatcFile() != null) {
+                    logger.info("[ArenaRegen] World '" + world.getName()
+                            + "' is now available. Retrying deferred arena '" + arenaName + "'...");
+                    regionData.loadFromDatc(regionData.getDatcFile())
+                            .thenRun(() -> {
+                                if (regionData.isBlockDataLoaded()) {
+                                    logger.info(ARChatColor.GREEN + "[ArenaRegen] Deferred arena '" + arenaName
+                                            + "' loaded successfully.");
+                                    if (playerMoveListener != null) {
+                                        playerMoveListener.updateRegionBounds();
+                                    }
+                                }
+                            })
+                            .exceptionally(e -> {
+                                logger.info(ARChatColor.RED + "[ArenaRegen] Retry failed for arena '" + arenaName
+                                        + "': " + e.getMessage());
+                                return null;
+                            });
+                }
+            }
+        }
+    }
+
+    public void onWorldLoaded(World world) {
+        if (world == null) {
+            return;
+        }
+        String worldName = world.getName();
+        List<String> deferredToLoad = new ArrayList<>();
+
+        for (Map.Entry<String, RegionData> entry : registeredRegions.entrySet()) {
+            RegionData regionData = entry.getValue();
+            if (!regionData.isBlockDataLoaded() && regionData.getWorldName() != null
+                    && regionData.getWorldName().equalsIgnoreCase(worldName)) {
+                deferredToLoad.add(entry.getKey());
+            }
+        }
+
+        if (deferredToLoad.isEmpty()) {
+            return;
+        }
+
+        logger.info("[ArenaRegen] World '" + worldName + "' loaded. Loading " + deferredToLoad.size()
+                + " deferred arena(s)...");
+
+        for (String arenaName : deferredToLoad) {
+            RegionData regionData = registeredRegions.get(arenaName);
+            if (regionData != null && regionData.getDatcFile() != null) {
+                regionData.loadFromDatc(regionData.getDatcFile())
+                        .thenRun(() -> {
+                            logger.info(ARChatColor.GREEN + "[ArenaRegen] Deferred arena '" + arenaName
+                                    + "' loaded successfully.");
+                            if (playerMoveListener != null) {
+                                playerMoveListener.updateRegionBounds();
+                            }
+                        })
+                        .exceptionally(e -> {
+                            logger.info(ARChatColor.RED + "[ArenaRegen] Failed to load deferred arena '" + arenaName
+                                    + "': " + e.getMessage());
+                            return null;
+                        });
+            }
+        }
+    }
+
+    public CompletableFuture<LoadResult> reloadArenas(CommandSender sender) {
+        if (sender != null) {
+            String startMsg = getMessagesConfig().getString("messages.reload-arenas-start",
+                    "&eReloading all arena files from disk, please wait...");
+            sender.sendMessage(prefix + " " + ChatColor.translateAlternateColorCodes('&', startMsg));
+        }
+
+        return loadRegionsAsync().thenApply(result -> {
+            Bukkit.getScheduler().runTask(this, () -> {
+                if (sender != null) {
+                    String successTemplate = getMessagesConfig().getString("messages.reload-arenas-success",
+                            "&aArena reload complete! &f{loaded} &aloaded, &e{deferred} &edeferred (world missing), &c{failed} &cfailed.");
+                    String msg = successTemplate
+                            .replace("{loaded}", String.valueOf(result.getLoaded()))
+                            .replace("{deferred}", String.valueOf(result.getDeferred()))
+                            .replace("{failed}", String.valueOf(result.getFailed()));
+                    sender.sendMessage(prefix + " " + ChatColor.translateAlternateColorCodes('&', msg));
+                }
+            });
+            return result;
+        }).exceptionally(e -> {
+            Bukkit.getScheduler().runTask(this, () -> {
+                if (sender != null) {
+                    sender.sendMessage(prefix + ChatColor.RED + " Failed to reload arenas: " + e.getMessage());
+                }
+            });
+            return null;
+        });
     }
 
     private void unlockAllArenas() {

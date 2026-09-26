@@ -19,4 +19,6 @@ messages:
   spawn-set: "&aSpawn point for arena '{arena_name}' has been set!"
   teleport-success: "&aTeleported to arena '{arena_name}'."
   reload-success: "&aConfiguration reloaded successfully!"
+  reload-arenas-start: "&eReloading all arena files from disk, please wait..."
+  reload-arenas-success: "&aArena reload complete! &f{loaded} &aloaded, &e{deferred} &edeferred (world missing), &c{failed} &cfailed."
   max-arenas-reached: "&cMaximum number of arenas ({max_arenas}) reached!"

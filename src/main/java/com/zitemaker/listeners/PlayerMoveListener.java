@@ -15,6 +15,7 @@ import org.bukkit.util.BoundingBox;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class PlayerMoveListener implements Listener {
 
@@ -22,7 +23,7 @@ public class PlayerMoveListener implements Listener {
     private final Map<UUID, Long> messageCooldowns = new HashMap<>();
     private static final long MESSAGE_COOLDOWN_MS = 3000;
 
-    private final Map<String, BoundingBox> regionBounds = new HashMap<>();
+    private final Map<String, BoundingBox> regionBounds = new ConcurrentHashMap<>();
 
     public PlayerMoveListener(ArenaRegen plugin) {
         this.plugin = plugin;
@@ -31,15 +32,23 @@ public class PlayerMoveListener implements Listener {
 
 
     public void updateRegionBounds() {
-        regionBounds.clear();
+        if (!Bukkit.isPrimaryThread()) {
+            Bukkit.getScheduler().runTask(plugin, this::updateRegionBounds);
+            return;
+        }
+        Map<String, BoundingBox> newBounds = new HashMap<>();
         for (Map.Entry<String, RegionData> entry : plugin.getRegisteredRegions().entrySet()) {
             RegionData region = entry.getValue();
-            BoundingBox box = new BoundingBox(
-                    region.getMinX(), region.getMinY(), region.getMinZ(),
-                    region.getMaxX(), region.getMaxY(), region.getMaxZ()
-            );
-            regionBounds.put(entry.getKey(), box);
+            if (region.isBlockDataLoaded()) {
+                BoundingBox box = new BoundingBox(
+                        region.getMinX(), region.getMinY(), region.getMinZ(),
+                        region.getMaxX(), region.getMaxY(), region.getMaxZ()
+                );
+                newBounds.put(entry.getKey(), box);
+            }
         }
+        regionBounds.clear();
+        regionBounds.putAll(newBounds);
     }
 
     @EventHandler
@@ -63,7 +72,7 @@ public class PlayerMoveListener implements Listener {
             if (!region.isLocked()) continue;
 
             BoundingBox box = regionBounds.get(regionName);
-            if (box == null || !region.getWorldName().equals(world.getName())) continue;
+            if (box == null || region.getWorldName() == null || !region.getWorldName().equalsIgnoreCase(world.getName())) continue;
 
             if (box.contains(x + 0.5, y + 0.5, z + 0.5)) {
                 long currentTime = System.currentTimeMillis();
@@ -74,7 +83,7 @@ public class PlayerMoveListener implements Listener {
                     messageCooldowns.put(playerId, currentTime);
                 }
 
-                safeLoc = findSafeLocationOutsideArena(player, region, from);
+                safeLoc = findSafeLocationOutsideArena(player, region, from, box);
                 shouldCancel = true;
                 break;
             }
@@ -86,10 +95,13 @@ public class PlayerMoveListener implements Listener {
         }
     }
 
-    private Location findSafeLocationOutsideArena(Player player, RegionData region, Location from) {
-        BoundingBox box = regionBounds.get(plugin.getRegisteredRegions().entrySet().stream()
-                .filter(e -> e.getValue() == region)
-                .findFirst().get().getKey());
+    private Location findSafeLocationOutsideArena(Player player, RegionData region, Location from, BoundingBox box) {
+        if (box == null) {
+            box = new BoundingBox(
+                    region.getMinX(), region.getMinY(), region.getMinZ(),
+                    region.getMaxX(), region.getMaxY(), region.getMaxZ()
+            );
+        }
         double x = from.getX(), y = from.getY(), z = from.getZ();
         float yaw = from.getYaw(), pitch = from.getPitch();
 
